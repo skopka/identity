@@ -1,4 +1,4 @@
-﻿namespace Skopka.Identity;
+﻿namespace Skopka.Identity.Users.Handles;
 
 public sealed record UpdatedHandles(
     string? UserName, string? NormalizedUserName,
