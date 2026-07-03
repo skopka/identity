@@ -1,6 +1,5 @@
 ﻿using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Users;
-using Skopka.Identity.Users.Commands;
 using Skopka.Identity.Users.Handles;
 
 namespace Skopka.Identity;
@@ -10,7 +9,7 @@ public interface IIdentityUserStore<TProfile>
     Task<IdentityUser<TProfile>?> FindByIdAsync(Guid id, CancellationToken ct);
 
     Task<OperationResult<IdentityUser<TProfile>>> CreateAsync(
-        CreateUserCommand<TProfile> cmd,
+        NewIdentityUser<TProfile> user,
         NormalizedHandles handles,
         DateTimeOffset now,
         CancellationToken ct);
