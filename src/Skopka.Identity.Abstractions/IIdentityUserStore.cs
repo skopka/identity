@@ -32,6 +32,7 @@ public interface IIdentityUserStore<TProfile>
         Guid userId,
         long expectedVersion,
         DateTimeOffset? deletedAt,
+        DateTimeOffset? blockedAt,
         DateTimeOffset? blockedUntil,
         DateTimeOffset now,
         CancellationToken ct);

@@ -16,6 +16,7 @@ public sealed class AuthUserEntity
     public long Version { get; set; } // optimistic concurrency token
 
     public DateTimeOffset? DeletedAt { get; set; }
+    public DateTimeOffset? BlockedAt { get; set; }
     public DateTimeOffset? BlockedUntil { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

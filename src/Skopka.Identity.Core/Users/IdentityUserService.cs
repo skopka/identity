@@ -188,8 +188,15 @@ public sealed class IdentityUserService<TProfile>(
         if (cmd.Until is not null && cmd.Until <= now)
             return Fail(op, IdentityErrors.Validation("until", "BlockedUntil must be in the future."));
 
-        // blockedAt/blockedUntil: blockedAt у тебя в публичной модели есть, но в Store UpdateStateAsync принимает только deletedAt/blockedUntil
-        var res = await store.UpdateStateAsync(user.Id, cmd.ExpectedVersion, user.DeletedAt, cmd.Until, now, ct);
+        var blockedAt = user.BlockedAt ?? now;
+        var res = await store.UpdateStateAsync(
+            user.Id,
+            cmd.ExpectedVersion,
+            user.DeletedAt,
+            blockedAt,
+            cmd.Until,
+            now,
+            ct);
         if (!res.IsSuccess) return Finish(op, OperationResultFactory.Fail<IdentityUser<TProfile>>(res.Errors));
 
         // Store UpdateStateAsync не возвращает пользователя -> перечитываем
@@ -211,7 +218,14 @@ public sealed class IdentityUserService<TProfile>(
         if (user.DeletedAt is not null) return Fail(op, IdentityErrors.Deleted());
         if (user.Version != cmd.ExpectedVersion) return Fail(op, IdentityErrors.Concurrency());
 
-        var res = await store.UpdateStateAsync(user.Id, cmd.ExpectedVersion, user.DeletedAt, blockedUntil: null, now, ct);
+        var res = await store.UpdateStateAsync(
+            user.Id,
+            cmd.ExpectedVersion,
+            user.DeletedAt,
+            null,
+            null,
+            now,
+            ct);
         if (!res.IsSuccess) return Finish(op, OperationResultFactory.Fail<IdentityUser<TProfile>>(res.Errors));
 
         var refreshed = await store.FindByIdAsync(user.Id, ct);
@@ -232,7 +246,14 @@ public sealed class IdentityUserService<TProfile>(
         if (user.Version != cmd.ExpectedVersion) return Finish(op, OperationResultFactory.Fail(IdentityErrors.Concurrency()));
 
         var deletedAt = user.DeletedAt ?? now; // идемпотентно
-        var res = await store.UpdateStateAsync(user.Id, cmd.ExpectedVersion, deletedAt, user.BlockedUntil, now, ct);
+        var res = await store.UpdateStateAsync(
+            user.Id,
+            cmd.ExpectedVersion,
+            deletedAt,
+            user.BlockedAt,
+            user.BlockedUntil,
+            now,
+            ct);
 
         return Finish(op, res.IsSuccess ? OperationResultFactory.Success() : OperationResultFactory.Fail(res.Errors));
     }
@@ -247,7 +268,14 @@ public sealed class IdentityUserService<TProfile>(
         if (!policy.CanMutate(user.Flags)) return Fail(op, IdentityErrors.Forbidden(user.Flags));
         if (user.Version != cmd.ExpectedVersion) return Fail(op, IdentityErrors.Concurrency());
 
-        var res = await store.UpdateStateAsync(user.Id, cmd.ExpectedVersion, deletedAt: null, user.BlockedUntil, now, ct);
+        var res = await store.UpdateStateAsync(
+            user.Id,
+            cmd.ExpectedVersion,
+            null,
+            user.BlockedAt,
+            user.BlockedUntil,
+            now,
+            ct);
         if (!res.IsSuccess) return Finish(op, OperationResultFactory.Fail<IdentityUser<TProfile>>(res.Errors));
 
         var refreshed = await store.FindByIdAsync(user.Id, ct);
