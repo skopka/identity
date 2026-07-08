@@ -27,6 +27,16 @@ Do not redesign the architecture unless the user explicitly asks for that.
 - `src/Skopka.Identity.Infrastructure` - infrastructure adapters.
 - `src/Skopka.Identity` - facade/DI package layer.
 
+Each module has its own local `AGENTS.md`. When editing inside a module, read the root
+file first and then the module-local file:
+
+- `src/Skopka.Identity.Abstractions/AGENTS.md`
+- `src/Skopka.Identity.Core/AGENTS.md`
+- `src/Skopka.Identity.Ef/AGENTS.md`
+- `src/Skopka.Identity.Ef.PostgreSql/AGENTS.md`
+- `src/Skopka.Identity.Infrastructure/AGENTS.md`
+- `src/Skopka.Identity/AGENTS.md`
+
 ## Main Public Contracts
 
 - `IIdentityUserService<TProfile>` in
@@ -208,4 +218,3 @@ dotnet build Skopka.Identity.slnx
 ```
 
 If tests are added or a test project appears, also run the relevant `dotnet test`.
-

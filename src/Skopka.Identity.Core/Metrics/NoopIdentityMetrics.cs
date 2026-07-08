@@ -2,9 +2,14 @@ namespace Skopka.Identity.Metrics;
 
 public sealed class NoopIdentityMetrics : IIdentityMetrics
 {
-    private sealed class Scope : IDisposable { public void Dispose() { } }
-    public IIdentityOpScope Begin(string operation)
+    private static readonly IIdentityOpScope Scope = new NoopScope();
+
+    public IIdentityOpScope Begin(string operation) => Scope;
+
+    private sealed class NoopScope : IIdentityOpScope
     {
-        throw new NotImplementedException();
+        public void Success() { }
+        public void Failure(string errorCode) { }
+        public void Dispose() { }
     }
 }
