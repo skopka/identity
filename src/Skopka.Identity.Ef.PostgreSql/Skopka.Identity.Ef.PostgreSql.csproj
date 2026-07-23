@@ -13,6 +13,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Skopka.Identity.Ef\Skopka.Identity.Ef.csproj" />
+        <ProjectReference Include="..\Skopka.Identity\Skopka.Identity.csproj" />
     </ItemGroup>
 
 </Project>
