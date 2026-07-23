@@ -18,7 +18,14 @@ public static class PostgreSqlIdentityBuilderExtensions
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
         builder.Services.AddDbContext<PostgreSqlIdentityDbContext<TProfile>>(
-            options => options.UseNpgsql(connectionString, configure));
+            options => options.UseNpgsql(
+                connectionString,
+                npgsql =>
+                {
+                    npgsql.MigrationsAssembly(
+                        typeof(PostgreSqlIdentityDbContext<>).Assembly.GetName().Name);
+                    configure?.Invoke(npgsql);
+                }));
 
         builder.Services.TryAddScoped<IdentityDbContext<TProfile>>(
             provider => provider.GetRequiredService<PostgreSqlIdentityDbContext<TProfile>>());

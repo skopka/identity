@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.Users;
@@ -38,6 +41,20 @@ public sealed class PostgreSqlIdentityRegistrationTests
         Assert.Contains(
             scopedProvider.GetServices<IEfIdentityExceptionMapper>(),
             mapper => mapper is PostgreSqlIdentityExceptionMapper);
+
+        var migration = Assert.Single(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith("_InitialIdentitySchema", StringComparison.Ordinal));
+        Assert.False(providerContext.Database.HasPendingModelChanges());
+
+        var script = providerContext.GetService<IMigrator>().GenerateScript(
+            fromMigration: null,
+            toMigration: migration);
+
+        Assert.Contains("CREATE TABLE auth_users", script, StringComparison.Ordinal);
+        Assert.Contains("CREATE TABLE user_profiles", script, StringComparison.Ordinal);
+        Assert.Contains("jsonb", script, StringComparison.Ordinal);
+        Assert.Contains("ux_auth_users_normalized_email", script, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -35,3 +35,14 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
   duplicate identity error.
 - Keep index names stable so exception mapping can identify which handle failed.
 
+## Migrations
+
+- Packaged migrations live in `Migrations`.
+- Restore the repository-local EF tool with `dotnet tool restore`.
+- Generate migrations through `PostgreSqlIdentityDesignTimeDbContextFactory` using
+  `dotnet tool run dotnet-ef`.
+- Do not remove `PostgreSqlIdentityMigrationsAssembly`: standard EF discovery filters
+  migrations by the closed generic design-time context and would hide them from a
+  runtime context using another `TProfile`.
+- Keep tests for `GetMigrations()`, generated migration SQL and
+  `HasPendingModelChanges()`.

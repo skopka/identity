@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Skopka.Identity.Ef.Entities;
 
 namespace Skopka.Identity.Ef.PostgreSql;
@@ -7,6 +8,12 @@ public sealed class PostgreSqlIdentityDbContext<TProfile>(
     DbContextOptions<PostgreSqlIdentityDbContext<TProfile>> options)
     : IdentityDbContext<TProfile>(options)
 {
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        optionsBuilder.ReplaceService<IMigrationsAssembly, PostgreSqlIdentityMigrationsAssembly>();
+    }
+
     protected override void ConfigureProviderModel(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<UserProfileEntity<TProfile>>()

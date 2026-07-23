@@ -156,6 +156,12 @@ PostgreSQL requirements:
 - Map EF concurrency conflicts to the identity concurrency error.
 - Bump timestamps/version consistently in persistence operations.
 
+PostgreSQL migrations are packaged in `Skopka.Identity.Ef.PostgreSql`. Because the
+runtime context is generic, migration discovery uses
+`PostgreSqlIdentityMigrationsAssembly` and a design-time profile factory. Preserve the
+runtime tests that verify migrations are visible for an arbitrary `TProfile` and that
+there are no pending model changes.
+
 ## Current Implementation Direction
 
 Continue from the existing code. The active implementation areas are:
