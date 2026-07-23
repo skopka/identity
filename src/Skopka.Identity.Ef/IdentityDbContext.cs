@@ -4,7 +4,7 @@ using Skopka.Identity.Ef.Entities;
 
 namespace Skopka.Identity.Ef;
 
-public sealed class IdentityDbContext<TProfile>(DbContextOptions<IdentityDbContext<TProfile>> options) : DbContext(options)
+public class IdentityDbContext<TProfile>(DbContextOptions options) : DbContext(options)
 {
     public DbSet<AuthUserEntity> Users => Set<AuthUserEntity>();
     public DbSet<UserProfileEntity<TProfile>> Profiles => Set<UserProfileEntity<TProfile>>();
@@ -20,5 +20,11 @@ public sealed class IdentityDbContext<TProfile>(DbContextOptions<IdentityDbConte
         modelBuilder.ApplyConfiguration(new UserProfileConfiguration<TProfile>());
         modelBuilder.ApplyConfiguration(new UserCredentialConfiguration());
         modelBuilder.ApplyConfiguration(new UserExternalLoginConfiguration());
+
+        ConfigureProviderModel(modelBuilder);
+    }
+
+    protected virtual void ConfigureProviderModel(ModelBuilder modelBuilder)
+    {
     }
 }
