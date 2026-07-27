@@ -4,4 +4,5 @@ public sealed record BeginVerificationCommand(
     Guid UserId,
     string Purpose,
     string Binding,
-    string Method);
+    string Method,
+    string? ClientKey = null);

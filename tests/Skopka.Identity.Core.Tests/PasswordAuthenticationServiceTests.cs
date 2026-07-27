@@ -3,6 +3,7 @@ using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.Errors;
 using Skopka.Identity.Metrics;
+using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Users;
 using Xunit;
 
@@ -167,6 +168,76 @@ public sealed class PasswordAuthenticationServiceTests
     }
 
     [Fact]
+    public async Task WrongPasswordHitsClientAndAccountPartitions()
+    {
+        var limiter = new FakeIdentityRateLimiter();
+        var fixture = new Fixture(rateLimiter: limiter);
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.UserName,
+                "alice",
+                "wrong",
+                "ip:203.0.113.10"),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.InvalidCredentials);
+        Assert.Contains(
+            limiter.Hits,
+            request => request.Scope == "password.client");
+        Assert.Contains(
+            limiter.Hits,
+            request => request.Scope == "password.account");
+        Assert.Empty(limiter.Resets);
+    }
+
+    [Fact]
+    public async Task SuccessfulPasswordResetsOnlyAccountPartition()
+    {
+        var limiter = new FakeIdentityRateLimiter();
+        var fixture = new Fixture(rateLimiter: limiter);
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.UserName,
+                "alice",
+                "correct",
+                "ip:203.0.113.10"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(
+            limiter.Resets,
+            reset => reset.Scope == "password.account");
+        Assert.DoesNotContain(
+            limiter.Resets,
+            reset => reset.Scope == "password.client");
+    }
+
+    [Fact]
+    public async Task AccountRateLimitRunsDummyVerification()
+    {
+        var limiter = new FakeIdentityRateLimiter
+        {
+            CheckDecision = new RateLimitDecision(
+                false,
+                DateTimeOffset.UtcNow.AddMinutes(1)),
+        };
+        var fixture = new Fixture(rateLimiter: limiter);
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.UserName,
+                "alice",
+                "correct"),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.RateLimitExceeded);
+        Assert.Equal(1, fixture.TimingProtector.SimulateCalls);
+        Assert.Equal(0, fixture.Hasher.VerifyCalls);
+    }
+
+    [Fact]
     public void TimingProtectorCreatesOneDummyVerifierAndReusesIt()
     {
         var hasher = new FakePasswordHasher();
@@ -193,7 +264,8 @@ public sealed class PasswordAuthenticationServiceTests
             bool userExists = true,
             string? passwordVerifier = "hash:correct",
             DateTimeOffset? blockedAt = null,
-            DateTimeOffset? blockedUntil = null)
+            DateTimeOffset? blockedUntil = null,
+            FakeIdentityRateLimiter? rateLimiter = null)
         {
             User = new IdentityUser<TestProfile>(
                 Guid.NewGuid(),
@@ -222,7 +294,9 @@ public sealed class PasswordAuthenticationServiceTests
                 new DefaultIdentityNormalizer(),
                 Hasher,
                 TimingProtector,
-                new NoopIdentityMetrics());
+                new NoopIdentityMetrics(),
+                new IdentityRateLimitOptions(),
+                rateLimiter is null ? [] : [rateLimiter]);
         }
 
         public IdentityUser<TestProfile> User { get; }
@@ -343,6 +417,46 @@ public sealed class PasswordAuthenticationServiceTests
 
         public void SimulateVerification(string providedPassword)
             => SimulateCalls++;
+    }
+
+    private sealed class FakeIdentityRateLimiter
+        : IIdentityRateLimiter<TestProfile>
+    {
+        public RateLimitDecision CheckDecision { get; set; } =
+            new(true, null);
+        public RateLimitDecision HitDecision { get; set; } =
+            new(true, null);
+        public List<RateLimitRequest> Checks { get; } = [];
+        public List<RateLimitRequest> Hits { get; } = [];
+        public List<(string Scope, string Key)> Resets { get; } = [];
+
+        public Task<RateLimitDecision> CheckAsync(
+            RateLimitRequest request,
+            CancellationToken ct)
+        {
+            Checks.Add(request);
+            return Task.FromResult(CheckDecision);
+        }
+
+        public Task<RateLimitDecision> HitAsync(
+            RateLimitRequest request,
+            CancellationToken ct)
+        {
+            Hits.Add(request);
+            return Task.FromResult(HitDecision);
+        }
+
+        public Task ResetAsync(
+            string scope,
+            string key,
+            CancellationToken ct)
+        {
+            Resets.Add((scope, key));
+            return Task.CompletedTask;
+        }
+
+        public Task<int> PruneAsync(CancellationToken ct)
+            => Task.FromResult(0);
     }
 
     public sealed record TestProfile(string DisplayName);

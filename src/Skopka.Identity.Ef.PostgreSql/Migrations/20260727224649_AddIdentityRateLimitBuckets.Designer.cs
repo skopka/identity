@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Skopka.Identity.Ef.PostgreSql;
@@ -11,9 +12,11 @@ using Skopka.Identity.Ef.PostgreSql;
 namespace Skopka.Identity.Ef.Migrations
 {
     [DbContext(typeof(PostgreSqlIdentityDbContext<PostgreSqlIdentityDesignTimeProfile>))]
-    partial class PostgreSqlIdentityDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260727224649_AddIdentityRateLimitBuckets")]
+    partial class AddIdentityRateLimitBuckets
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

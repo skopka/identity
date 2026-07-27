@@ -18,6 +18,8 @@ identity stores when it is added.
   `IPasswordCredentialStore<TProfile>`.
 - Implement `EfVerificationChallengeStore<TProfile>` against
   `IVerificationChallengeStore<TProfile>`.
+- Implement `EfRateLimitBucketStore<TProfile>` against
+  `IRateLimitBucketStore<TProfile>`.
 - Map EF entities to public `IdentityUser<TProfile>` models.
 - Configure generic EF relationships, keys, concurrency tokens and timestamps.
 - Translate EF concurrency conflicts into identity concurrency errors.
@@ -56,3 +58,7 @@ identity stores when it is added.
 - `verification_challenges.version` is a concurrency token. Record-attempt and
   proof-consumption transitions must recheck state, expiry, binding, proof digest and
   expected version before saving.
+- `identity_rate_limit_buckets` uses `(scope, key_hash)` as its key. Hit/reset operations
+  retry insert/update/delete races and never persist raw account or client identifiers.
+- Pruning deletes only buckets older than the supplied cutoff and respects the requested
+  batch size.

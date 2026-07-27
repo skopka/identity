@@ -1,5 +1,6 @@
 using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Metrics;
+using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Users;
 
 namespace Skopka.Identity.Verification;
@@ -12,18 +13,24 @@ public sealed class IdentityVerificationService<TProfile>
     private readonly IReadOnlyDictionary<string, IVerificationMethodProvider> methods;
     private readonly VerificationOptions options;
     private readonly IIdentityMetrics metrics;
+    private readonly IdentityRateLimitOptions rateLimitOptions;
+    private readonly IIdentityRateLimiter<TProfile>? rateLimiter;
 
     public IdentityVerificationService(
         IVerificationChallengeStore<TProfile> challengeStore,
         IIdentityUserStore<TProfile> userStore,
         IEnumerable<IVerificationMethodProvider> methodProviders,
         VerificationOptions options,
-        IIdentityMetrics metrics)
+        IIdentityMetrics metrics,
+        IdentityRateLimitOptions rateLimitOptions,
+        IEnumerable<IIdentityRateLimiter<TProfile>> rateLimiters)
     {
         this.challengeStore = challengeStore;
         this.userStore = userStore;
         this.options = options;
         this.metrics = metrics;
+        this.rateLimitOptions = rateLimitOptions;
+        rateLimiter = rateLimiters.FirstOrDefault();
 
         ValidateOptions(options);
         methods = methodProviders.ToDictionary(
@@ -50,11 +57,67 @@ public sealed class IdentityVerificationService<TProfile>
         }
 
         var now = DateTimeOffset.UtcNow;
+        if (rateLimiter is not null)
+        {
+            var clientKey = NormalizeClientKey(cmd.ClientKey);
+            if (clientKey is not null)
+            {
+                var clientDecision = await rateLimiter.HitAsync(
+                    new RateLimitRequest(
+                        IdentityRateLimitScopes.VerificationClient,
+                        clientKey,
+                        rateLimitOptions.VerificationClientPermitLimit,
+                        rateLimitOptions.VerificationClientWindow),
+                    ct);
+                if (!clientDecision.IsAllowed)
+                {
+                    return Fail<IssuedVerificationChallenge>(
+                        op,
+                        IdentityRateLimitErrors.Exceeded(
+                            clientDecision.RetryAfter));
+                }
+            }
+        }
+
         var user = await userStore.FindByIdAsync(cmd.UserId, ct);
         var userError = ValidateActiveUser(user, now);
         if (userError is not null)
         {
             return Fail<IssuedVerificationChallenge>(op, userError);
+        }
+
+        if (rateLimiter is not null)
+        {
+            var intentDecision = await rateLimiter.HitAsync(
+                new RateLimitRequest(
+                    IdentityRateLimitScopes.VerificationIntent,
+                    BuildVerificationIntentKey(cmd),
+                    rateLimitOptions.VerificationIntentPermitLimit,
+                    rateLimitOptions.VerificationIntentWindow,
+                    rateLimitOptions.VerificationResendCooldown),
+                ct);
+            if (!intentDecision.IsAllowed)
+            {
+                return Fail<IssuedVerificationChallenge>(
+                    op,
+                    IdentityRateLimitErrors.Exceeded(
+                        intentDecision.RetryAfter));
+            }
+
+            var accountDecision = await rateLimiter.HitAsync(
+                new RateLimitRequest(
+                    IdentityRateLimitScopes.VerificationAccount,
+                    user!.Id.ToString("N"),
+                    rateLimitOptions.VerificationAccountPermitLimit,
+                    rateLimitOptions.VerificationAccountWindow),
+                ct);
+            if (!accountDecision.IsAllowed)
+            {
+                return Fail<IssuedVerificationChallenge>(
+                    op,
+                    IdentityRateLimitErrors.Exceeded(
+                        accountDecision.RetryAfter));
+            }
         }
 
         var challengeId = Guid.NewGuid();
@@ -314,6 +377,13 @@ public sealed class IdentityVerificationService<TProfile>
                 "Method is required and exceeds the supported length.");
         }
 
+        if (cmd.ClientKey is { Length: > RateLimitLimits.MaximumClientKeyLength })
+        {
+            return IdentityErrors.Validation(
+                "clientKey",
+                "ClientKey exceeds the supported length.");
+        }
+
         return null;
     }
 
@@ -368,6 +438,16 @@ public sealed class IdentityVerificationService<TProfile>
     private static bool IsValidRequiredValue(string? value, int maximumLength)
         => !string.IsNullOrWhiteSpace(value)
             && value.Length <= maximumLength;
+
+    private static string BuildVerificationIntentKey(
+        BeginVerificationCommand cmd)
+        => $"{cmd.UserId:N}|{cmd.Purpose.Length}:{cmd.Purpose}"
+            + $"|{cmd.Binding.Length}:{cmd.Binding}|{cmd.Method}";
+
+    private static string? NormalizeClientKey(string? clientKey)
+        => string.IsNullOrWhiteSpace(clientKey)
+            ? null
+            : clientKey.Trim();
 
     private static DateTimeOffset Min(
         DateTimeOffset first,

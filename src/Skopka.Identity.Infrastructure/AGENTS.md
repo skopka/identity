@@ -58,3 +58,10 @@ It is not the place for core business rules.
   challenge lifetime, proof lifetime and per-challenge failed-attempt limit. Delivery is
   the caller's responsibility. Treat returned delivery codes as secrets and never log
   them.
+- `HmacRateLimitPartitionHasher` obscures account, client and intent identifiers before
+  persistence. Its key is a distinct deployment secret, copied on registration and
+  cleared on disposal.
+- `UseHmacRateLimiting<TProfile>()` explicitly enables the persistent limiter and
+  configures password account/client, verification account/client, intent and resend
+  policies plus bucket retention/cleanup batch size. All instances sharing the database
+  must use the same partition key.

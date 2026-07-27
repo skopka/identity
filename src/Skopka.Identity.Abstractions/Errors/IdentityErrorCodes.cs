@@ -28,4 +28,6 @@ public static class IdentityErrorCodes
     public const string VerificationAttemptsExceeded = "identity.verification.attempts_exceeded";
     public const string VerificationProofInvalid = "identity.verification.proof_invalid";
     public const string VerificationMethodUnavailable = "identity.verification.method_unavailable";
+
+    public const string RateLimitExceeded = "identity.rate_limit.exceeded";
 }

@@ -19,6 +19,8 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   confirmation/password-reset use cases.
 - Implement `IIdentityVerificationService<TProfile>` challenge orchestration and
   one-time proof generation/consumption.
+- Implement `IIdentityRateLimiter<TProfile>` hashing/orchestration and apply configured
+  policies in password authentication and Verification Begin.
 - Provide default domain services such as `DefaultIdentityNormalizer`,
   `DefaultUserOperationPolicy` and default/noop metrics implementations.
 - Create domain errors through `IdentityErrors`.
@@ -68,6 +70,15 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
 - Do not claim cross-module transaction atomicity. The application use case should
   consume the proof and mutate its intent in one unit of work when both stores can share
   a transaction.
+- Password account rate limiting checks before password verification, records only
+  credential failures and resets after a correct password. Preserve one dummy KDF when
+  an account partition is denied.
+- Client partitions count every request. Never reset a client/IP partition after one
+  successful account login.
+- Verification client, intent and account partitions are evaluated in that order so
+  cooldown-denied resend attempts do not consume account issuance quota.
+- Rate-limit maintenance computes the retention cutoff in Core and delegates bounded
+  pruning to the store. Do not start background workers in Core.
 
 ## Implementation Style
 

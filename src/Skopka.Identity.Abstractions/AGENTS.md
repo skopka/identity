@@ -34,6 +34,8 @@ small value objects.
 - Define Verification contracts for challenge lifecycle, concrete method providers,
   one-time proofs and persistence ports. Keep business intents opaque through
   server-created `Purpose` and `Binding` values.
+- Define transport-neutral rate-limit requests, decisions, options, bucket stores and
+  partition-hasher contracts. Do not reference ASP.NET rate-limiter or HTTP types.
 
 ## Boundaries
 
@@ -59,3 +61,5 @@ small value objects.
 - Verification methods return opaque persisted verifiers and optional delivery codes.
   The abstraction must not require generated OTP, because future TOTP or WebAuthn
   methods may not issue a deliverable code.
+- Optional `ClientKey` command fields carry server-created transport context. They are
+  not raw client DTO fields and must remain nullable for non-HTTP/background callers.

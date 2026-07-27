@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.Metrics;
+using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Security;
 using Skopka.Identity.Users;
 using Skopka.Identity.Verification;
@@ -51,6 +52,9 @@ public sealed class PostgreSqlIdentityRegistrationTests
         Assert.IsType<IdentityVerificationService<TestProfile>>(
             scopedProvider.GetRequiredService<
                 IIdentityVerificationService<TestProfile>>());
+        Assert.IsType<EfRateLimitBucketStore<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IRateLimitBucketStore<TestProfile>>());
 
         var providerContext = scopedProvider.GetRequiredService<PostgreSqlIdentityDbContext<TestProfile>>();
         var storeContext = scopedProvider.GetRequiredService<IdentityDbContext<TestProfile>>();
@@ -71,11 +75,16 @@ public sealed class PostgreSqlIdentityRegistrationTests
             name => name.EndsWith(
                 "_AddVerificationChallenges",
                 StringComparison.Ordinal));
+        var rateLimitMigration = Assert.Single(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith(
+                "_AddIdentityRateLimitBuckets",
+                StringComparison.Ordinal));
         Assert.False(providerContext.Database.HasPendingModelChanges());
 
         var script = providerContext.GetService<IMigrator>().GenerateScript(
             fromMigration: null,
-            toMigration: verificationMigration);
+            toMigration: rateLimitMigration);
 
         Assert.Contains("CREATE TABLE auth_users", script, StringComparison.Ordinal);
         Assert.Contains("CREATE TABLE user_profiles", script, StringComparison.Ordinal);
@@ -85,6 +94,10 @@ public sealed class PostgreSqlIdentityRegistrationTests
         Assert.Contains("gen_random_uuid()", script, StringComparison.Ordinal);
         Assert.Contains(
             "CREATE TABLE verification_challenges",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "CREATE TABLE identity_rate_limit_buckets",
             script,
             StringComparison.Ordinal);
     }

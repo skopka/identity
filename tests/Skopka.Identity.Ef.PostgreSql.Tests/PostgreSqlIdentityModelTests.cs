@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Skopka.Identity.Ef.Entities;
+using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Verification;
 using Xunit;
 
@@ -60,6 +61,22 @@ public sealed class PostgreSqlIdentityModelTests
             challengeType
                 .FindProperty(nameof(VerificationChallengeEntity.ProofHash))!
                 .GetMaxLength());
+
+        var rateLimitType = context.Model.FindEntityType(
+            typeof(RateLimitBucketEntity));
+        Assert.NotNull(rateLimitType);
+        Assert.True(
+            rateLimitType
+                .FindProperty(nameof(RateLimitBucketEntity.Version))!
+                .IsConcurrencyToken);
+        Assert.Equal(
+            RateLimitLimits.KeyHashLength,
+            rateLimitType
+                .FindProperty(nameof(RateLimitBucketEntity.KeyHash))!
+                .GetMaxLength());
+        Assert.Equal(
+            2,
+            rateLimitType.FindPrimaryKey()!.Properties.Count);
     }
 
     private static void AssertUniqueFilteredIndex(

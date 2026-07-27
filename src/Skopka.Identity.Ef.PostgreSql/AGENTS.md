@@ -18,6 +18,7 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
 - Register user, active login lookup and password credential EF stores through
   `UsePostgreSql`.
 - Register `IVerificationChallengeStore<TProfile>` through `UsePostgreSql`.
+- Register `IRateLimitBucketStore<TProfile>` through `UsePostgreSql`.
 
 ## Boundaries
 
@@ -53,3 +54,5 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
   before making the column non-null.
 - Verification migrations create `verification_challenges` with a foreign key to
   `auth_users`, a user/state lookup index and a concurrency-token version column.
+- Rate-limit migrations create `identity_rate_limit_buckets` with a composite
+  `(scope, key_hash)` primary key.

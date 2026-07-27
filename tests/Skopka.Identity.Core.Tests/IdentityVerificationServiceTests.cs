@@ -1,6 +1,7 @@
 using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Errors;
 using Skopka.Identity.Metrics;
+using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Users;
 using Skopka.Identity.Users.Handles;
 using Skopka.Identity.Verification;
@@ -167,6 +168,71 @@ public sealed class IdentityVerificationServiceTests
         AssertError(result, IdentityErrorCodes.VerificationProofInvalid);
     }
 
+    [Fact]
+    public async Task BeginUsesClientAccountAndIntentPartitions()
+    {
+        var limiter = new FakeIdentityRateLimiter();
+        var fixture = new Fixture(rateLimiter: limiter);
+
+        var result = await fixture.Service.BeginAsync(
+            new BeginVerificationCommand(
+                fixture.UserStore.User.Id,
+                "profile.delete",
+                "profile-7:v1",
+                VerificationMethods.OneTimeCode,
+                "ip:203.0.113.10"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(
+            limiter.Hits,
+            request => request.Scope == "verification.client");
+        Assert.Contains(
+            limiter.Hits,
+            request => request.Scope == "verification.account");
+        Assert.Contains(
+            limiter.Hits,
+            request => request.Scope == "verification.intent"
+                && request.MinimumInterval == TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public async Task ResendCooldownPreventsIssuingSecondCode()
+    {
+        var intentHits = 0;
+        var limiter = new FakeIdentityRateLimiter
+        {
+            HitHandler = request =>
+            {
+                if (request.Scope != "verification.intent")
+                {
+                    return new RateLimitDecision(true, null);
+                }
+
+                intentHits++;
+                return intentHits == 1
+                    ? new RateLimitDecision(true, null)
+                    : new RateLimitDecision(
+                        false,
+                        DateTimeOffset.UtcNow.AddSeconds(30));
+            },
+        };
+        var fixture = new Fixture(rateLimiter: limiter);
+
+        var first = await fixture.BeginAsync();
+        var second = await fixture.Service.BeginAsync(
+            new BeginVerificationCommand(
+                fixture.UserStore.User.Id,
+                "profile.delete",
+                "profile-7:v1",
+                VerificationMethods.OneTimeCode),
+            CancellationToken.None);
+
+        Assert.NotNull(first);
+        AssertError(second, IdentityErrorCodes.RateLimitExceeded);
+        Assert.Equal(1, fixture.MethodProvider.IssueCalls);
+    }
+
     private static void AssertError(OperationResult result, string code)
     {
         Assert.False(result.IsSuccess);
@@ -175,25 +241,31 @@ public sealed class IdentityVerificationServiceTests
 
     private sealed class Fixture
     {
-        public Fixture(int maxAttempts = 5)
+        public Fixture(
+            int maxAttempts = 5,
+            FakeIdentityRateLimiter? rateLimiter = null)
         {
             UserStore = new FakeIdentityUserStore(CreateUser());
             ChallengeStore = new FakeVerificationChallengeStore();
+            MethodProvider = new FakeVerificationMethodProvider();
             Service = new IdentityVerificationService<TestProfile>(
                 ChallengeStore,
                 UserStore,
-                [new FakeVerificationMethodProvider()],
+                [MethodProvider],
                 new VerificationOptions
                 {
                     ChallengeLifetime = TimeSpan.FromMinutes(5),
                     ProofLifetime = TimeSpan.FromMinutes(2),
                     MaxAttempts = maxAttempts,
                 },
-                new NoopIdentityMetrics());
+                new NoopIdentityMetrics(),
+                new IdentityRateLimitOptions(),
+                rateLimiter is null ? [] : [rateLimiter]);
         }
 
         public FakeIdentityUserStore UserStore { get; }
         public FakeVerificationChallengeStore ChallengeStore { get; }
+        public FakeVerificationMethodProvider MethodProvider { get; }
         public IdentityVerificationService<TestProfile> Service { get; }
 
         public async Task<IssuedVerificationChallenge> BeginAsync()
@@ -214,14 +286,18 @@ public sealed class IdentityVerificationServiceTests
         : IVerificationMethodProvider
     {
         public string Method => VerificationMethods.OneTimeCode;
+        public int IssueCalls { get; private set; }
 
         public Task<IssuedVerificationMethodChallenge> IssueAsync(
             VerificationMethodContext context,
             CancellationToken ct)
-            => Task.FromResult(
+        {
+            IssueCalls++;
+            return Task.FromResult(
                 new IssuedVerificationMethodChallenge(
                     "fixed-verifier",
                     "123456"));
+        }
 
         public Task<bool> VerifyAsync(
             VerificationMethodContext context,
@@ -231,6 +307,42 @@ public sealed class IdentityVerificationServiceTests
             => Task.FromResult(
                 verifier == "fixed-verifier"
                 && response == "123456");
+    }
+
+    private sealed class FakeIdentityRateLimiter
+        : IIdentityRateLimiter<TestProfile>
+    {
+        public Func<RateLimitRequest, RateLimitDecision>? HitHandler
+        {
+            get;
+            init;
+        }
+
+        public List<RateLimitRequest> Hits { get; } = [];
+
+        public Task<RateLimitDecision> CheckAsync(
+            RateLimitRequest request,
+            CancellationToken ct)
+            => Task.FromResult(new RateLimitDecision(true, null));
+
+        public Task<RateLimitDecision> HitAsync(
+            RateLimitRequest request,
+            CancellationToken ct)
+        {
+            Hits.Add(request);
+            return Task.FromResult(
+                HitHandler?.Invoke(request)
+                ?? new RateLimitDecision(true, null));
+        }
+
+        public Task ResetAsync(
+            string scope,
+            string key,
+            CancellationToken ct)
+            => Task.CompletedTask;
+
+        public Task<int> PruneAsync(CancellationToken ct)
+            => Task.FromResult(0);
     }
 
     private sealed class FakeVerificationChallengeStore

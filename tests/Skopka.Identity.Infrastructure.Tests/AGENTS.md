@@ -11,3 +11,6 @@ URL-safe encoding and DI registration. Use an ephemeral provider only inside tes
 
 Generated OTP tests must cover exact code format, wrong/malformed input, full context
 binding, historical HMAC key verification and DI registration.
+
+Rate-limit partition tests must prove deterministic scope-bound HMAC output, absence of
+raw identifiers and DI registration with configured policies.

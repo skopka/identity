@@ -16,3 +16,7 @@ replay.
 Verification tests must cover user/purpose/binding/stamp binding, failed-attempt lock,
 proof expiry and one-time consumption. Use method-provider and store fakes; do not test
 HMAC algorithms in Core.
+
+Rate-limit orchestration tests must distinguish account failures from per-request client
+hits, preserve dummy password verification on denied account partitions and verify
+resend evaluation order.

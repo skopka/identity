@@ -58,6 +58,9 @@ file first and then the module-local file:
   consumption for step-up verification challenges.
 - `IVerificationMethodProvider` verifies a concrete method such as a generated OTP.
 - `IVerificationChallengeStore<TProfile>` persists challenge state and CAS transitions.
+- `IIdentityRateLimiter<TProfile>` applies named fixed-window policies to HMAC-obscured
+  account, client and verification-intent partitions.
+- `IRateLimitBucketStore<TProfile>` persists rate-limit buckets for multi-instance use.
 - `IIdentityNormalizer` normalizes userName/email/phone before persistence and checks.
 - `IUserOperationPolicy` decides whether the current user flags allow mutation.
 - `IProfilePatch<TProfile>` applies partial profile changes.
@@ -182,7 +185,25 @@ Preserve these rules:
   with the challenge and consumption uses optimistic concurrency. Security-stamp
   changes invalidate pending challenges and verified proofs.
 - Per-challenge `MaxAttempts` does not replace account/IP rate limiting or resend
-  cooldown. Those controls remain the next security-critical layer.
+  cooldown. Persistent rate limiting adds account/client policies and a per-intent
+  resend cooldown.
+- Password account buckets count only invalid credentials and reset after a correct
+  password. Password client buckets count every request and are not reset by a
+  successful login.
+- Verification start uses three partitions: client request volume, account-wide issued
+  challenges and purpose/binding-specific cooldown/limit. A cooldown-denied resend does
+  not consume the account issuance quota.
+- `ClientKey` is optional transport context, normally derived from a normalized IP or
+  trusted gateway/device signal. Transport code must create it server-side and must not
+  trust a value supplied by the request body.
+- Rate-limit partition keys are HMAC-SHA256 values. The partition key is shared by all
+  application instances and remains outside the database. Rotating it resets active
+  short-lived buckets.
+- Hosts must schedule `IIdentityRateLimiter<TProfile>.PruneAsync()` periodically.
+  `BucketRetention` must cover every active policy window; cleanup runs in bounded
+  batches and no hidden background service is started by the library.
+- Map `identity.rate_limit.exceeded` to HTTP 429 and use `RateLimitDetails.RetryAfter`
+  for the `Retry-After` response. Core remains transport-neutral.
 - Action tokens are stateless and do not require EF entities. The default Infrastructure
   provider uses ASP.NET Core Data Protection. Multi-instance deployments must persist
   and share their Data Protection key ring.
@@ -216,6 +237,10 @@ EF Core storage is split:
   - opaque method verifier and security-stamp snapshot
   - failed-attempt count and challenge state
   - one-time proof digest and expiry
+- `identity_rate_limit_buckets`
+  - HMAC-obscured partition key and named scope
+  - fixed-window hit count and last-hit timestamp
+  - optimistic concurrency version
 - planned later:
   - `user_external_logins`
 
@@ -241,9 +266,11 @@ there are no pending model changes.
 Continue from the existing code. User lifecycle, password credentials, password
 authentication by username/email, security stamp rotation/validation and stateless
 action tokens are implemented. Verification challenges and generated HMAC OTP are
-implemented as a separate subsystem. The next security-critical area is account/IP
-attempt tracking, challenge-start throttling and resend cooldown. Keep request/IP-aware
-throttling out of password/OTP cryptographic providers and low-level EF lookup stores.
+implemented as a separate subsystem. Persistent account/client rate limiting,
+challenge-start throttling and resend cooldown are implemented. The next major area is
+JWT/session integration: access/refresh issuance, claims principal construction and
+step-up proof exchange. Keep transport token issuance out of password/OTP cryptographic
+providers and EF stores.
 
 Do not move EF responsibilities into Core. Do not move domain policy decisions into EF
 unless the store is only translating database outcomes into domain errors.
