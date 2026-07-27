@@ -19,7 +19,8 @@ public sealed class SecurityStampServiceTests
             new DefaultIdentityNormalizer(),
             new DefaultUserOperationPolicy(),
             new FakeSecurityStampGenerator(),
-            new NoopIdentityMetrics());
+            new NoopIdentityMetrics(),
+            []);
 
         var result = await service.CreateAsync(
             new CreateUserCommand<TestProfile>(
@@ -44,7 +45,8 @@ public sealed class SecurityStampServiceTests
             new DefaultIdentityNormalizer(),
             new DefaultUserOperationPolicy(),
             new FakeSecurityStampGenerator(),
-            new NoopIdentityMetrics());
+            new NoopIdentityMetrics(),
+            []);
 
         var result = await service.DeleteAsync(
             new DeleteUserCommand(store.User.Id, store.User.Version),

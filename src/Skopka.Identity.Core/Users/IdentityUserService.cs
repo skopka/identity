@@ -1,6 +1,7 @@
 ﻿using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.Security;
+using Skopka.Identity.Tokens;
 using Skopka.Identity.Users.Commands;
 using Skopka.Identity.Users.Handles;
 
@@ -11,9 +12,13 @@ public sealed class IdentityUserService<TProfile>(
     IIdentityNormalizer normalizer,
     IUserOperationPolicy policy,
     ISecurityStampGenerator securityStampGenerator,
-    IIdentityMetrics metrics)
+    IIdentityMetrics metrics,
+    IEnumerable<IIdentityActionTokenProvider> actionTokenProviders)
     : IIdentityUserService<TProfile>
 {
+    private readonly IIdentityActionTokenProvider? actionTokenProvider =
+        actionTokenProviders.FirstOrDefault();
+
     public async Task<OperationResult<IdentityUser<TProfile>>> CreateAsync(CreateUserCommand<TProfile> cmd, CancellationToken ct)
     {
         using var op = metrics.Begin("user.create");
@@ -52,6 +57,9 @@ public sealed class IdentityUserService<TProfile>(
         if (user is null)
             return Fail(op, IdentityErrors.NotFound());
 
+        if (!policy.CanMutate(user.Flags))
+            return Fail(op, IdentityErrors.Forbidden(user.Flags));
+
         if (user.DeletedAt is not null)
             return Fail(op, IdentityErrors.Deleted());
 
@@ -60,7 +68,23 @@ public sealed class IdentityUserService<TProfile>(
         if (!string.Equals(currentNormalized, normalized, StringComparison.Ordinal))
             return Fail(op, IdentityErrors.Validation("email", "Email has changed or does not match."));
 
-        // CAS по текущей версии пользователя (версию из команды не требуем)
+        var tokenError = IdentityActionTokenValidator.Validate(
+            actionTokenProvider,
+            cmd.Token,
+            IdentityActionTokenPurpose.EmailConfirmation,
+            user.Id,
+            user.SecurityStamp,
+            currentNormalized,
+            now);
+        if (tokenError is not null)
+            return Fail(op, tokenError);
+
+        if (user.EmailConfirmed)
+        {
+            op.Success();
+            return OperationResultFactory.Success(user);
+        }
+
         var updated = new UpdatedHandles(
             user.UserName, normalizer.NormalizeUserName(user.UserName),
             user.Email, currentNormalized, true,
@@ -83,12 +107,32 @@ public sealed class IdentityUserService<TProfile>(
         if (user is null)
             return Fail(op, IdentityErrors.NotFound());
 
+        if (!policy.CanMutate(user.Flags))
+            return Fail(op, IdentityErrors.Forbidden(user.Flags));
+
         if (user.DeletedAt is not null)
             return Fail(op, IdentityErrors.Deleted());
 
         var currentNormalized = normalizer.NormalizePhone(user.Phone);
         if (!string.Equals(currentNormalized, normalized, StringComparison.Ordinal))
             return Fail(op, IdentityErrors.Validation("phone", "Phone has changed or does not match."));
+
+        var tokenError = IdentityActionTokenValidator.Validate(
+            actionTokenProvider,
+            cmd.Token,
+            IdentityActionTokenPurpose.PhoneConfirmation,
+            user.Id,
+            user.SecurityStamp,
+            currentNormalized,
+            now);
+        if (tokenError is not null)
+            return Fail(op, tokenError);
+
+        if (user.PhoneConfirmed)
+        {
+            op.Success();
+            return OperationResultFactory.Success(user);
+        }
 
         var updated = new UpdatedHandles(
             user.UserName, normalizer.NormalizeUserName(user.UserName),

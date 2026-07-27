@@ -2,6 +2,7 @@ using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Errors;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.Security;
+using Skopka.Identity.Tokens;
 using Skopka.Identity.Users;
 
 namespace Skopka.Identity.Credentials;
@@ -12,9 +13,13 @@ public sealed class PasswordCredentialService<TProfile>(
     IPasswordHasher passwordHasher,
     ISecurityStampGenerator securityStampGenerator,
     IUserOperationPolicy policy,
-    IIdentityMetrics metrics)
+    IIdentityMetrics metrics,
+    IEnumerable<IIdentityActionTokenProvider> actionTokenProviders)
     : IPasswordCredentialService<TProfile>
 {
+    private readonly IIdentityActionTokenProvider? actionTokenProvider =
+        actionTokenProviders.FirstOrDefault();
+
     public async Task<OperationResult> SetPasswordAsync(
         SetPasswordCommand cmd,
         CancellationToken ct)
@@ -134,6 +139,55 @@ public sealed class PasswordCredentialService<TProfile>(
         return Finish(op, result);
     }
 
+    public async Task<OperationResult> ResetPasswordAsync(
+        ResetPasswordCommand cmd,
+        CancellationToken ct)
+    {
+        using var op = metrics.Begin("credential.password.reset");
+        var now = DateTimeOffset.UtcNow;
+
+        var validationError = ValidatePassword(cmd.NewPassword, "newPassword");
+        if (validationError is not null)
+        {
+            return Fail(op, validationError);
+        }
+
+        var user = await userStore.FindByIdAsync(cmd.UserId, ct);
+        var userError = ValidateMutableUser(user);
+        if (userError is not null)
+        {
+            return Fail(op, userError);
+        }
+
+        var tokenError = IdentityActionTokenValidator.Validate(
+            actionTokenProvider,
+            cmd.Token,
+            IdentityActionTokenPurpose.PasswordReset,
+            user!.Id,
+            user.SecurityStamp,
+            target: null,
+            now);
+        if (tokenError is not null)
+        {
+            return Fail(op, tokenError);
+        }
+
+        var currentVerifier = await credentialStore.FindPasswordVerifierAsync(
+            cmd.UserId,
+            ct);
+        var passwordVerifier = passwordHasher.HashPassword(cmd.NewPassword);
+        var result = await credentialStore.ReplacePasswordVerifierAsync(
+            cmd.UserId,
+            user.Version,
+            currentVerifier,
+            passwordVerifier,
+            securityStampGenerator.Generate(),
+            now,
+            ct);
+
+        return Finish(op, result);
+    }
+
     public async Task<OperationResult> VerifyPasswordAsync(
         VerifyPasswordCommand cmd,
         CancellationToken ct)
@@ -200,6 +254,19 @@ public sealed class PasswordCredentialService<TProfile>(
         IdentityUser<TProfile>? user,
         long expectedVersion)
     {
+        var error = ValidateMutableUser(user);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        return user!.Version == expectedVersion
+            ? null
+            : IdentityErrors.Concurrency();
+    }
+
+    private Error? ValidateMutableUser(IdentityUser<TProfile>? user)
+    {
         if (user is null)
         {
             return IdentityErrors.NotFound();
@@ -210,14 +277,9 @@ public sealed class PasswordCredentialService<TProfile>(
             return IdentityErrors.Forbidden(user.Flags);
         }
 
-        if (user.DeletedAt is not null)
-        {
-            return IdentityErrors.Deleted();
-        }
-
-        return user.Version == expectedVersion
+        return user.DeletedAt is null
             ? null
-            : IdentityErrors.Concurrency();
+            : IdentityErrors.Deleted();
     }
 
     private static Error? ValidatePassword(string? password, string field)

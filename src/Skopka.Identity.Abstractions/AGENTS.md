@@ -28,6 +28,9 @@ small value objects.
   `IIdentityUserLookupStore<TProfile>` and `IPasswordVerificationTimingProtector`.
 - Define security stamp contracts such as `ISecurityStampService<TProfile>` and
   `ISecurityStampGenerator`.
+- Define action-token contracts under `Tokens`, including purposes, protected payload,
+  issuer, provider and configurable lifetimes. Action tokens must not depend on ASP.NET
+  Core Data Protection at this layer.
 
 ## Boundaries
 
@@ -48,3 +51,5 @@ small value objects.
   high-level use-case command records.
 - All async public contracts accept `CancellationToken ct`.
 - Expected domain failures are represented by `OperationResult` and stable error codes.
+- Confirmation commands include the target handle and protected token, but intentionally
+  omit `ExpectedVersion`. Password reset includes the protected token and new password.

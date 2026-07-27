@@ -16,6 +16,10 @@ public interface IPasswordCredentialService<TProfile>
         RemovePasswordCommand cmd,
         CancellationToken ct);
 
+    Task<OperationResult> ResetPasswordAsync(
+        ResetPasswordCommand cmd,
+        CancellationToken ct);
+
     Task<OperationResult> VerifyPasswordAsync(
         VerifyPasswordCommand cmd,
         CancellationToken ct);

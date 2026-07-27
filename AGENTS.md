@@ -52,6 +52,8 @@ file first and then the module-local file:
   handles.
 - `ISecurityStampService<TProfile>` rotates and validates session invalidation stamps.
 - `ISecurityStampGenerator` creates opaque random stamp values.
+- `IIdentityActionTokenIssuer<TProfile>` issues confirmation and password-reset tokens.
+- `IIdentityActionTokenProvider` protects and reads purpose-bound token payloads.
 - `IIdentityNormalizer` normalizes userName/email/phone before persistence and checks.
 - `IUserOperationPolicy` decides whether the current user flags allow mutation.
 - `IProfilePatch<TProfile>` applies partial profile changes.
@@ -116,6 +118,7 @@ The current command set is:
 - `SetPasswordCommand`
 - `ChangePasswordCommand`
 - `RemovePasswordCommand`
+- `ResetPasswordCommand`
 - `VerifyPasswordCommand`
 - `AuthenticatePasswordCommand`
 - `RotateSecurityStampCommand`
@@ -132,7 +135,8 @@ Preserve these rules:
   create or update unless the user explicitly changes this rule.
 - Confirmation operations do not use expected version, but must validate that the
   email/phone from the confirmation command still matches the user's current value after
-  normalization. This protects against stale confirmation links/tokens.
+  normalization. They also require a non-expired action token bound to the confirmation
+  purpose, user id, normalized handle and current security stamp.
 - `ChangeEmail` resets `EmailConfirmed` to `false`.
 - `ChangePhone` resets `PhoneConfirmed` to `false`.
 - `System` and `Protected` users cannot be mutated through the normal API.
@@ -154,6 +158,18 @@ Preserve these rules:
   operation. Stamp validation rejects missing, deleted and actively blocked users.
 - Soft delete rotates the stamp so restoring a user cannot reactivate sessions issued
   before deletion.
+- Email confirmation, phone confirmation and password reset are separate action-token
+  purposes. Tokens cannot be reused across purposes. Password reset rotates the security
+  stamp atomically with the verifier change, making a successfully used reset token
+  invalid.
+- Action tokens are not OTP authenticators. Keep future TOTP/SMS/email OTP challenge
+  state, attempt limits and MFA rules in a separate subsystem.
+- Action tokens are stateless and do not require EF entities. The default Infrastructure
+  provider uses ASP.NET Core Data Protection. Multi-instance deployments must persist
+  and share their Data Protection key ring.
+- Token issuance returns the token to the caller; email/SMS delivery and
+  user-enumeration-safe HTTP responses belong to transport/infrastructure integration,
+  not Core.
 - Store operations receive `now` from the service; do not recompute operation time in
   lower-level domain orchestration.
 - Expected domain failures should return `OperationResult` errors, not throw exceptions.
@@ -199,9 +215,10 @@ there are no pending model changes.
 ## Current Implementation Direction
 
 Continue from the existing code. User lifecycle, password credentials, password
-authentication by username/email and security stamp rotation/validation are implemented.
-The next security-critical area is authentication attempt tracking and rate limiting.
-Keep request/IP-aware throttling out of the password hasher and low-level EF lookup store.
+authentication by username/email, security stamp rotation/validation and stateless
+action tokens are implemented. The next security-critical area is authentication attempt
+tracking and rate limiting. Keep request/IP-aware throttling out of the password hasher
+and low-level EF lookup store.
 
 Do not move EF responsibilities into Core. Do not move domain policy decisions into EF
 unless the store is only translating database outcomes into domain errors.

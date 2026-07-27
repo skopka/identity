@@ -7,7 +7,7 @@ Read `../../AGENTS.md` first. This file narrows the rules for
 
 This module implements domain orchestration for identity users, password credentials,
 password authentication and security stamps. It coordinates validation, normalization,
-policy checks, metrics and calls to storage ports.
+action-token issuance/validation, policy checks, metrics and calls to storage ports.
 
 ## Allowed Responsibilities
 
@@ -15,6 +15,8 @@ policy checks, metrics and calls to storage ports.
 - Implement `IPasswordCredentialService<TProfile>`.
 - Implement `IPasswordAuthenticationService<TProfile>` and dummy verification workload.
 - Implement `ISecurityStampService<TProfile>` and the default random stamp generator.
+- Implement `IIdentityActionTokenIssuer<TProfile>` and validate action-token bindings in
+  confirmation/password-reset use cases.
 - Provide default domain services such as `DefaultIdentityNormalizer`,
   `DefaultUserOperationPolicy` and default/noop metrics implementations.
 - Create domain errors through `IdentityErrors`.
@@ -36,6 +38,8 @@ policy checks, metrics and calls to storage ports.
   support future external-login-only users.
 - `ConfirmEmail` and `ConfirmPhone` do not accept expected version, but must verify that
   the command value still matches the current user value after normalization.
+- Confirmation tokens are bound to purpose, user id, normalized current handle, current
+  security stamp and expiry.
 - `ChangeEmail` resets `EmailConfirmed` to `false`.
 - `ChangePhone` resets `PhoneConfirmed` to `false`.
 - `System` and `Protected` users cannot be mutated through normal API policy.
@@ -50,6 +54,10 @@ policy checks, metrics and calls to storage ports.
 - Password set/change/removal rotates the security stamp; technical rehash does not.
 - Soft delete rotates the security stamp; restore preserves the post-delete stamp.
 - Stamp validation rejects deleted and actively blocked users.
+- Password reset does not require the old password or expected version. It validates a
+  password-reset token, then atomically replaces the verifier and rotates the security
+  stamp. The stamp change invalidates the successfully used reset token.
+- Do not treat action tokens as OTP/MFA authenticators or add delivery concerns to Core.
 
 ## Implementation Style
 

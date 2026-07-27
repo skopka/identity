@@ -41,3 +41,10 @@ It is not the place for core business rules.
   `IPasswordCredentialService<TProfile>`, `IPasswordAuthenticationService<TProfile>` and
   a singleton dummy-verification workload. Do not make the facade package depend on
   Argon2.
+- `DataProtectionIdentityActionTokenProvider` cryptographically separates each token
+  purpose and emits URL-safe protected payloads. Malformed, tampered and cross-purpose
+  tokens must fail without throwing expected validation exceptions.
+- `UseDataProtectionActionTokens<TProfile>()` explicitly enables the default action-token
+  subsystem and configures its lifetimes. Production and multi-instance applications
+  must persist and share the ASP.NET Core Data Protection key ring; ephemeral keys make
+  outstanding tokens invalid after restart or when routed to another instance.

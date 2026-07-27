@@ -8,3 +8,7 @@ algorithm here.
 
 Cover security stamp generation, explicit rotation, password-triggered rotation and
 validation against user state.
+
+Action-token tests must cover purpose, user, normalized target, security-stamp and expiry
+bindings. Password-reset tests must prove that successful stamp rotation prevents token
+replay.

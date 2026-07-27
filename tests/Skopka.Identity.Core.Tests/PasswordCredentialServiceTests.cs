@@ -188,7 +188,8 @@ public sealed class PasswordCredentialServiceTests
                 Hasher,
                 new FakeSecurityStampGenerator(),
                 new DefaultUserOperationPolicy(),
-                new NoopIdentityMetrics());
+                new NoopIdentityMetrics(),
+                []);
         }
 
         public IdentityUser<TestProfile> User { get; }

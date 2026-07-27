@@ -1,3 +1,3 @@
 namespace Skopka.Identity.Users.Commands;
 
-public record ConfirmPhoneCommand(Guid UserId, string Phone);
+public record ConfirmPhoneCommand(Guid UserId, string Phone, string Token);

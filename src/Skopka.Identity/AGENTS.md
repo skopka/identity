@@ -39,3 +39,6 @@ install and configure without moving domain or persistence logic into the facade
   the configured persistence provider must supply their stores.
 - `AddSkopkaIdentity<TProfile>()` registers the default security stamp generator and
   rotate/validate service. Consumers may replace the generator by registering first.
+- Action tokens remain optional and are enabled through Infrastructure with
+  `UseDataProtectionActionTokens<TProfile>()`; the facade does not take a direct Data
+  Protection dependency.

@@ -7,8 +7,8 @@ public static class IdentityErrorCodes
     public const string Forbidden = "identity.user.forbidden";
 
     public const string DuplicateUserName = "identity.user_name.duplicate";
-    public const string DuplicateEmail    = "identity.email.duplicate";
-    public const string DuplicatePhone    = "identity.phone.duplicate";
+    public const string DuplicateEmail = "identity.email.duplicate";
+    public const string DuplicatePhone = "identity.phone.duplicate";
 
     public const string Validation = "identity.validation.failed";
     public const string UserDeleted = "identity.user.deleted";
@@ -19,4 +19,7 @@ public static class IdentityErrorCodes
 
     public const string InvalidCredentials = "identity.authentication.invalid_credentials";
     public const string AuthenticationBlocked = "identity.authentication.blocked";
+
+    public const string InvalidActionToken = "identity.token.invalid";
+    public const string ActionTokenProviderUnavailable = "identity.token.provider_unavailable";
 }
