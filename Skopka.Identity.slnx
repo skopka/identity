@@ -8,4 +8,5 @@
   <Project Path="tests/Skopka.Identity.Ef.Tests/Skopka.Identity.Ef.Tests.csproj" />
   <Project Path="tests/Skopka.Identity.Ef.PostgreSql.Tests/Skopka.Identity.Ef.PostgreSql.Tests.csproj" />
   <Project Path="tests/Skopka.Identity.Infrastructure.Tests/Skopka.Identity.Infrastructure.Tests.csproj" />
+  <Project Path="tests/Skopka.Identity.Core.Tests/Skopka.Identity.Core.Tests.csproj" />
 </Solution>

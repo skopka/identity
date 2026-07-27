@@ -5,12 +5,14 @@ Read `../../AGENTS.md` first. This file narrows the rules for
 
 ## Purpose
 
-This module implements domain orchestration for identity users. It coordinates validation,
-normalization, policy checks, metrics and calls to storage ports.
+This module implements domain orchestration for identity users and password credentials.
+It coordinates validation, normalization, policy checks, metrics and calls to storage
+ports.
 
 ## Allowed Responsibilities
 
 - Implement `IIdentityUserService<TProfile>`.
+- Implement `IPasswordCredentialService<TProfile>`.
 - Provide default domain services such as `DefaultIdentityNormalizer`,
   `DefaultUserOperationPolicy` and default/noop metrics implementations.
 - Create domain errors through `IdentityErrors`.
@@ -46,4 +48,3 @@ normalization, policy checks, metrics and calls to storage ports.
 - Return `OperationResult` for expected domain failures.
 - Throw exceptions only for programmer errors or truly unexpected infrastructure failures
   that Core cannot translate.
-

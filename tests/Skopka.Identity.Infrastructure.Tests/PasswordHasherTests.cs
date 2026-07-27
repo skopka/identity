@@ -170,6 +170,14 @@ public sealed class PasswordHasherTests
                 options.MaximumAcceptedIterations = 10_000;
             });
 
+        Assert.Contains(
+            services,
+            descriptor =>
+                descriptor.ServiceType
+                    == typeof(IPasswordCredentialService<TestProfile>)
+                && descriptor.ImplementationType
+                    == typeof(PasswordCredentialService<TestProfile>));
+
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<Pbkdf2PasswordHasher>(

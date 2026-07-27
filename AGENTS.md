@@ -43,6 +43,9 @@ file first and then the module-local file:
   `src/Skopka.Identity.Abstractions/IIdentityUserService.cs` is the main use-case API.
 - `IIdentityUserStore<TProfile>` is the storage port used by Core. Core must not depend
   on EF Core, SQL, database indexes or provider-specific transactions.
+- `IPasswordCredentialService<TProfile>` orchestrates password credential lifecycle.
+- `IPasswordCredentialStore<TProfile>` persists opaque password verifiers and uses the
+  user version for optimistic concurrency.
 - `IIdentityNormalizer` normalizes userName/email/phone before persistence and checks.
 - `IUserOperationPolicy` decides whether the current user flags allow mutation.
 - `IProfilePatch<TProfile>` applies partial profile changes.
@@ -100,6 +103,10 @@ The current command set is:
 - `UnblockUserCommand`
 - `DeleteUserCommand`
 - `RestoreUserCommand`
+- `SetPasswordCommand`
+- `ChangePasswordCommand`
+- `RemovePasswordCommand`
+- `VerifyPasswordCommand`
 
 Mutation commands use `ExpectedVersion` except `ConfirmEmailCommand` and
 `ConfirmPhoneCommand`, which intentionally do not accept `ExpectedVersion`.
@@ -145,8 +152,10 @@ EF Core storage is split:
 - `user_profiles`
   - display handles
   - `Profile` stored as `jsonb`
+- `user_credentials`
+  - opaque password verifier
+  - credential update timestamp
 - planned later:
-  - `user_credentials`
   - `user_external_logins`
 
 PostgreSQL requirements:
@@ -168,24 +177,10 @@ there are no pending model changes.
 
 ## Current Implementation Direction
 
-Continue from the existing code. The active implementation areas are:
-
-1. Align and finish `IdentityUserService<TProfile>` in `Skopka.Identity.Core`.
-   Responsibilities:
-   - validation
-   - policy checks
-   - normalization
-   - metrics
-   - orchestration
-   - calling `IIdentityUserStore<TProfile>`
-
-2. Implement or finish `EfIdentityUserStore<TProfile>` in the EF Core layer.
-   Responsibilities:
-   - EF Core persistence
-   - mapping entities to `IdentityUser<TProfile>`
-   - optimistic concurrency handling
-   - unique violation mapping
-   - timestamp and version updates
+Continue from the existing code. User and password credential lifecycle are implemented.
+The next active area is login lookup/authentication orchestration. Keep sign-in eligibility
+(deleted/blocked state), login enumeration resistance and dummy password verification out
+of the low-level password hasher and credential store.
 
 Do not move EF responsibilities into Core. Do not move domain policy decisions into EF
 unless the store is only translating database outcomes into domain errors.

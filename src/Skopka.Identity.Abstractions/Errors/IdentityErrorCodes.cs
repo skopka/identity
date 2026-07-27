@@ -12,4 +12,8 @@ public static class IdentityErrorCodes
 
     public const string Validation = "identity.validation.failed";
     public const string UserDeleted = "identity.user.deleted";
+
+    public const string PasswordAlreadySet = "identity.password.already_set";
+    public const string PasswordNotSet = "identity.password.not_set";
+    public const string InvalidPassword = "identity.password.invalid";
 }

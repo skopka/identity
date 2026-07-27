@@ -37,4 +37,6 @@ It is not the place for core business rules.
 - Pepper key ids must support rotation. Verification with an old available key returns
   `SuccessRehashNeeded`; a missing key returns `Failed`.
 - Password hasher DI extensions live in this optional module and extend
-  `IdentityBuilder<TProfile>`. Do not make the facade package depend on Argon2.
+  `IdentityBuilder<TProfile>`. Selecting a hasher also registers
+  `IPasswordCredentialService<TProfile>`. Do not make the facade package depend on
+  Argon2.

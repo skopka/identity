@@ -12,6 +12,8 @@ identity stores when it is added.
 
 - Define `IdentityDbContext<TProfile>` and EF entities.
 - Implement `EfIdentityUserStore<TProfile>` against `IIdentityUserStore<TProfile>`.
+- Implement `EfPasswordCredentialStore<TProfile>` against
+  `IPasswordCredentialStore<TProfile>`.
 - Map EF entities to public `IdentityUser<TProfile>` models.
 - Configure generic EF relationships, keys, concurrency tokens and timestamps.
 - Translate EF concurrency conflicts into identity concurrency errors.
@@ -41,4 +43,5 @@ identity stores when it is added.
 - Map missing users to not-found errors when the store contract returns an
   `OperationResult`.
 - Keep password verifier data opaque if credential persistence is implemented here.
-
+- Password verifier replacements compare both user `Version` and the expected previous
+  verifier before updating, then bump the user version in the same save operation.

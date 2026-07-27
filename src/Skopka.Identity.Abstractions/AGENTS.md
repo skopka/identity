@@ -21,8 +21,9 @@ small value objects.
   `UserFlags` and role/handle records.
 - Define stable error code constants and serializable error details.
 - Define narrow credential contracts such as `IPasswordHasher`,
-  `IPasswordPepperProvider` and `PasswordVerificationResult`. Keep verifier strings
-  opaque to consumers.
+  `IPasswordPepperProvider`, `IPasswordCredentialService<TProfile>`,
+  `IPasswordCredentialStore<TProfile>` and `PasswordVerificationResult`. Keep verifier
+  strings opaque to consumers.
 
 ## Boundaries
 

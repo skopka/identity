@@ -19,6 +19,9 @@ public static class IdentityPasswordHasherBuilderExtensions
         builder.Services.RemoveAll<IPasswordHasher>();
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
+        builder.Services.TryAddScoped<
+            IPasswordCredentialService<TProfile>,
+            PasswordCredentialService<TProfile>>();
 
         return builder;
     }
@@ -36,6 +39,9 @@ public static class IdentityPasswordHasherBuilderExtensions
         builder.Services.RemoveAll<IPasswordHasher>();
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton<IPasswordHasher, Argon2idPepperedPasswordHasher>();
+        builder.Services.TryAddScoped<
+            IPasswordCredentialService<TProfile>,
+            PasswordCredentialService<TProfile>>();
 
         return builder;
     }
