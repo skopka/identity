@@ -26,6 +26,8 @@ small value objects.
   strings opaque to consumers.
 - Define authentication contracts such as `IPasswordAuthenticationService<TProfile>`,
   `IIdentityUserLookupStore<TProfile>` and `IPasswordVerificationTimingProtector`.
+- Define security stamp contracts such as `ISecurityStampService<TProfile>` and
+  `ISecurityStampGenerator`.
 
 ## Boundaries
 

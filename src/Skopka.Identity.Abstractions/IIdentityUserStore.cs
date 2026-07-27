@@ -28,12 +28,20 @@ public interface IIdentityUserStore<TProfile>
         DateTimeOffset now,
         CancellationToken ct);
 
+    Task<OperationResult<IdentityUser<TProfile>>> UpdateSecurityStampAsync(
+        Guid userId,
+        long expectedVersion,
+        string securityStamp,
+        DateTimeOffset now,
+        CancellationToken ct);
+
     Task<OperationResult> UpdateStateAsync(
         Guid userId,
         long expectedVersion,
         DateTimeOffset? deletedAt,
         DateTimeOffset? blockedAt,
         DateTimeOffset? blockedUntil,
+        string? newSecurityStamp,
         DateTimeOffset now,
         CancellationToken ct);
 }

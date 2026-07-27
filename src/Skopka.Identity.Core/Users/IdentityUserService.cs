@@ -1,5 +1,6 @@
 ﻿using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Metrics;
+using Skopka.Identity.Security;
 using Skopka.Identity.Users.Commands;
 using Skopka.Identity.Users.Handles;
 
@@ -9,6 +10,7 @@ public sealed class IdentityUserService<TProfile>(
     IIdentityUserStore<TProfile> store,
     IIdentityNormalizer normalizer,
     IUserOperationPolicy policy,
+    ISecurityStampGenerator securityStampGenerator,
     IIdentityMetrics metrics)
     : IIdentityUserService<TProfile>
 {
@@ -30,7 +32,8 @@ public sealed class IdentityUserService<TProfile>(
             cmd.Email,
             cmd.Phone,
             cmd.Profile,
-            cmd.Flags);
+            cmd.Flags,
+            securityStampGenerator.Generate());
 
         var res = await store.CreateAsync(user, handles, now, ct);
         return Finish(op, res);
@@ -195,6 +198,7 @@ public sealed class IdentityUserService<TProfile>(
             user.DeletedAt,
             blockedAt,
             cmd.Until,
+            newSecurityStamp: null,
             now,
             ct);
         if (!res.IsSuccess) return Finish(op, OperationResultFactory.Fail<IdentityUser<TProfile>>(res.Errors));
@@ -224,6 +228,7 @@ public sealed class IdentityUserService<TProfile>(
             user.DeletedAt,
             null,
             null,
+            newSecurityStamp: null,
             now,
             ct);
         if (!res.IsSuccess) return Finish(op, OperationResultFactory.Fail<IdentityUser<TProfile>>(res.Errors));
@@ -252,6 +257,7 @@ public sealed class IdentityUserService<TProfile>(
             deletedAt,
             user.BlockedAt,
             user.BlockedUntil,
+            securityStampGenerator.Generate(),
             now,
             ct);
 
@@ -274,6 +280,7 @@ public sealed class IdentityUserService<TProfile>(
             null,
             user.BlockedAt,
             user.BlockedUntil,
+            newSecurityStamp: null,
             now,
             ct);
         if (!res.IsSuccess) return Finish(op, OperationResultFactory.Fail<IdentityUser<TProfile>>(res.Errors));

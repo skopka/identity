@@ -20,7 +20,8 @@ public sealed class EfIdentityUserStoreTests
                 "alice@example.com",
                 "+123456789",
                 new TestProfile("Alice Smith"),
-                UserFlags.None),
+                UserFlags.None,
+                "SECURITY-STAMP"),
             new NormalizedHandles("ALICE", "ALICE@EXAMPLE.COM", "+123456789"),
             now,
             CancellationToken.None);
@@ -96,6 +97,7 @@ public sealed class EfIdentityUserStoreTests
             null,
             blockedAt,
             blockedUntil,
+            newSecurityStamp: null,
             blockedAt,
             CancellationToken.None);
 
@@ -107,6 +109,26 @@ public sealed class EfIdentityUserStoreTests
         Assert.Equal(blockedAt, found.BlockedAt);
         Assert.Equal(blockedUntil, found.BlockedUntil);
         Assert.Equal(blockedAt, found.ModifiedAt);
+    }
+
+    [Fact]
+    public async Task UpdateSecurityStampIncrementsVersion()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var created = await database.CreateUserAsync();
+        var now = created.ModifiedAt.AddMinutes(1);
+
+        var result = await database.Store.UpdateSecurityStampAsync(
+            created.Id,
+            created.Version,
+            "NEW-SECURITY-STAMP",
+            now,
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(created.Version + 1, result.Value.Version);
+        Assert.Equal("NEW-SECURITY-STAMP", result.Value.SecurityStamp);
+        Assert.Equal(now, result.Value.ModifiedAt);
     }
 
     [Fact]
@@ -137,6 +159,7 @@ public sealed class EfIdentityUserStoreTests
             null,
             null,
             null,
+            newSecurityStamp: null,
             DateTimeOffset.UtcNow,
             CancellationToken.None);
 
@@ -173,6 +196,7 @@ public sealed class EfIdentityUserStoreTests
             DateTimeOffset.UtcNow,
             created.BlockedAt,
             created.BlockedUntil,
+            newSecurityStamp: "DELETE-STAMP",
             DateTimeOffset.UtcNow,
             CancellationToken.None);
         Assert.True(deleteResult.IsSuccess);
@@ -219,7 +243,8 @@ public sealed class EfIdentityUserStoreTests
                     "alice@example.com",
                     null,
                     new TestProfile("Alice"),
-                    UserFlags.None),
+                    UserFlags.None,
+                    "SECURITY-STAMP"),
                 new NormalizedHandles("ALICE", "ALICE@EXAMPLE.COM", null),
                 now,
                 CancellationToken.None);

@@ -50,6 +50,8 @@ file first and then the module-local file:
   login without exposing whether the user or credential exists.
 - `IIdentityUserLookupStore<TProfile>` provides active-user lookup by normalized login
   handles.
+- `ISecurityStampService<TProfile>` rotates and validates session invalidation stamps.
+- `ISecurityStampGenerator` creates opaque random stamp values.
 - `IIdentityNormalizer` normalizes userName/email/phone before persistence and checks.
 - `IUserOperationPolicy` decides whether the current user flags allow mutation.
 - `IProfilePatch<TProfile>` applies partial profile changes.
@@ -73,6 +75,7 @@ public record IdentityUser<TProfile>(
     bool PhoneConfirmed,
     TProfile Profile,
     long Version,
+    string SecurityStamp,
     DateTimeOffset? DeletedAt,
     DateTimeOffset? BlockedAt,
     DateTimeOffset? BlockedUntil,
@@ -90,7 +93,10 @@ application. Do not bake application profile fields into the core model.
 `Version` is a `long` optimistic concurrency token. Do not replace it with timestamps and
 do not bypass expected-version checks for mutating commands.
 
-`SecurityStamp` is intentionally not part of the current model. It is planned separately.
+`SecurityStamp` is a random opaque value used to invalidate sessions. It changes on
+password set/change/removal, soft delete and explicit rotation, but not on a technical
+password rehash. Future credential changes such as external login removal must rotate it
+as well.
 
 ## Commands
 
@@ -112,6 +118,7 @@ The current command set is:
 - `RemovePasswordCommand`
 - `VerifyPasswordCommand`
 - `AuthenticatePasswordCommand`
+- `RotateSecurityStampCommand`
 
 Mutation commands use `ExpectedVersion` except `ConfirmEmailCommand` and
 `ConfirmPhoneCommand`, which intentionally do not accept `ExpectedVersion`.
@@ -143,6 +150,10 @@ Preserve these rules:
   between usernames and emails. Unknown users, missing credentials and wrong passwords
   return the same invalid-credentials error. Unknown/missing-credential paths must run a
   configured dummy password verification workload.
+- Security stamp changes and credential mutations bump `Version` in the same persistence
+  operation. Stamp validation rejects missing, deleted and actively blocked users.
+- Soft delete rotates the stamp so restoring a user cannot reactivate sessions issued
+  before deletion.
 - Store operations receive `now` from the service; do not recompute operation time in
   lower-level domain orchestration.
 - Expected domain failures should return `OperationResult` errors, not throw exceptions.
@@ -157,6 +168,7 @@ EF Core storage is split:
   - normalized handles
   - confirmed flags
   - version
+  - security stamp
   - deleted and blocked timestamps
 - `user_profiles`
   - display handles
@@ -186,10 +198,10 @@ there are no pending model changes.
 
 ## Current Implementation Direction
 
-Continue from the existing code. User lifecycle, password credentials and password
-authentication by username/email are implemented. The next security-critical area is
-authentication attempt tracking and rate limiting. Keep request/IP-aware throttling out of
-the password hasher and low-level EF lookup store.
+Continue from the existing code. User lifecycle, password credentials, password
+authentication by username/email and security stamp rotation/validation are implemented.
+The next security-critical area is authentication attempt tracking and rate limiting.
+Keep request/IP-aware throttling out of the password hasher and low-level EF lookup store.
 
 Do not move EF responsibilities into Core. Do not move domain policy decisions into EF
 unless the store is only translating database outcomes into domain errors.

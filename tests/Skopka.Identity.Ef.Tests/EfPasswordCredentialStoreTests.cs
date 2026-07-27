@@ -20,6 +20,7 @@ public sealed class EfPasswordCredentialStoreTests
             database.User.Version,
             expectedPasswordVerifier: null,
             passwordVerifier: "opaque-verifier",
+            newSecurityStamp: "NEW-STAMP",
             now,
             CancellationToken.None);
 
@@ -34,6 +35,7 @@ public sealed class EfPasswordCredentialStoreTests
             .AsNoTracking()
             .SingleAsync(entity => entity.Id == database.User.Id);
         Assert.Equal(database.User.Version + 1, user.Version);
+        Assert.Equal("NEW-STAMP", user.SecurityStamp);
         Assert.Equal(now, user.ModifiedAt);
     }
 
@@ -47,6 +49,7 @@ public sealed class EfPasswordCredentialStoreTests
             database.User.Version,
             expectedPasswordVerifier: "different-verifier",
             passwordVerifier: "new-verifier",
+            newSecurityStamp: "NEW-STAMP",
             DateTimeOffset.UtcNow,
             CancellationToken.None);
 
@@ -68,6 +71,7 @@ public sealed class EfPasswordCredentialStoreTests
             database.User.Version + 1,
             expectedPasswordVerifier: "old-verifier",
             passwordVerifier: "new-verifier",
+            newSecurityStamp: "NEW-STAMP",
             DateTimeOffset.UtcNow,
             CancellationToken.None);
 
@@ -85,6 +89,7 @@ public sealed class EfPasswordCredentialStoreTests
             database.User.Version,
             expectedPasswordVerifier: "old-verifier",
             passwordVerifier: null,
+            newSecurityStamp: "NEW-STAMP",
             now,
             CancellationToken.None);
 
@@ -95,6 +100,28 @@ public sealed class EfPasswordCredentialStoreTests
             .SingleAsync(entity => entity.UserId == database.User.Id);
         Assert.Null(credential.PasswordVerifier);
         Assert.Equal(now, credential.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task TechnicalRehashPreservesSecurityStamp()
+    {
+        await using var database = await TestDatabase.CreateAsync("old-verifier");
+
+        var result = await database.CredentialStore.ReplacePasswordVerifierAsync(
+            database.User.Id,
+            database.User.Version,
+            expectedPasswordVerifier: "old-verifier",
+            passwordVerifier: "new-verifier",
+            newSecurityStamp: null,
+            DateTimeOffset.UtcNow,
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+
+        var user = await database.Context.Users
+            .AsNoTracking()
+            .SingleAsync(entity => entity.Id == database.User.Id);
+        Assert.Equal(database.User.SecurityStamp, user.SecurityStamp);
     }
 
     private static void AssertError(
@@ -135,7 +162,8 @@ public sealed class EfPasswordCredentialStoreTests
                     "alice@example.com",
                     null,
                     new TestProfile("Alice"),
-                    UserFlags.None),
+                    UserFlags.None,
+                    "OLD-STAMP"),
                 new NormalizedHandles("ALICE", "ALICE@EXAMPLE.COM", null),
                 now,
                 CancellationToken.None);
@@ -149,6 +177,7 @@ public sealed class EfPasswordCredentialStoreTests
                     createResult.Value.Version,
                     expectedPasswordVerifier: null,
                     passwordVerifier,
+                    newSecurityStamp: "SET-STAMP",
                     now.AddMinutes(1),
                     CancellationToken.None);
                 Assert.True(setResult.IsSuccess);

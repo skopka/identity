@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.Metrics;
+using Skopka.Identity.Security;
 using Skopka.Identity.Users;
 using Xunit;
 
@@ -33,6 +34,10 @@ public sealed class PostgreSqlIdentityRegistrationTests
             scopedProvider.GetRequiredService<IIdentityMetrics>());
         Assert.IsType<IdentityUserService<TestProfile>>(
             scopedProvider.GetRequiredService<IIdentityUserService<TestProfile>>());
+        Assert.IsType<DefaultSecurityStampGenerator>(
+            scopedProvider.GetRequiredService<ISecurityStampGenerator>());
+        Assert.IsType<SecurityStampService<TestProfile>>(
+            scopedProvider.GetRequiredService<ISecurityStampService<TestProfile>>());
         Assert.IsType<EfIdentityUserStore<TestProfile>>(
             scopedProvider.GetRequiredService<IIdentityUserStore<TestProfile>>());
         Assert.IsType<EfIdentityUserStore<TestProfile>>(
@@ -48,19 +53,24 @@ public sealed class PostgreSqlIdentityRegistrationTests
             scopedProvider.GetServices<IEfIdentityExceptionMapper>(),
             mapper => mapper is PostgreSqlIdentityExceptionMapper);
 
-        var migration = Assert.Single(
+        Assert.Single(
             providerContext.Database.GetMigrations(),
             name => name.EndsWith("_InitialIdentitySchema", StringComparison.Ordinal));
+        var securityStampMigration = Assert.Single(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith("_AddSecurityStamp", StringComparison.Ordinal));
         Assert.False(providerContext.Database.HasPendingModelChanges());
 
         var script = providerContext.GetService<IMigrator>().GenerateScript(
             fromMigration: null,
-            toMigration: migration);
+            toMigration: securityStampMigration);
 
         Assert.Contains("CREATE TABLE auth_users", script, StringComparison.Ordinal);
         Assert.Contains("CREATE TABLE user_profiles", script, StringComparison.Ordinal);
         Assert.Contains("jsonb", script, StringComparison.Ordinal);
         Assert.Contains("ux_auth_users_normalized_email", script, StringComparison.Ordinal);
+        Assert.Contains("security_stamp", script, StringComparison.Ordinal);
+        Assert.Contains("gen_random_uuid()", script, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -68,13 +78,18 @@ public sealed class PostgreSqlIdentityRegistrationTests
     {
         var services = new ServiceCollection();
         var normalizer = new TestNormalizer();
+        var securityStampGenerator = new TestSecurityStampGenerator();
         services.AddSingleton<IIdentityNormalizer>(normalizer);
+        services.AddSingleton<ISecurityStampGenerator>(securityStampGenerator);
 
         services.AddSkopkaIdentity<TestProfile>();
 
         using var provider = services.BuildServiceProvider();
 
         Assert.Same(normalizer, provider.GetRequiredService<IIdentityNormalizer>());
+        Assert.Same(
+            securityStampGenerator,
+            provider.GetRequiredService<ISecurityStampGenerator>());
     }
 
     public sealed record TestProfile(string DisplayName);
@@ -84,5 +99,10 @@ public sealed class PostgreSqlIdentityRegistrationTests
         public string? NormalizeUserName(string? value) => value;
         public string? NormalizeEmail(string? value) => value;
         public string? NormalizePhone(string? value) => value;
+    }
+
+    private sealed class TestSecurityStampGenerator : ISecurityStampGenerator
+    {
+        public string Generate() => "TEST-STAMP";
     }
 }

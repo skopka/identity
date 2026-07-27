@@ -10,6 +10,7 @@ public record IdentityUser<TProfile>(
     bool PhoneConfirmed,
     TProfile Profile,
     long Version,
+    string SecurityStamp,
     DateTimeOffset? DeletedAt,
     DateTimeOffset? BlockedAt,
     DateTimeOffset? BlockedUntil,

@@ -49,3 +49,5 @@ identity stores when it is added.
   may no longer be unique.
 - Password verifier replacements compare both user `Version` and the expected previous
   verifier before updating, then bump the user version in the same save operation.
+- `auth_users.security_stamp` is required and limited to 64 characters. Explicit stamp
+  rotation and password credential changes persist it atomically with the version bump.

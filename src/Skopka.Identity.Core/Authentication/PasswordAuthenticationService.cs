@@ -91,6 +91,7 @@ public sealed class PasswordAuthenticationService<TProfile>(
                 user.Version,
                 passwordVerifier,
                 updatedVerifier,
+                newSecurityStamp: null,
                 now,
                 ct);
 

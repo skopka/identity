@@ -205,6 +205,7 @@ public sealed class PasswordAuthenticationServiceTests
                 false,
                 new TestProfile("Alice"),
                 3,
+                "SECURITY-STAMP",
                 null,
                 blockedAt,
                 blockedUntil,
@@ -288,6 +289,7 @@ public sealed class PasswordAuthenticationServiceTests
             long expectedVersion,
             string? expectedPasswordVerifier,
             string? newPasswordVerifier,
+            string? newSecurityStamp,
             DateTimeOffset now,
             CancellationToken ct)
         {

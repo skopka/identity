@@ -1,6 +1,7 @@
 using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Errors;
 using Skopka.Identity.Metrics;
+using Skopka.Identity.Security;
 using Skopka.Identity.Users;
 
 namespace Skopka.Identity.Credentials;
@@ -9,6 +10,7 @@ public sealed class PasswordCredentialService<TProfile>(
     IIdentityUserStore<TProfile> userStore,
     IPasswordCredentialStore<TProfile> credentialStore,
     IPasswordHasher passwordHasher,
+    ISecurityStampGenerator securityStampGenerator,
     IUserOperationPolicy policy,
     IIdentityMetrics metrics)
     : IPasswordCredentialService<TProfile>
@@ -45,6 +47,7 @@ public sealed class PasswordCredentialService<TProfile>(
             cmd.ExpectedVersion,
             expectedPasswordVerifier: null,
             passwordVerifier,
+            securityStampGenerator.Generate(),
             now,
             ct);
 
@@ -92,6 +95,7 @@ public sealed class PasswordCredentialService<TProfile>(
             cmd.ExpectedVersion,
             currentVerifier,
             passwordVerifier,
+            securityStampGenerator.Generate(),
             now,
             ct);
 
@@ -123,6 +127,7 @@ public sealed class PasswordCredentialService<TProfile>(
             cmd.ExpectedVersion,
             currentVerifier,
             passwordVerifier: null,
+            securityStampGenerator.Generate(),
             now,
             ct);
 
@@ -175,6 +180,7 @@ public sealed class PasswordCredentialService<TProfile>(
                 user.Version,
                 currentVerifier,
                 passwordVerifier,
+                newSecurityStamp: null,
                 now,
                 ct);
 

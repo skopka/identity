@@ -37,3 +37,5 @@ install and configure without moving domain or persistence logic into the facade
   default in `AddSkopkaIdentity<TProfile>()`.
 - Selecting a password hasher activates password credential and authentication services;
   the configured persistence provider must supply their stores.
+- `AddSkopkaIdentity<TProfile>()` registers the default security stamp generator and
+  rotate/validate service. Consumers may replace the generator by registering first.

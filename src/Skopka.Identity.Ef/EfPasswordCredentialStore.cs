@@ -34,6 +34,7 @@ public sealed class EfPasswordCredentialStore<TProfile>(
         long expectedVersion,
         string? expectedPasswordVerifier,
         string? passwordVerifier,
+        string? newSecurityStamp,
         DateTimeOffset now,
         CancellationToken ct)
     {
@@ -78,6 +79,11 @@ public sealed class EfPasswordCredentialStore<TProfile>(
         }
 
         user.Version = checked(expectedVersion + 1);
+        if (newSecurityStamp is not null)
+        {
+            user.SecurityStamp = newSecurityStamp;
+        }
+
         user.ModifiedAt = now;
 
         try

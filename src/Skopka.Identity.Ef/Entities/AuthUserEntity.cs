@@ -14,6 +14,7 @@ public sealed class AuthUserEntity
     public bool PhoneConfirmed { get; set; }
 
     public long Version { get; set; } // optimistic concurrency token
+    public string SecurityStamp { get; set; } = null!;
 
     public DateTimeOffset? DeletedAt { get; set; }
     public DateTimeOffset? BlockedAt { get; set; }

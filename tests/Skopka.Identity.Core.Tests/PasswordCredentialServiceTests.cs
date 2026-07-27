@@ -2,6 +2,7 @@ using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.Errors;
 using Skopka.Identity.Metrics;
+using Skopka.Identity.Security;
 using Skopka.Identity.Users;
 using Skopka.Identity.Users.Handles;
 using Xunit;
@@ -23,6 +24,7 @@ public sealed class PasswordCredentialServiceTests
         Assert.Equal("hash:new password", fixture.CredentialStore.PasswordVerifier);
         Assert.Equal(fixture.User.Version, fixture.CredentialStore.LastExpectedVersion);
         Assert.Null(fixture.CredentialStore.LastExpectedPasswordVerifier);
+        Assert.Equal("NEW-STAMP", fixture.CredentialStore.LastNewSecurityStamp);
     }
 
     [Fact]
@@ -71,6 +73,7 @@ public sealed class PasswordCredentialServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal("hash:current", fixture.CredentialStore.LastExpectedPasswordVerifier);
         Assert.Equal("hash:new password", fixture.CredentialStore.PasswordVerifier);
+        Assert.Equal("NEW-STAMP", fixture.CredentialStore.LastNewSecurityStamp);
     }
 
     [Fact]
@@ -85,6 +88,7 @@ public sealed class PasswordCredentialServiceTests
         Assert.True(result.IsSuccess);
         Assert.Null(fixture.CredentialStore.PasswordVerifier);
         Assert.Equal("hash:current", fixture.CredentialStore.LastExpectedPasswordVerifier);
+        Assert.Equal("NEW-STAMP", fixture.CredentialStore.LastNewSecurityStamp);
     }
 
     [Fact]
@@ -100,6 +104,7 @@ public sealed class PasswordCredentialServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal("legacy", fixture.CredentialStore.LastExpectedPasswordVerifier);
         Assert.Equal("hash:current", fixture.CredentialStore.PasswordVerifier);
+        Assert.Null(fixture.CredentialStore.LastNewSecurityStamp);
     }
 
     [Fact]
@@ -168,6 +173,7 @@ public sealed class PasswordCredentialServiceTests
                 false,
                 new TestProfile("Alice"),
                 3,
+                "OLD-STAMP",
                 null,
                 null,
                 null,
@@ -180,6 +186,7 @@ public sealed class PasswordCredentialServiceTests
                 new FakeIdentityUserStore(User),
                 CredentialStore,
                 Hasher,
+                new FakeSecurityStampGenerator(),
                 new DefaultUserOperationPolicy(),
                 new NoopIdentityMetrics());
         }
@@ -196,6 +203,7 @@ public sealed class PasswordCredentialServiceTests
         public string? PasswordVerifier { get; private set; } = passwordVerifier;
         public string? LastExpectedPasswordVerifier { get; private set; }
         public long LastExpectedVersion { get; private set; }
+        public string? LastNewSecurityStamp { get; private set; }
         public int ReplaceCalls { get; private set; }
 
         public Task<string?> FindPasswordVerifierAsync(
@@ -208,15 +216,22 @@ public sealed class PasswordCredentialServiceTests
             long expectedVersion,
             string? expectedPasswordVerifier,
             string? newPasswordVerifier,
+            string? newSecurityStamp,
             DateTimeOffset now,
             CancellationToken ct)
         {
             ReplaceCalls++;
             LastExpectedVersion = expectedVersion;
             LastExpectedPasswordVerifier = expectedPasswordVerifier;
+            LastNewSecurityStamp = newSecurityStamp;
             PasswordVerifier = newPasswordVerifier;
             return Task.FromResult(OperationResultFactory.Success());
         }
+    }
+
+    private sealed class FakeSecurityStampGenerator : ISecurityStampGenerator
+    {
+        public string Generate() => "NEW-STAMP";
     }
 
     private sealed class FakePasswordHasher : IPasswordHasher
@@ -273,12 +288,21 @@ public sealed class PasswordCredentialServiceTests
             CancellationToken ct)
             => throw new NotSupportedException();
 
+        public Task<OperationResult<IdentityUser<TestProfile>>> UpdateSecurityStampAsync(
+            Guid userId,
+            long expectedVersion,
+            string securityStamp,
+            DateTimeOffset now,
+            CancellationToken ct)
+            => throw new NotSupportedException();
+
         public Task<OperationResult> UpdateStateAsync(
             Guid userId,
             long expectedVersion,
             DateTimeOffset? deletedAt,
             DateTimeOffset? blockedAt,
             DateTimeOffset? blockedUntil,
+            string? newSecurityStamp,
             DateTimeOffset now,
             CancellationToken ct)
             => throw new NotSupportedException();

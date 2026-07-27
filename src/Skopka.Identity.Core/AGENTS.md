@@ -5,15 +5,16 @@ Read `../../AGENTS.md` first. This file narrows the rules for
 
 ## Purpose
 
-This module implements domain orchestration for identity users, password credentials and
-password authentication. It coordinates validation, normalization, policy checks,
-metrics and calls to storage ports.
+This module implements domain orchestration for identity users, password credentials,
+password authentication and security stamps. It coordinates validation, normalization,
+policy checks, metrics and calls to storage ports.
 
 ## Allowed Responsibilities
 
 - Implement `IIdentityUserService<TProfile>`.
 - Implement `IPasswordCredentialService<TProfile>`.
 - Implement `IPasswordAuthenticationService<TProfile>` and dummy verification workload.
+- Implement `ISecurityStampService<TProfile>` and the default random stamp generator.
 - Provide default domain services such as `DefaultIdentityNormalizer`,
   `DefaultUserOperationPolicy` and default/noop metrics implementations.
 - Create domain errors through `IdentityErrors`.
@@ -46,6 +47,9 @@ metrics and calls to storage ports.
 - Authentication performs one password KDF verification on every credential-denied path.
 - Active permanent or temporary blocks reject authentication after password verification;
   expired temporary blocks do not reject authentication.
+- Password set/change/removal rotates the security stamp; technical rehash does not.
+- Soft delete rotates the security stamp; restore preserves the post-delete stamp.
+- Stamp validation rejects deleted and actively blocked users.
 
 ## Implementation Style
 

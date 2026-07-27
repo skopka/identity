@@ -48,3 +48,5 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
   runtime context using another `TProfile`.
 - Keep tests for `GetMigrations()`, generated migration SQL and
   `HasPendingModelChanges()`.
+- Security stamp migration backfills existing users with PostgreSQL-generated UUID values
+  before making the column non-null.

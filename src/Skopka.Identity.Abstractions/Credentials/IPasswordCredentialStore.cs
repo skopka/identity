@@ -13,6 +13,7 @@ public interface IPasswordCredentialStore<TProfile>
         long expectedVersion,
         string? expectedPasswordVerifier,
         string? passwordVerifier,
+        string? newSecurityStamp,
         DateTimeOffset now,
         CancellationToken ct);
 }

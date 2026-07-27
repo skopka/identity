@@ -303,6 +303,7 @@ public sealed class PasswordHasherTests
             long expectedVersion,
             string? expectedPasswordVerifier,
             string? passwordVerifier,
+            string? newSecurityStamp,
             DateTimeOffset now,
             CancellationToken ct)
             => Task.FromResult(OperationResultFactory.Success());

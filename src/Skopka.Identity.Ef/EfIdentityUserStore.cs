@@ -101,6 +101,7 @@ public sealed class EfIdentityUserStore<TProfile>
             NormalizedEmail = handles.Email,
             NormalizedPhone = handles.Phone,
             Version = 1,
+            SecurityStamp = user.SecurityStamp,
             CreatedAt = now,
             ModifiedAt = now,
             Profile = profile
@@ -232,12 +233,48 @@ public sealed class EfIdentityUserStore<TProfile>
         }
     }
 
+    public async Task<OperationResult<IdentityUser<TProfile>>> UpdateSecurityStampAsync(
+        Guid userId,
+        long expectedVersion,
+        string securityStamp,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        var profile = await FindTrackedProfileAsync(userId, ct);
+        if (profile is null)
+        {
+            return OperationResultFactory.Fail<IdentityUser<TProfile>>(UserNotFoundError);
+        }
+
+        var authUser = profile.User;
+        if (authUser.Version != expectedVersion)
+        {
+            Detach(authUser, profile);
+            return OperationResultFactory.Fail<IdentityUser<TProfile>>(ConcurrencyError);
+        }
+
+        authUser.SecurityStamp = securityStamp;
+        BumpVersion(authUser, expectedVersion, now);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+            return OperationResultFactory.Success(ToModel(profile));
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            Detach(authUser, profile);
+            return OperationResultFactory.Fail<IdentityUser<TProfile>>(ConcurrencyError);
+        }
+    }
+
     public async Task<OperationResult> UpdateStateAsync(
         Guid userId,
         long expectedVersion,
         DateTimeOffset? deletedAt,
         DateTimeOffset? blockedAt,
         DateTimeOffset? blockedUntil,
+        string? newSecurityStamp,
         DateTimeOffset now,
         CancellationToken ct)
     {
@@ -256,6 +293,11 @@ public sealed class EfIdentityUserStore<TProfile>
         authUser.DeletedAt = deletedAt;
         authUser.BlockedAt = blockedAt;
         authUser.BlockedUntil = blockedUntil;
+        if (newSecurityStamp is not null)
+        {
+            authUser.SecurityStamp = newSecurityStamp;
+        }
+
         BumpVersion(authUser, expectedVersion, now);
 
         try
@@ -306,6 +348,7 @@ public sealed class EfIdentityUserStore<TProfile>
             user.PhoneConfirmed,
             profile.Profile,
             user.Version,
+            user.SecurityStamp,
             user.DeletedAt,
             user.BlockedAt,
             user.BlockedUntil,

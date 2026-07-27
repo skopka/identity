@@ -22,6 +22,10 @@ internal sealed class AuthUserConfiguration : IEntityTypeConfiguration<AuthUserE
         builder.Property(user => user.Version)
             .HasColumnName("version")
             .IsConcurrencyToken();
+        builder.Property(user => user.SecurityStamp)
+            .HasColumnName("security_stamp")
+            .HasMaxLength(64)
+            .IsRequired();
         builder.Property(user => user.DeletedAt).HasColumnName("deleted_at");
         builder.Property(user => user.BlockedAt).HasColumnName("blocked_at");
         builder.Property(user => user.BlockedUntil).HasColumnName("blocked_until");

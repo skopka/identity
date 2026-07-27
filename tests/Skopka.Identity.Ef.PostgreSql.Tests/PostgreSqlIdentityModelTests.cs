@@ -24,6 +24,11 @@ public sealed class PostgreSqlIdentityModelTests
         var userType = context.Model.FindEntityType(typeof(AuthUserEntity));
         Assert.NotNull(userType);
 
+        var securityStamp = userType.FindProperty(nameof(AuthUserEntity.SecurityStamp));
+        Assert.NotNull(securityStamp);
+        Assert.False(securityStamp.IsNullable);
+        Assert.Equal(64, securityStamp.GetMaxLength());
+
         AssertUniqueFilteredIndex(
             userType,
             "ux_auth_users_normalized_user_name",
