@@ -17,6 +17,8 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
 - Implement `ISecurityStampService<TProfile>` and the default random stamp generator.
 - Implement `IIdentityActionTokenIssuer<TProfile>` and validate action-token bindings in
   confirmation/password-reset use cases.
+- Implement `IIdentityVerificationService<TProfile>` challenge orchestration and
+  one-time proof generation/consumption.
 - Provide default domain services such as `DefaultIdentityNormalizer`,
   `DefaultUserOperationPolicy` and default/noop metrics implementations.
 - Create domain errors through `IdentityErrors`.
@@ -58,6 +60,14 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   password-reset token, then atomically replaces the verifier and rotates the security
   stamp. The stamp change invalidates the successfully used reset token.
 - Do not treat action tokens as OTP/MFA authenticators or add delivery concerns to Core.
+- Verification binds every challenge to user, purpose, intent binding and current
+  security stamp. It enforces expiry and failed-attempt limits independently of the
+  selected method provider.
+- Core stores only a SHA-256 digest of the high-entropy verification proof. Business
+  authorization and execution remain outside Verification.
+- Do not claim cross-module transaction atomicity. The application use case should
+  consume the proof and mutate its intent in one unit of work when both stores can share
+  a transaction.
 
 ## Implementation Style
 

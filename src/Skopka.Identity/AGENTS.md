@@ -42,3 +42,6 @@ install and configure without moving domain or persistence logic into the facade
 - Action tokens remain optional and are enabled through Infrastructure with
   `UseDataProtectionActionTokens<TProfile>()`; the facade does not take a direct Data
   Protection dependency.
+- `AddSkopkaIdentity<TProfile>()` registers Verification orchestration and default
+  options. Concrete verification methods remain optional and are selected through
+  Infrastructure extensions such as `UseHmacOneTimeCodes<TProfile>()`.

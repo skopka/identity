@@ -48,3 +48,13 @@ It is not the place for core business rules.
   subsystem and configures its lifetimes. Production and multi-instance applications
   must persist and share the ASP.NET Core Data Protection key ring; ephemeral keys make
   outstanding tokens invalid after restart or when routed to another instance.
+- `HmacOneTimeCodeProvider` issues generated numeric OTP values but persists only a
+  versioned HMAC-SHA256 verifier bound to the full challenge context. Compare digests in
+  fixed time and reject malformed verifier/code input without throwing.
+- Verification-code HMAC keys are separate from password peppers and Data Protection
+  keys. Key providers retain historical keys until all challenges issued under them have
+  expired.
+- `UseHmacOneTimeCodes<TProfile>()` enables generated OTP and configures code length,
+  challenge lifetime, proof lifetime and per-challenge failed-attempt limit. Delivery is
+  the caller's responsibility. Treat returned delivery codes as secrets and never log
+  them.

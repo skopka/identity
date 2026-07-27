@@ -7,6 +7,7 @@ using Skopka.Identity.Credentials;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.Security;
 using Skopka.Identity.Users;
+using Skopka.Identity.Verification;
 using Xunit;
 
 namespace Skopka.Identity.Ef.PostgreSql.Tests;
@@ -44,6 +45,12 @@ public sealed class PostgreSqlIdentityRegistrationTests
             scopedProvider.GetRequiredService<IIdentityUserLookupStore<TestProfile>>());
         Assert.IsType<EfPasswordCredentialStore<TestProfile>>(
             scopedProvider.GetRequiredService<IPasswordCredentialStore<TestProfile>>());
+        Assert.IsType<EfVerificationChallengeStore<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IVerificationChallengeStore<TestProfile>>());
+        Assert.IsType<IdentityVerificationService<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentityVerificationService<TestProfile>>());
 
         var providerContext = scopedProvider.GetRequiredService<PostgreSqlIdentityDbContext<TestProfile>>();
         var storeContext = scopedProvider.GetRequiredService<IdentityDbContext<TestProfile>>();
@@ -59,11 +66,16 @@ public sealed class PostgreSqlIdentityRegistrationTests
         var securityStampMigration = Assert.Single(
             providerContext.Database.GetMigrations(),
             name => name.EndsWith("_AddSecurityStamp", StringComparison.Ordinal));
+        var verificationMigration = Assert.Single(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith(
+                "_AddVerificationChallenges",
+                StringComparison.Ordinal));
         Assert.False(providerContext.Database.HasPendingModelChanges());
 
         var script = providerContext.GetService<IMigrator>().GenerateScript(
             fromMigration: null,
-            toMigration: securityStampMigration);
+            toMigration: verificationMigration);
 
         Assert.Contains("CREATE TABLE auth_users", script, StringComparison.Ordinal);
         Assert.Contains("CREATE TABLE user_profiles", script, StringComparison.Ordinal);
@@ -71,6 +83,10 @@ public sealed class PostgreSqlIdentityRegistrationTests
         Assert.Contains("ux_auth_users_normalized_email", script, StringComparison.Ordinal);
         Assert.Contains("security_stamp", script, StringComparison.Ordinal);
         Assert.Contains("gen_random_uuid()", script, StringComparison.Ordinal);
+        Assert.Contains(
+            "CREATE TABLE verification_challenges",
+            script,
+            StringComparison.Ordinal);
     }
 
     [Fact]

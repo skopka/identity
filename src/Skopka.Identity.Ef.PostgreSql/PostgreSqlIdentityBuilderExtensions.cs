@@ -6,6 +6,7 @@ using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.Ef;
 using Skopka.Identity.Ef.PostgreSql;
+using Skopka.Identity.Verification;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -38,6 +39,9 @@ public static class PostgreSqlIdentityBuilderExtensions
         builder.Services.TryAddScoped<
             IPasswordCredentialStore<TProfile>,
             EfPasswordCredentialStore<TProfile>>();
+        builder.Services.TryAddScoped<
+            IVerificationChallengeStore<TProfile>,
+            EfVerificationChallengeStore<TProfile>>();
         builder.Services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IEfIdentityExceptionMapper, PostgreSqlIdentityExceptionMapper>());
 

@@ -3,6 +3,7 @@ using Skopka.Identity;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.Security;
 using Skopka.Identity.Users;
+using Skopka.Identity.Verification;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -21,6 +22,10 @@ public static class IdentityServiceCollectionExtensions
         services.TryAddScoped<
             ISecurityStampService<TProfile>,
             SecurityStampService<TProfile>>();
+        services.TryAddSingleton(new VerificationOptions());
+        services.TryAddScoped<
+            IIdentityVerificationService<TProfile>,
+            IdentityVerificationService<TProfile>>();
 
         return new IdentityBuilder<TProfile>(services);
     }

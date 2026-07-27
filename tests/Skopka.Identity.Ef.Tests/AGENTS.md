@@ -2,6 +2,9 @@
 
 Read `../../AGENTS.md` and `../../src/Skopka.Identity.Ef/AGENTS.md` first.
 
+Verification store tests must cover failed-attempt state transitions, proof binding,
+single consumption and optimistic concurrency behavior.
+
 This project verifies the provider-neutral behavior of `Skopka.Identity.Ef`.
 Use the EF Core in-memory provider for store contract tests. Keep relational constraints,
 SQL generation and SQLSTATE tests in a separate PostgreSQL test project when it is added.

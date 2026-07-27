@@ -31,6 +31,9 @@ small value objects.
 - Define action-token contracts under `Tokens`, including purposes, protected payload,
   issuer, provider and configurable lifetimes. Action tokens must not depend on ASP.NET
   Core Data Protection at this layer.
+- Define Verification contracts for challenge lifecycle, concrete method providers,
+  one-time proofs and persistence ports. Keep business intents opaque through
+  server-created `Purpose` and `Binding` values.
 
 ## Boundaries
 
@@ -53,3 +56,6 @@ small value objects.
 - Expected domain failures are represented by `OperationResult` and stable error codes.
 - Confirmation commands include the target handle and protected token, but intentionally
   omit `ExpectedVersion`. Password reset includes the protected token and new password.
+- Verification methods return opaque persisted verifiers and optional delivery codes.
+  The abstraction must not require generated OTP, because future TOTP or WebAuthn
+  methods may not issue a deliverable code.

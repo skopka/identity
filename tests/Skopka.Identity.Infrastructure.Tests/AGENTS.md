@@ -8,3 +8,6 @@ are allowed only in tests to keep the suite fast.
 
 Data Protection action-token tests must cover round-trip, tampering, purpose separation,
 URL-safe encoding and DI registration. Use an ephemeral provider only inside tests.
+
+Generated OTP tests must cover exact code format, wrong/malformed input, full context
+binding, historical HMAC key verification and DI registration.

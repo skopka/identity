@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Skopka.Identity.Ef.Entities;
+using Skopka.Identity.Verification;
 using Xunit;
 
 namespace Skopka.Identity.Ef.PostgreSql.Tests;
@@ -41,6 +42,24 @@ public sealed class PostgreSqlIdentityModelTests
             userType,
             "ux_auth_users_normalized_phone",
             "deleted_at IS NULL AND normalized_phone IS NOT NULL");
+
+        var challengeType = context.Model.FindEntityType(
+            typeof(VerificationChallengeEntity));
+        Assert.NotNull(challengeType);
+        Assert.True(
+            challengeType
+                .FindProperty(nameof(VerificationChallengeEntity.Version))!
+                .IsConcurrencyToken);
+        Assert.Equal(
+            VerificationLimits.MaximumBindingLength,
+            challengeType
+                .FindProperty(nameof(VerificationChallengeEntity.Binding))!
+                .GetMaxLength());
+        Assert.Equal(
+            64,
+            challengeType
+                .FindProperty(nameof(VerificationChallengeEntity.ProofHash))!
+                .GetMaxLength());
     }
 
     private static void AssertUniqueFilteredIndex(

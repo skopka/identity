@@ -12,3 +12,7 @@ validation against user state.
 Action-token tests must cover purpose, user, normalized target, security-stamp and expiry
 bindings. Password-reset tests must prove that successful stamp rotation prevents token
 replay.
+
+Verification tests must cover user/purpose/binding/stamp binding, failed-attempt lock,
+proof expiry and one-time consumption. Use method-provider and store fakes; do not test
+HMAC algorithms in Core.

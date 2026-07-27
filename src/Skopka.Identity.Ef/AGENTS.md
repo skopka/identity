@@ -16,6 +16,8 @@ identity stores when it is added.
   `IIdentityUserLookupStore<TProfile>`.
 - Implement `EfPasswordCredentialStore<TProfile>` against
   `IPasswordCredentialStore<TProfile>`.
+- Implement `EfVerificationChallengeStore<TProfile>` against
+  `IVerificationChallengeStore<TProfile>`.
 - Map EF entities to public `IdentityUser<TProfile>` models.
 - Configure generic EF relationships, keys, concurrency tokens and timestamps.
 - Translate EF concurrency conflicts into identity concurrency errors.
@@ -51,3 +53,6 @@ identity stores when it is added.
   verifier before updating, then bump the user version in the same save operation.
 - `auth_users.security_stamp` is required and limited to 64 characters. Explicit stamp
   rotation and password credential changes persist it atomically with the version bump.
+- `verification_challenges.version` is a concurrency token. Record-attempt and
+  proof-consumption transitions must recheck state, expiry, binding, proof digest and
+  expected version before saving.

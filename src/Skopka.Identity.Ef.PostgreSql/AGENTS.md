@@ -17,6 +17,7 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
 - Provide PostgreSQL DI extension methods for EF persistence when the facade needs them.
 - Register user, active login lookup and password credential EF stores through
   `UsePostgreSql`.
+- Register `IVerificationChallengeStore<TProfile>` through `UsePostgreSql`.
 
 ## Boundaries
 
@@ -50,3 +51,5 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
   `HasPendingModelChanges()`.
 - Security stamp migration backfills existing users with PostgreSQL-generated UUID values
   before making the column non-null.
+- Verification migrations create `verification_challenges` with a foreign key to
+  `auth_users`, a user/state lookup index and a concurrency-token version column.

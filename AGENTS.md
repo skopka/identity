@@ -54,6 +54,10 @@ file first and then the module-local file:
 - `ISecurityStampGenerator` creates opaque random stamp values.
 - `IIdentityActionTokenIssuer<TProfile>` issues confirmation and password-reset tokens.
 - `IIdentityActionTokenProvider` protects and reads purpose-bound token payloads.
+- `IIdentityVerificationService<TProfile>` owns begin, verify and one-time proof
+  consumption for step-up verification challenges.
+- `IVerificationMethodProvider` verifies a concrete method such as a generated OTP.
+- `IVerificationChallengeStore<TProfile>` persists challenge state and CAS transitions.
 - `IIdentityNormalizer` normalizes userName/email/phone before persistence and checks.
 - `IUserOperationPolicy` decides whether the current user flags allow mutation.
 - `IProfilePatch<TProfile>` applies partial profile changes.
@@ -122,6 +126,9 @@ The current command set is:
 - `VerifyPasswordCommand`
 - `AuthenticatePasswordCommand`
 - `RotateSecurityStampCommand`
+- `BeginVerificationCommand`
+- `VerifyVerificationChallengeCommand`
+- `ConsumeVerificationProofCommand`
 
 Mutation commands use `ExpectedVersion` except `ConfirmEmailCommand` and
 `ConfirmPhoneCommand`, which intentionally do not accept `ExpectedVersion`.
@@ -163,7 +170,19 @@ Preserve these rules:
   stamp atomically with the verifier change, making a successfully used reset token
   invalid.
 - Action tokens are not OTP authenticators. Keep future TOTP/SMS/email OTP challenge
-  state, attempt limits and MFA rules in a separate subsystem.
+  state, attempt limits and MFA rules in the separate Verification subsystem.
+- Verification owns challenge expiry, failed-attempt limits, purpose/binding/stamp
+  checks and the `Pending -> Verified -> Consumed` state machine. A business feature
+  decides when verification is required, creates the server-side intent binding and
+  consumes the proof before executing the action.
+- Generated OTP values are never persisted. Infrastructure stores a versioned
+  HMAC-SHA256 verifier bound to challenge id, user id, purpose and binding. HMAC keys
+  stay outside the database and support key-id rotation.
+- A verification proof is a high-entropy one-time secret. Its SHA-256 digest is stored
+  with the challenge and consumption uses optimistic concurrency. Security-stamp
+  changes invalidate pending challenges and verified proofs.
+- Per-challenge `MaxAttempts` does not replace account/IP rate limiting or resend
+  cooldown. Those controls remain the next security-critical layer.
 - Action tokens are stateless and do not require EF entities. The default Infrastructure
   provider uses ASP.NET Core Data Protection. Multi-instance deployments must persist
   and share their Data Protection key ring.
@@ -192,6 +211,11 @@ EF Core storage is split:
 - `user_credentials`
   - opaque password verifier
   - credential update timestamp
+- `verification_challenges`
+  - purpose and server-created intent binding
+  - opaque method verifier and security-stamp snapshot
+  - failed-attempt count and challenge state
+  - one-time proof digest and expiry
 - planned later:
   - `user_external_logins`
 
@@ -216,9 +240,10 @@ there are no pending model changes.
 
 Continue from the existing code. User lifecycle, password credentials, password
 authentication by username/email, security stamp rotation/validation and stateless
-action tokens are implemented. The next security-critical area is authentication attempt
-tracking and rate limiting. Keep request/IP-aware throttling out of the password hasher
-and low-level EF lookup store.
+action tokens are implemented. Verification challenges and generated HMAC OTP are
+implemented as a separate subsystem. The next security-critical area is account/IP
+attempt tracking, challenge-start throttling and resend cooldown. Keep request/IP-aware
+throttling out of password/OTP cryptographic providers and low-level EF lookup stores.
 
 Do not move EF responsibilities into Core. Do not move domain policy decisions into EF
 unless the store is only translating database outcomes into domain errors.
