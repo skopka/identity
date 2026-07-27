@@ -35,3 +35,5 @@ install and configure without moving domain or persistence logic into the facade
 - Password hashing is selected explicitly with `UsePbkdf2PasswordHasher()` or
   `UseArgon2idPepperedPasswordHasher()`. Do not register a hidden password-hashing
   default in `AddSkopkaIdentity<TProfile>()`.
+- Selecting a password hasher activates password credential and authentication services;
+  the configured persistence provider must supply their stores.

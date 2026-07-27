@@ -24,6 +24,8 @@ small value objects.
   `IPasswordPepperProvider`, `IPasswordCredentialService<TProfile>`,
   `IPasswordCredentialStore<TProfile>` and `PasswordVerificationResult`. Keep verifier
   strings opaque to consumers.
+- Define authentication contracts such as `IPasswordAuthenticationService<TProfile>`,
+  `IIdentityUserLookupStore<TProfile>` and `IPasswordVerificationTimingProtector`.
 
 ## Boundaries
 

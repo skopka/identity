@@ -16,4 +16,7 @@ public static class IdentityErrorCodes
     public const string PasswordAlreadySet = "identity.password.already_set";
     public const string PasswordNotSet = "identity.password.not_set";
     public const string InvalidPassword = "identity.password.invalid";
+
+    public const string InvalidCredentials = "identity.authentication.invalid_credentials";
+    public const string AuthenticationBlocked = "identity.authentication.blocked";
 }

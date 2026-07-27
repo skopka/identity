@@ -1,6 +1,9 @@
 using System.Security.Cryptography;
 using Microsoft.Extensions.DependencyInjection;
+using Skopka.Abstraction.OperationResult;
+using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
+using Skopka.Identity.Users;
 using Xunit;
 
 namespace Skopka.Identity.Infrastructure.Tests;
@@ -177,6 +180,21 @@ public sealed class PasswordHasherTests
                     == typeof(IPasswordCredentialService<TestProfile>)
                 && descriptor.ImplementationType
                     == typeof(PasswordCredentialService<TestProfile>));
+        Assert.Contains(
+            services,
+            descriptor =>
+                descriptor.ServiceType
+                    == typeof(IPasswordAuthenticationService<TestProfile>)
+                && descriptor.ImplementationType
+                    == typeof(PasswordAuthenticationService<TestProfile>));
+        Assert.Contains(
+            services,
+            descriptor =>
+                descriptor.ServiceType
+                    == typeof(IPasswordVerificationTimingProtector)
+                && descriptor.ImplementationType
+                    == typeof(PasswordVerificationTimingProtector)
+                && descriptor.Lifetime == ServiceLifetime.Singleton);
 
         using var provider = services.BuildServiceProvider();
 
@@ -210,6 +228,32 @@ public sealed class PasswordHasherTests
         Assert.Null(provider.GetService<Argon2idPepperedPasswordHasherOptions>());
     }
 
+    [Fact]
+    public void DependencyInjectionResolvesPasswordAuthenticationService()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<
+            IIdentityUserLookupStore<TestProfile>,
+            EmptyUserLookupStore>();
+        services.AddSingleton<
+            IPasswordCredentialStore<TestProfile>,
+            EmptyPasswordCredentialStore>();
+
+        services
+            .AddSkopkaIdentity<TestProfile>()
+            .UsePbkdf2PasswordHasher(options =>
+            {
+                options.Iterations = 1_000;
+                options.MaximumAcceptedIterations = 10_000;
+            });
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsType<PasswordAuthenticationService<TestProfile>>(
+            provider.GetRequiredService<
+                IPasswordAuthenticationService<TestProfile>>());
+    }
+
     public sealed record TestProfile(string DisplayName);
 
     private static Pbkdf2PasswordHasherOptions FastPbkdf2Options()
@@ -231,4 +275,36 @@ public sealed class PasswordHasherTests
 
     private static StaticPasswordPepperProvider CreatePeppers(string keyId)
         => new(keyId, RandomNumberGenerator.GetBytes(32));
+
+    private sealed class EmptyUserLookupStore
+        : IIdentityUserLookupStore<TestProfile>
+    {
+        public Task<IdentityUser<TestProfile>?> FindActiveByNormalizedUserNameAsync(
+            string normalizedUserName,
+            CancellationToken ct)
+            => Task.FromResult<IdentityUser<TestProfile>?>(null);
+
+        public Task<IdentityUser<TestProfile>?> FindActiveByNormalizedEmailAsync(
+            string normalizedEmail,
+            CancellationToken ct)
+            => Task.FromResult<IdentityUser<TestProfile>?>(null);
+    }
+
+    private sealed class EmptyPasswordCredentialStore
+        : IPasswordCredentialStore<TestProfile>
+    {
+        public Task<string?> FindPasswordVerifierAsync(
+            Guid userId,
+            CancellationToken ct)
+            => Task.FromResult<string?>(null);
+
+        public Task<OperationResult> ReplacePasswordVerifierAsync(
+            Guid userId,
+            long expectedVersion,
+            string? expectedPasswordVerifier,
+            string? passwordVerifier,
+            DateTimeOffset now,
+            CancellationToken ct)
+            => Task.FromResult(OperationResultFactory.Success());
+    }
 }

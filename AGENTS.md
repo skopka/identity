@@ -46,6 +46,10 @@ file first and then the module-local file:
 - `IPasswordCredentialService<TProfile>` orchestrates password credential lifecycle.
 - `IPasswordCredentialStore<TProfile>` persists opaque password verifiers and uses the
   user version for optimistic concurrency.
+- `IPasswordAuthenticationService<TProfile>` authenticates an explicit username or email
+  login without exposing whether the user or credential exists.
+- `IIdentityUserLookupStore<TProfile>` provides active-user lookup by normalized login
+  handles.
 - `IIdentityNormalizer` normalizes userName/email/phone before persistence and checks.
 - `IUserOperationPolicy` decides whether the current user flags allow mutation.
 - `IProfilePatch<TProfile>` applies partial profile changes.
@@ -107,6 +111,7 @@ The current command set is:
 - `ChangePasswordCommand`
 - `RemovePasswordCommand`
 - `VerifyPasswordCommand`
+- `AuthenticatePasswordCommand`
 
 Mutation commands use `ExpectedVersion` except `ConfirmEmailCommand` and
 `ConfirmPhoneCommand`, which intentionally do not accept `ExpectedVersion`.
@@ -134,6 +139,10 @@ Preserve these rules:
   provides `Pbkdf2PasswordHasher` and `Argon2idPepperedPasswordHasher`. HMAC-SHA256 is
   used as a peppered pre-hash, not as encryption. Pepper keys remain outside persistence
   and are resolved by versioned key id.
+- Password authentication uses an explicit `PasswordLoginHandle` to avoid ambiguity
+  between usernames and emails. Unknown users, missing credentials and wrong passwords
+  return the same invalid-credentials error. Unknown/missing-credential paths must run a
+  configured dummy password verification workload.
 - Store operations receive `now` from the service; do not recompute operation time in
   lower-level domain orchestration.
 - Expected domain failures should return `OperationResult` errors, not throw exceptions.
@@ -177,10 +186,10 @@ there are no pending model changes.
 
 ## Current Implementation Direction
 
-Continue from the existing code. User and password credential lifecycle are implemented.
-The next active area is login lookup/authentication orchestration. Keep sign-in eligibility
-(deleted/blocked state), login enumeration resistance and dummy password verification out
-of the low-level password hasher and credential store.
+Continue from the existing code. User lifecycle, password credentials and password
+authentication by username/email are implemented. The next security-critical area is
+authentication attempt tracking and rate limiting. Keep request/IP-aware throttling out of
+the password hasher and low-level EF lookup store.
 
 Do not move EF responsibilities into Core. Do not move domain policy decisions into EF
 unless the store is only translating database outcomes into domain errors.

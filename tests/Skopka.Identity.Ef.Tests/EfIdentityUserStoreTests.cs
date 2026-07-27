@@ -144,6 +144,49 @@ public sealed class EfIdentityUserStoreTests
         Assert.Contains(result.Errors, error => error.Code == IdentityErrorCodes.UserNotFound);
     }
 
+    [Fact]
+    public async Task FindsActiveUserByNormalizedUserNameAndEmail()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var created = await database.CreateUserAsync();
+
+        var byUserName = await database.Store.FindActiveByNormalizedUserNameAsync(
+            "ALICE",
+            CancellationToken.None);
+        var byEmail = await database.Store.FindActiveByNormalizedEmailAsync(
+            "ALICE@EXAMPLE.COM",
+            CancellationToken.None);
+
+        Assert.Equal(created, byUserName);
+        Assert.Equal(created, byEmail);
+    }
+
+    [Fact]
+    public async Task NormalizedLoginLookupExcludesDeletedUser()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var created = await database.CreateUserAsync();
+
+        var deleteResult = await database.Store.UpdateStateAsync(
+            created.Id,
+            created.Version,
+            DateTimeOffset.UtcNow,
+            created.BlockedAt,
+            created.BlockedUntil,
+            DateTimeOffset.UtcNow,
+            CancellationToken.None);
+        Assert.True(deleteResult.IsSuccess);
+
+        Assert.Null(
+            await database.Store.FindActiveByNormalizedUserNameAsync(
+                "ALICE",
+                CancellationToken.None));
+        Assert.Null(
+            await database.Store.FindActiveByNormalizedEmailAsync(
+                "ALICE@EXAMPLE.COM",
+                CancellationToken.None));
+    }
+
     public sealed record TestProfile(string DisplayName);
 
     private sealed class TestDatabase(

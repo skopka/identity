@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
+using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.Users;
@@ -34,6 +35,8 @@ public sealed class PostgreSqlIdentityRegistrationTests
             scopedProvider.GetRequiredService<IIdentityUserService<TestProfile>>());
         Assert.IsType<EfIdentityUserStore<TestProfile>>(
             scopedProvider.GetRequiredService<IIdentityUserStore<TestProfile>>());
+        Assert.IsType<EfIdentityUserStore<TestProfile>>(
+            scopedProvider.GetRequiredService<IIdentityUserLookupStore<TestProfile>>());
         Assert.IsType<EfPasswordCredentialStore<TestProfile>>(
             scopedProvider.GetRequiredService<IPasswordCredentialStore<TestProfile>>());
 

@@ -15,7 +15,8 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
   required.
 - Translate PostgreSQL unique violations into identity duplicate errors.
 - Provide PostgreSQL DI extension methods for EF persistence when the facade needs them.
-- Register both user and password credential EF stores through `UsePostgreSql`.
+- Register user, active login lookup and password credential EF stores through
+  `UsePostgreSql`.
 
 ## Boundaries
 

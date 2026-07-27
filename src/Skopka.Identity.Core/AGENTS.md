@@ -5,14 +5,15 @@ Read `../../AGENTS.md` first. This file narrows the rules for
 
 ## Purpose
 
-This module implements domain orchestration for identity users and password credentials.
-It coordinates validation, normalization, policy checks, metrics and calls to storage
-ports.
+This module implements domain orchestration for identity users, password credentials and
+password authentication. It coordinates validation, normalization, policy checks,
+metrics and calls to storage ports.
 
 ## Allowed Responsibilities
 
 - Implement `IIdentityUserService<TProfile>`.
 - Implement `IPasswordCredentialService<TProfile>`.
+- Implement `IPasswordAuthenticationService<TProfile>` and dummy verification workload.
 - Provide default domain services such as `DefaultIdentityNormalizer`,
   `DefaultUserOperationPolicy` and default/noop metrics implementations.
 - Create domain errors through `IdentityErrors`.
@@ -40,6 +41,11 @@ ports.
 - Mutating commands with `ExpectedVersion` must check optimistic concurrency.
 - Store calls receive the `now` value computed by the service.
 - Metrics must mark success and failure consistently.
+- Unknown users, users without password credentials and wrong passwords return the same
+  invalid-credentials error.
+- Authentication performs one password KDF verification on every credential-denied path.
+- Active permanent or temporary blocks reject authentication after password verification;
+  expired temporary blocks do not reject authentication.
 
 ## Implementation Style
 

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skopka.Identity;
+using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
 
 namespace Microsoft.Extensions.DependencyInjection;
@@ -22,6 +23,7 @@ public static class IdentityPasswordHasherBuilderExtensions
         builder.Services.TryAddScoped<
             IPasswordCredentialService<TProfile>,
             PasswordCredentialService<TProfile>>();
+        AddPasswordAuthentication<TProfile>(builder.Services);
 
         return builder;
     }
@@ -42,6 +44,7 @@ public static class IdentityPasswordHasherBuilderExtensions
         builder.Services.TryAddScoped<
             IPasswordCredentialService<TProfile>,
             PasswordCredentialService<TProfile>>();
+        AddPasswordAuthentication<TProfile>(builder.Services);
 
         return builder;
     }
@@ -64,5 +67,16 @@ public static class IdentityPasswordHasherBuilderExtensions
     {
         services.RemoveAll<Pbkdf2PasswordHasherOptions>();
         services.RemoveAll<Argon2idPepperedPasswordHasherOptions>();
+    }
+
+    private static void AddPasswordAuthentication<TProfile>(
+        IServiceCollection services)
+    {
+        services.TryAddSingleton<
+            IPasswordVerificationTimingProtector,
+            PasswordVerificationTimingProtector>();
+        services.TryAddScoped<
+            IPasswordAuthenticationService<TProfile>,
+            PasswordAuthenticationService<TProfile>>();
     }
 }

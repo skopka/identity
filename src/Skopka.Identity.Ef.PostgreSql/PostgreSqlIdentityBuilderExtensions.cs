@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Skopka.Identity;
+using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.Ef;
 using Skopka.Identity.Ef.PostgreSql;
@@ -31,6 +32,9 @@ public static class PostgreSqlIdentityBuilderExtensions
         builder.Services.TryAddScoped<IdentityDbContext<TProfile>>(
             provider => provider.GetRequiredService<PostgreSqlIdentityDbContext<TProfile>>());
         builder.Services.TryAddScoped<IIdentityUserStore<TProfile>, EfIdentityUserStore<TProfile>>();
+        builder.Services.TryAddScoped<
+            IIdentityUserLookupStore<TProfile>,
+            EfIdentityUserStore<TProfile>>();
         builder.Services.TryAddScoped<
             IPasswordCredentialStore<TProfile>,
             EfPasswordCredentialStore<TProfile>>();

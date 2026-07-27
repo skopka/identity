@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Skopka.Abstraction.OperationResult;
+using Skopka.Identity.Authentication;
 using Skopka.Identity.Ef.Entities;
 using Skopka.Identity.Errors;
 using Skopka.Identity.Users;
@@ -7,7 +8,9 @@ using Skopka.Identity.Users.Handles;
 
 namespace Skopka.Identity.Ef;
 
-public sealed class EfIdentityUserStore<TProfile> : IIdentityUserStore<TProfile>
+public sealed class EfIdentityUserStore<TProfile>
+    : IIdentityUserStore<TProfile>,
+      IIdentityUserLookupStore<TProfile>
 {
     private static readonly Error UserNotFoundError = new(
         IdentityErrorCodes.UserNotFound,
@@ -41,6 +44,36 @@ public sealed class EfIdentityUserStore<TProfile> : IIdentityUserStore<TProfile>
             .AsNoTracking()
             .Include(entity => entity.User)
             .SingleOrDefaultAsync(entity => entity.UserId == id, ct);
+
+        return profile is null ? null : ToModel(profile);
+    }
+
+    public async Task<IdentityUser<TProfile>?> FindActiveByNormalizedUserNameAsync(
+        string normalizedUserName,
+        CancellationToken ct)
+    {
+        var profile = await dbContext.Profiles
+            .AsNoTracking()
+            .Include(entity => entity.User)
+            .SingleOrDefaultAsync(
+                entity => entity.User.DeletedAt == null
+                    && entity.User.NormalizedUserName == normalizedUserName,
+                ct);
+
+        return profile is null ? null : ToModel(profile);
+    }
+
+    public async Task<IdentityUser<TProfile>?> FindActiveByNormalizedEmailAsync(
+        string normalizedEmail,
+        CancellationToken ct)
+    {
+        var profile = await dbContext.Profiles
+            .AsNoTracking()
+            .Include(entity => entity.User)
+            .SingleOrDefaultAsync(
+                entity => entity.User.DeletedAt == null
+                    && entity.User.NormalizedEmail == normalizedEmail,
+                ct);
 
         return profile is null ? null : ToModel(profile);
     }

@@ -38,5 +38,6 @@ It is not the place for core business rules.
   `SuccessRehashNeeded`; a missing key returns `Failed`.
 - Password hasher DI extensions live in this optional module and extend
   `IdentityBuilder<TProfile>`. Selecting a hasher also registers
-  `IPasswordCredentialService<TProfile>`. Do not make the facade package depend on
+  `IPasswordCredentialService<TProfile>`, `IPasswordAuthenticationService<TProfile>` and
+  a singleton dummy-verification workload. Do not make the facade package depend on
   Argon2.

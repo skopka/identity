@@ -12,6 +12,8 @@ identity stores when it is added.
 
 - Define `IdentityDbContext<TProfile>` and EF entities.
 - Implement `EfIdentityUserStore<TProfile>` against `IIdentityUserStore<TProfile>`.
+- Implement active normalized-handle lookup through
+  `IIdentityUserLookupStore<TProfile>`.
 - Implement `EfPasswordCredentialStore<TProfile>` against
   `IPasswordCredentialStore<TProfile>`.
 - Map EF entities to public `IdentityUser<TProfile>` models.
@@ -43,5 +45,7 @@ identity stores when it is added.
 - Map missing users to not-found errors when the store contract returns an
   `OperationResult`.
 - Keep password verifier data opaque if credential persistence is implemented here.
+- Login lookup filters deleted users in the database query because soft-deleted handles
+  may no longer be unique.
 - Password verifier replacements compare both user `Version` and the expected previous
   verifier before updating, then bump the user version in the same save operation.
