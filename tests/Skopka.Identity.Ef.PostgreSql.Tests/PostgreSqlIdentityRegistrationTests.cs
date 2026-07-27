@@ -7,6 +7,7 @@ using Skopka.Identity.Credentials;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Security;
+using Skopka.Identity.Sessions;
 using Skopka.Identity.Users;
 using Skopka.Identity.Verification;
 using Xunit;
@@ -55,6 +56,9 @@ public sealed class PostgreSqlIdentityRegistrationTests
         Assert.IsType<EfRateLimitBucketStore<TestProfile>>(
             scopedProvider.GetRequiredService<
                 IRateLimitBucketStore<TestProfile>>());
+        Assert.IsType<EfIdentityRefreshSessionStore<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentityRefreshSessionStore<TestProfile>>());
 
         var providerContext = scopedProvider.GetRequiredService<PostgreSqlIdentityDbContext<TestProfile>>();
         var storeContext = scopedProvider.GetRequiredService<IdentityDbContext<TestProfile>>();
@@ -80,11 +84,16 @@ public sealed class PostgreSqlIdentityRegistrationTests
             name => name.EndsWith(
                 "_AddIdentityRateLimitBuckets",
                 StringComparison.Ordinal));
+        var refreshSessionMigration = Assert.Single(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith(
+                "_AddIdentityRefreshSessions",
+                StringComparison.Ordinal));
         Assert.False(providerContext.Database.HasPendingModelChanges());
 
         var script = providerContext.GetService<IMigrator>().GenerateScript(
             fromMigration: null,
-            toMigration: rateLimitMigration);
+            toMigration: refreshSessionMigration);
 
         Assert.Contains("CREATE TABLE auth_users", script, StringComparison.Ordinal);
         Assert.Contains("CREATE TABLE user_profiles", script, StringComparison.Ordinal);
@@ -98,6 +107,10 @@ public sealed class PostgreSqlIdentityRegistrationTests
             StringComparison.Ordinal);
         Assert.Contains(
             "CREATE TABLE identity_rate_limit_buckets",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "CREATE TABLE identity_refresh_sessions",
             script,
             StringComparison.Ordinal);
     }

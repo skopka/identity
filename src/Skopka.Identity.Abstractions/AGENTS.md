@@ -36,6 +36,8 @@ small value objects.
   server-created `Purpose` and `Binding` values.
 - Define transport-neutral rate-limit requests, decisions, options, bucket stores and
   partition-hasher contracts. Do not reference ASP.NET rate-limiter or HTTP types.
+- Define transport-neutral session contracts under `Sessions`: access/refresh providers,
+  session commands, issued token pairs, refresh persistence models and store ports.
 
 ## Boundaries
 
@@ -63,3 +65,5 @@ small value objects.
   methods may not issue a deliverable code.
 - Optional `ClientKey` command fields carry server-created transport context. They are
   not raw client DTO fields and must remain nullable for non-HTTP/background callers.
+- Session contracts expose no IdentityModel, JWT bearer middleware or EF types. Refresh
+  store models carry digests and rotation state, never plaintext refresh secrets.

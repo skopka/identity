@@ -20,6 +20,8 @@ identity stores when it is added.
   `IVerificationChallengeStore<TProfile>`.
 - Implement `EfRateLimitBucketStore<TProfile>` against
   `IRateLimitBucketStore<TProfile>`.
+- Implement `EfIdentityRefreshSessionStore<TProfile>` against
+  `IIdentityRefreshSessionStore<TProfile>`.
 - Map EF entities to public `IdentityUser<TProfile>` models.
 - Configure generic EF relationships, keys, concurrency tokens and timestamps.
 - Translate EF concurrency conflicts into identity concurrency errors.
@@ -62,3 +64,8 @@ identity stores when it is added.
   retry insert/update/delete races and never persist raw account or client identifiers.
 - Pruning deletes only buckets older than the supplied cutoff and respects the requested
   batch size.
+- `identity_refresh_sessions` stores only refresh-token digests. Rotation atomically
+  consumes one token and creates its replacement while preserving logical session,
+  user, stamp and absolute expiry bindings.
+- Rotated rows remain available for replay detection. Reuse revokes the entire logical
+  session; revoke and pruning operations retry optimistic concurrency races.

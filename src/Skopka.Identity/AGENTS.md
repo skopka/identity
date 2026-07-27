@@ -48,3 +48,6 @@ install and configure without moving domain or persistence logic into the facade
 - Persistent rate limiting remains optional and is enabled through Infrastructure with
   `UseHmacRateLimiting<TProfile>()`. `AddSkopkaIdentity<TProfile>()` registers only its
   default policy options so existing consumers continue to work without a limiter.
+- JWT sessions remain optional and are enabled through Infrastructure with
+  `UseJwtSessions<TProfile>()`. The configured persistence provider supplies the refresh
+  session store; the facade registers only default session lifetime options.

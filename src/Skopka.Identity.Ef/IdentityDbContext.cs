@@ -14,6 +14,8 @@ public class IdentityDbContext<TProfile>(DbContextOptions options) : DbContext(o
         => Set<VerificationChallengeEntity>();
     public DbSet<RateLimitBucketEntity> RateLimitBuckets
         => Set<RateLimitBucketEntity>();
+    public DbSet<RefreshSessionEntity> RefreshSessions
+        => Set<RefreshSessionEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -26,6 +28,7 @@ public class IdentityDbContext<TProfile>(DbContextOptions options) : DbContext(o
         modelBuilder.ApplyConfiguration(new UserExternalLoginConfiguration());
         modelBuilder.ApplyConfiguration(new VerificationChallengeConfiguration());
         modelBuilder.ApplyConfiguration(new RateLimitBucketConfiguration());
+        modelBuilder.ApplyConfiguration(new RefreshSessionConfiguration());
 
         ConfigureProviderModel(modelBuilder);
     }

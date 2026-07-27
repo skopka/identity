@@ -30,4 +30,9 @@ public static class IdentityErrorCodes
     public const string VerificationMethodUnavailable = "identity.verification.method_unavailable";
 
     public const string RateLimitExceeded = "identity.rate_limit.exceeded";
+
+    public const string AccessTokenInvalid = "identity.session.access_token_invalid";
+    public const string RefreshTokenInvalid = "identity.session.refresh_token_invalid";
+    public const string RefreshTokenReuseDetected =
+        "identity.session.refresh_token_reuse_detected";
 }

@@ -9,6 +9,9 @@ Rate-limit store tests must cover fixed-window limits, window rollover, cooldown
 extension on denied hits, reset, bounded pruning and concurrency-token model
 configuration.
 
+Refresh-session store tests must cover atomic replacement, rotated-token replay,
+digest mismatch, family revoke and bounded pruning.
+
 This project verifies the provider-neutral behavior of `Skopka.Identity.Ef`.
 Use the EF Core in-memory provider for store contract tests. Keep relational constraints,
 SQL generation and SQLSTATE tests in a separate PostgreSQL test project when it is added.

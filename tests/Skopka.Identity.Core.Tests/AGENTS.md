@@ -20,3 +20,6 @@ HMAC algorithms in Core.
 Rate-limit orchestration tests must distinguish account failures from per-request client
 hits, preserve dummy password verification on denied account partitions and verify
 resend evaluation order.
+
+Session tests must verify stale-stamp rejection, absolute expiry preservation, one-time
+refresh rotation, replay family revoke and online access validation after revoke.

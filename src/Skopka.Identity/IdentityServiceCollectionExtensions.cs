@@ -3,6 +3,7 @@ using Skopka.Identity;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Security;
+using Skopka.Identity.Sessions;
 using Skopka.Identity.Users;
 using Skopka.Identity.Verification;
 
@@ -20,6 +21,7 @@ public static class IdentityServiceCollectionExtensions
         services.TryAddSingleton<IIdentityMetrics, IdentityMetrics>();
         services.TryAddSingleton<ISecurityStampGenerator, DefaultSecurityStampGenerator>();
         services.TryAddSingleton(new IdentityRateLimitOptions());
+        services.TryAddSingleton(new IdentitySessionOptions());
         services.TryAddScoped<IIdentityUserService<TProfile>, IdentityUserService<TProfile>>();
         services.TryAddScoped<
             ISecurityStampService<TProfile>,

@@ -61,6 +61,11 @@ file first and then the module-local file:
 - `IIdentityRateLimiter<TProfile>` applies named fixed-window policies to HMAC-obscured
   account, client and verification-intent partitions.
 - `IRateLimitBucketStore<TProfile>` persists rate-limit buckets for multi-instance use.
+- `IIdentitySessionService<TProfile>` issues, refreshes, validates and revokes JWT-backed
+  identity sessions.
+- `IIdentityRefreshSessionStore<TProfile>` persists refresh-token rotation chains.
+- `IIdentityAccessTokenProvider` and `IIdentityRefreshTokenProvider` isolate token
+  cryptography and wire formats from Core.
 - `IIdentityNormalizer` normalizes userName/email/phone before persistence and checks.
 - `IUserOperationPolicy` decides whether the current user flags allow mutation.
 - `IProfilePatch<TProfile>` applies partial profile changes.
@@ -132,6 +137,10 @@ The current command set is:
 - `BeginVerificationCommand`
 - `VerifyVerificationChallengeCommand`
 - `ConsumeVerificationProofCommand`
+- `CreateIdentitySessionCommand`
+- `RefreshIdentitySessionCommand`
+- `RevokeIdentitySessionCommand`
+- `RevokeAllIdentitySessionsCommand`
 
 Mutation commands use `ExpectedVersion` except `ConfirmEmailCommand` and
 `ConfirmPhoneCommand`, which intentionally do not accept `ExpectedVersion`.
@@ -204,6 +213,21 @@ Preserve these rules:
   batches and no hidden background service is started by the library.
 - Map `identity.rate_limit.exceeded` to HTTP 429 and use `RateLimitDetails.RetryAfter`
   for the `Retry-After` response. Core remains transport-neutral.
+- Session creation requires the current security stamp returned by the preceding
+  authentication result. Core reloads the user and rejects stale, deleted or actively
+  blocked authentication state before persisting a session.
+- JWT access tokens are short-lived and contain user id, logical session id, token id,
+  timestamps and format version. Do not expose the raw security stamp as a JWT claim.
+- Refresh tokens are opaque 256-bit random secrets. Persistence stores only their
+  SHA-256 digest and the non-secret token id needed for lookup.
+- Refresh rotation is strict and one-time. Reuse of a rotated token revokes every token
+  in the logical session. Rotation preserves an absolute session expiry rather than
+  extending the session indefinitely.
+- Cryptographic JWT validation is stateless until access-token expiry.
+  `ValidateAccessTokenAsync` adds an online database/stamp check when immediate session
+  revoke, password-change or user-block enforcement is required.
+- Hosts must schedule `IIdentitySessionService<TProfile>.PruneAsync()` in bounded batches.
+  Revoked and rotated rows remain until expiry plus retention so replay can be detected.
 - Action tokens are stateless and do not require EF entities. The default Infrastructure
   provider uses ASP.NET Core Data Protection. Multi-instance deployments must persist
   and share their Data Protection key ring.
@@ -241,6 +265,11 @@ EF Core storage is split:
   - HMAC-obscured partition key and named scope
   - fixed-window hit count and last-hit timestamp
   - optimistic concurrency version
+- `identity_refresh_sessions`
+  - logical session id and per-rotation token id
+  - refresh-token digest and security-stamp snapshot
+  - absolute expiry, rotation/revoke timestamps and replacement link
+  - optimistic concurrency version
 - planned later:
   - `user_external_logins`
 
@@ -267,10 +296,12 @@ Continue from the existing code. User lifecycle, password credentials, password
 authentication by username/email, security stamp rotation/validation and stateless
 action tokens are implemented. Verification challenges and generated HMAC OTP are
 implemented as a separate subsystem. Persistent account/client rate limiting,
-challenge-start throttling and resend cooldown are implemented. The next major area is
-JWT/session integration: access/refresh issuance, claims principal construction and
-step-up proof exchange. Keep transport token issuance out of password/OTP cryptographic
-providers and EF stores.
+challenge-start throttling and resend cooldown are implemented. JWT access tokens and
+persistent refresh sessions now support strict rotation, replay detection, online
+validation and revoke. The next major areas are ASP.NET authentication middleware and
+claims/roles projection, followed by exchanging step-up proofs into authorization
+decisions. Keep transport token issuance out of password/OTP cryptographic providers and
+EF stores.
 
 Do not move EF responsibilities into Core. Do not move domain policy decisions into EF
 unless the store is only translating database outcomes into domain errors.

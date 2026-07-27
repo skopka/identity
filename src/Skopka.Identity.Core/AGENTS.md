@@ -21,6 +21,8 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   one-time proof generation/consumption.
 - Implement `IIdentityRateLimiter<TProfile>` hashing/orchestration and apply configured
   policies in password authentication and Verification Begin.
+- Implement `IIdentitySessionService<TProfile>` issuance, refresh rotation, online
+  access validation, revoke and bounded pruning.
 - Provide default domain services such as `DefaultIdentityNormalizer`,
   `DefaultUserOperationPolicy` and default/noop metrics implementations.
 - Create domain errors through `IdentityErrors`.
@@ -79,6 +81,16 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   cooldown-denied resend attempts do not consume account issuance quota.
 - Rate-limit maintenance computes the retention cutoff in Core and delegates bounded
   pruning to the store. Do not start background workers in Core.
+- Session creation reloads the user and compares the authentication security stamp in
+  fixed time. Deleted, actively blocked or stale authentication results cannot create
+  sessions.
+- Refresh rotation preserves the original absolute expiry. A replayed rotated token
+  revokes the complete logical session; a stamp mismatch also revokes that session.
+- JWT signing/validation and opaque refresh-token generation are provider
+  responsibilities. Core never parses JWT or persists plaintext refresh tokens.
+- Online access validation checks the cryptographic payload, active refresh session,
+  current user state and security-stamp snapshot. Stateless middleware validation has
+  intentionally weaker immediate-revocation semantics.
 
 ## Implementation Style
 

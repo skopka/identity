@@ -65,3 +65,11 @@ It is not the place for core business rules.
   configures password account/client, verification account/client, intent and resend
   policies plus bucket retention/cleanup batch size. All instances sharing the database
   must use the same partition key.
+- `HmacJwtAccessTokenProvider` uses Microsoft IdentityModel and HS256 with explicit
+  issuer, audience, lifetime, signature and algorithm validation. Signing keys contain
+  at least 256 bits and remain outside persistence.
+- `OpaqueRefreshTokenProvider` creates versioned tokens with a 256-bit random secret and
+  exposes only a SHA-256 digest for persistence.
+- `UseJwtSessions<TProfile>()` explicitly enables Core session orchestration and its
+  token providers. JWT signing keys must be shared by token issuers and validators;
+  changing a single configured key invalidates outstanding short-lived access tokens.

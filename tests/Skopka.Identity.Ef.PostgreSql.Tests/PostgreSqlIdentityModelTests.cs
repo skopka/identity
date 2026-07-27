@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Skopka.Identity.Ef.Entities;
 using Skopka.Identity.RateLimiting;
+using Skopka.Identity.Sessions;
 using Skopka.Identity.Verification;
 using Xunit;
 
@@ -77,6 +78,24 @@ public sealed class PostgreSqlIdentityModelTests
         Assert.Equal(
             2,
             rateLimitType.FindPrimaryKey()!.Properties.Count);
+
+        var refreshSessionType = context.Model.FindEntityType(
+            typeof(RefreshSessionEntity));
+        Assert.NotNull(refreshSessionType);
+        Assert.True(
+            refreshSessionType
+                .FindProperty(nameof(RefreshSessionEntity.Version))!
+                .IsConcurrencyToken);
+        Assert.Equal(
+            SessionLimits.TokenHashLength,
+            refreshSessionType
+                .FindProperty(nameof(RefreshSessionEntity.TokenHash))!
+                .GetMaxLength());
+        Assert.Equal(
+            SessionLimits.SecurityStampLength,
+            refreshSessionType
+                .FindProperty(nameof(RefreshSessionEntity.SecurityStamp))!
+                .GetMaxLength());
     }
 
     private static void AssertUniqueFilteredIndex(
