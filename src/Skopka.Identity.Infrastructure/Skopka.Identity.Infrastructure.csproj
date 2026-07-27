@@ -6,4 +6,14 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
+    <ItemGroup>
+        <PackageReference Include="Konscious.Security.Cryptography.Argon2" Version="1.3.1" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Skopka.Identity.Abstractions\Skopka.Identity.Abstractions.csproj" />
+        <ProjectReference Include="..\Skopka.Identity\Skopka.Identity.csproj" />
+    </ItemGroup>
+
 </Project>

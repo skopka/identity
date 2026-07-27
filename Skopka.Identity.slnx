@@ -3,7 +3,9 @@
   <Project Path="src/Skopka.Identity.Core/Skopka.Identity.Core.csproj" />
   <Project Path="src/Skopka.Identity.Ef.PostgreSql/Skopka.Identity.Ef.PostgreSql.csproj" />
   <Project Path="src/Skopka.Identity.Ef/Skopka.Identity.Ef.csproj" />
+  <Project Path="src/Skopka.Identity.Infrastructure/Skopka.Identity.Infrastructure.csproj" />
   <Project Path="src/Skopka.Identity/Skopka.Identity.csproj" />
   <Project Path="tests/Skopka.Identity.Ef.Tests/Skopka.Identity.Ef.Tests.csproj" />
   <Project Path="tests/Skopka.Identity.Ef.PostgreSql.Tests/Skopka.Identity.Ef.PostgreSql.Tests.csproj" />
+  <Project Path="tests/Skopka.Identity.Infrastructure.Tests/Skopka.Identity.Infrastructure.Tests.csproj" />
 </Solution>

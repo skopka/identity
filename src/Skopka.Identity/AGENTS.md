@@ -32,4 +32,6 @@ install and configure without moving domain or persistence logic into the facade
 - Make optional subsystems explicit: EF persistence, PostgreSQL, password credentials,
   tokens, external login, roles and claims.
 - Defaults should be safe, but every security-sensitive behavior must be configurable.
-
+- Password hashing is selected explicitly with `UsePbkdf2PasswordHasher()` or
+  `UseArgon2idPepperedPasswordHasher()`. Do not register a hidden password-hashing
+  default in `AddSkopkaIdentity<TProfile>()`.

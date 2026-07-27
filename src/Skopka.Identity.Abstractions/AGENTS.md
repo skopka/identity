@@ -20,6 +20,9 @@ small value objects.
 - Define public domain models such as `IdentityUser<TProfile>`, `IdentityProfile`,
   `UserFlags` and role/handle records.
 - Define stable error code constants and serializable error details.
+- Define narrow credential contracts such as `IPasswordHasher`,
+  `IPasswordPepperProvider` and `PasswordVerificationResult`. Keep verifier strings
+  opaque to consumers.
 
 ## Boundaries
 
@@ -40,4 +43,3 @@ small value objects.
   high-level use-case command records.
 - All async public contracts accept `CancellationToken ct`.
 - Expected domain failures are represented by `OperationResult` and stable error codes.
-

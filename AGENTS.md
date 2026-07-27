@@ -123,6 +123,10 @@ Preserve these rules:
 - Restore may fail if unique handles were occupied after deletion.
 - Credentials are separate from profile data. Storage must hide password implementation
   details such as hash, salt and pepper.
+- Password hashing contracts live under `Skopka.Identity.Credentials`. Infrastructure
+  provides `Pbkdf2PasswordHasher` and `Argon2idPepperedPasswordHasher`. HMAC-SHA256 is
+  used as a peppered pre-hash, not as encryption. Pepper keys remain outside persistence
+  and are resolved by versioned key id.
 - Store operations receive `now` from the service; do not recompute operation time in
   lower-level domain orchestration.
 - Expected domain failures should return `OperationResult` errors, not throw exceptions.

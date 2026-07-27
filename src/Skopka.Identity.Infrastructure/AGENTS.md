@@ -30,4 +30,11 @@ It is not the place for core business rules.
 - Keep dependencies optional and scoped to the specific adapter.
 - Avoid making infrastructure packages required for consumers that only need the domain
   core.
-
+- Password verifiers are versioned opaque strings. Never persist plaintext passwords or
+  pepper keys.
+- `Pbkdf2PasswordHasher` uses PBKDF2-HMAC-SHA256. The peppered provider uses
+  HMAC-SHA256 as a pre-hash and Argon2id as the password KDF.
+- Pepper key ids must support rotation. Verification with an old available key returns
+  `SuccessRehashNeeded`; a missing key returns `Failed`.
+- Password hasher DI extensions live in this optional module and extend
+  `IdentityBuilder<TProfile>`. Do not make the facade package depend on Argon2.
