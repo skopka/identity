@@ -14,6 +14,9 @@ covered.
 Keep role entity metadata, normalized-name uniqueness, constraint mapping, store
 registration and role migration SQL covered.
 
+DI registration tests should cover optional StepUp service/policy composition. StepUp
+does not add a PostgreSQL entity or migration; it consumes existing Verification state.
+
 This project verifies PostgreSQL-specific EF model annotations and exception mapping.
 Tests that require a live PostgreSQL server should be explicit integration tests and
 must not silently depend on a developer-local database.

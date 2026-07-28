@@ -19,6 +19,9 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   confirmation/password-reset use cases.
 - Implement `IIdentityVerificationService<TProfile>` challenge orchestration and
   one-time proof generation/consumption.
+- Implement optional `IIdentityStepUpService<TProfile>` orchestration over Verification:
+  resolve current policy, enforce method/intent/age and consume proof before returning
+  an authorization decision.
 - Implement `IIdentityRateLimiter<TProfile>` hashing/orchestration and apply configured
   policies in password authentication and Verification Begin.
 - Implement `IIdentitySessionService<TProfile>` issuance, refresh rotation, online
@@ -76,9 +79,18 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   selected method provider.
 - Core stores only a SHA-256 digest of the high-entropy verification proof. Business
   authorization and execution remain outside Verification.
+- Step-up policy owns verification requirements; the business use case owns action and
+  resource binding. Neither value may be accepted unmodified from an untrusted client.
+- Bind Verification to the SHA-256 digest of the length-prefixed action/resource pair,
+  not to the raw resource binding alone. This prevents cross-action proof reuse when
+  policy purposes are accidentally shared.
+- A step-up decision is returned only after successful proof consumption. Do not turn it
+  into a reusable bearer credential inside Core.
+- Step-up confirms an additional verification requirement; it does not replace role or
+  domain authorization checks performed by the application.
 - Do not claim cross-module transaction atomicity. The application use case should
-  consume the proof and mutate its intent in one unit of work when both stores can share
-  a transaction.
+  call step-up authorization and mutate its intent in one unit of work when both stores
+  can share a transaction.
 - Password account rate limiting checks before password verification, records only
   credential failures and resets after a correct password. Preserve one dummy KDF when
   an account partition is denied.

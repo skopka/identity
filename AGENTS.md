@@ -58,6 +58,10 @@ file first and then the module-local file:
   consumption for step-up verification challenges.
 - `IVerificationMethodProvider` verifies a concrete method such as a generated OTP.
 - `IVerificationChallengeStore<TProfile>` persists challenge state and CAS transitions.
+- `IIdentityStepUpService<TProfile>` begins policy-approved verification and exchanges
+  a one-time proof for an in-memory authorization decision.
+- `IStepUpPolicyProvider<TProfile>` maps a server-created action/resource context to
+  allowed verification methods, purpose, assurance level and optional maximum age.
 - `IIdentityRateLimiter<TProfile>` applies named fixed-window policies to HMAC-obscured
   account, client and verification-intent partitions.
 - `IRateLimitBucketStore<TProfile>` persists rate-limit buckets for multi-instance use.
@@ -189,9 +193,22 @@ Preserve these rules:
 - Action tokens are not OTP authenticators. Keep future TOTP/SMS/email OTP challenge
   state, attempt limits and MFA rules in the separate Verification subsystem.
 - Verification owns challenge expiry, failed-attempt limits, purpose/binding/stamp
-  checks and the `Pending -> Verified -> Consumed` state machine. A business feature
-  decides when verification is required, creates the server-side intent binding and
-  consumes the proof before executing the action.
+  checks and the `Pending -> Verified -> Consumed` state machine. Step-up policy decides
+  which verification is required and exchanges the proof for a decision. The business
+  feature creates the server-side action/resource binding and executes the action.
+- Step-up actions and bindings are server-created values, not raw client DTO fields.
+  Policy supplies the verification purpose; clients cannot choose it.
+- Step-up hashes the length-prefixed action/resource pair into the Verification binding.
+  This prevents proof transfer between actions even if a policy provider accidentally
+  reuses the same purpose.
+- A successful step-up decision is an in-memory result, not a bearer token. The service
+  re-evaluates current policy, checks method/binding/verification age and consumes the
+  proof before returning the decision.
+- A step-up decision means only that the additional verification requirement was
+  satisfied. It does not replace role checks or the application's domain authorization.
+- When proof consumption and the protected mutation use stores that can share a
+  transaction, the application should wrap both calls in that transaction. The library
+  does not claim cross-store atomicity.
 - Generated OTP values are never persisted. Infrastructure stores a versioned
   HMAC-SHA256 verifier bound to challenge id, user id, purpose and binding. HMAC keys
   stay outside the database and support key-id rotation.
@@ -327,9 +344,9 @@ challenge-start throttling and resend cooldown are implemented. JWT access token
 persistent refresh sessions now support strict rotation, replay detection, online
 validation and revoke. ASP.NET Core JWT bearer integration and extensible claims
 projection are implemented. Optional role CRUD, direct membership persistence and JWT
-role projection are implemented. The next major areas are exchanging step-up proofs
-into authorization decisions and implementing external login adapters. Keep transport
-token issuance out of password/OTP
+role projection are implemented. Optional policy-driven step-up decisions exchange
+one-time verification proofs without issuing another bearer token. The next major area
+is implementing external login adapters. Keep transport token issuance out of password/OTP
 cryptographic providers and EF stores.
 
 `IdentityRole.ParentId` is validated against missing parents and cycles, but does not

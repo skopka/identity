@@ -34,6 +34,11 @@ small value objects.
 - Define Verification contracts for challenge lifecycle, concrete method providers,
   one-time proofs and persistence ports. Keep business intents opaque through
   server-created `Purpose` and `Binding` values.
+- Define StepUp contracts for server-created action/resource context, dynamic policy
+  requirements and one-time proof-to-decision exchange. Decisions are transport-neutral
+  in-memory results, not bearer tokens.
+- A successful `StepUpDecision` does not grant domain permission by itself. The
+  application remains responsible for its normal role/policy authorization.
 - Define transport-neutral rate-limit requests, decisions, options, bucket stores and
   partition-hasher contracts. Do not reference ASP.NET rate-limiter or HTTP types.
 - Define transport-neutral session contracts under `Sessions`: access/refresh providers,
@@ -68,6 +73,10 @@ small value objects.
 - Verification methods return opaque persisted verifiers and optional delivery codes.
   The abstraction must not require generated OTP, because future TOTP or WebAuthn
   methods may not issue a deliverable code.
+- Step-up commands do not accept a verification purpose. The policy provider owns it,
+  preventing transport callers from selecting a weaker or unrelated purpose.
+- Step-up `AssuranceLevel` is an application-defined ordinal for policy comparison. It
+  does not by itself claim NIST AAL or another external certification level.
 - Optional `ClientKey` command fields carry server-created transport context. They are
   not raw client DTO fields and must remain nullable for non-HTTP/background callers.
 - Session contracts expose no IdentityModel, JWT bearer middleware or EF types. Refresh

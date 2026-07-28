@@ -45,6 +45,9 @@ install and configure without moving domain or persistence logic into the facade
 - `AddSkopkaIdentity<TProfile>()` registers Verification orchestration and default
   options. Concrete verification methods remain optional and are selected through
   Infrastructure extensions such as `UseHmacOneTimeCodes<TProfile>()`.
+- Step-up authorization remains optional and is enabled with
+  `AddStepUpAuthorization<TPolicyProvider>()`. The application supplies the policy
+  provider; the facade registers only Core orchestration.
 - Persistent rate limiting remains optional and is enabled through Infrastructure with
   `UseHmacRateLimiting<TProfile>()`. `AddSkopkaIdentity<TProfile>()` registers only its
   default policy options so existing consumers continue to work without a limiter.

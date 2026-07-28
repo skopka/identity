@@ -9,6 +9,7 @@ using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Roles;
 using Skopka.Identity.Security;
 using Skopka.Identity.Sessions;
+using Skopka.Identity.StepUp;
 using Skopka.Identity.Users;
 using Skopka.Identity.Verification;
 using Xunit;
@@ -25,6 +26,7 @@ public sealed class PostgreSqlIdentityRegistrationTests
         services
             .AddSkopkaIdentity<TestProfile>()
             .AddRoles()
+            .AddStepUpAuthorization<TestStepUpPolicyProvider>()
             .UsePostgreSql("Host=localhost;Database=skopka_identity_di_tests");
 
         using var provider = services.BuildServiceProvider();
@@ -77,6 +79,12 @@ public sealed class PostgreSqlIdentityRegistrationTests
                 IIdentitySessionClaimsProvider<TestProfile>>(),
             claimsProvider =>
                 claimsProvider is IdentityRoleSessionClaimsProvider<TestProfile>);
+        Assert.IsType<TestStepUpPolicyProvider>(
+            scopedProvider.GetRequiredService<
+                IStepUpPolicyProvider<TestProfile>>());
+        Assert.IsType<IdentityStepUpService<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentityStepUpService<TestProfile>>());
 
         var providerContext = scopedProvider.GetRequiredService<PostgreSqlIdentityDbContext<TestProfile>>();
         var storeContext = scopedProvider.GetRequiredService<IdentityDbContext<TestProfile>>();
@@ -177,5 +185,14 @@ public sealed class PostgreSqlIdentityRegistrationTests
     private sealed class TestSecurityStampGenerator : ISecurityStampGenerator
     {
         public string Generate() => "TEST-STAMP";
+    }
+
+    private sealed class TestStepUpPolicyProvider
+        : IStepUpPolicyProvider<TestProfile>
+    {
+        public Task<StepUpRequirement?> GetRequirementAsync(
+            StepUpAuthorizationContext context,
+            CancellationToken ct)
+            => Task.FromResult<StepUpRequirement?>(null);
     }
 }

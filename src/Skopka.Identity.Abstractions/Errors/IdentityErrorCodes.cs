@@ -33,6 +33,9 @@ public static class IdentityErrorCodes
     public const string VerificationProofInvalid = "identity.verification.proof_invalid";
     public const string VerificationMethodUnavailable = "identity.verification.method_unavailable";
 
+    public const string StepUpPolicyUnavailable = "identity.step_up.policy_unavailable";
+    public const string StepUpMethodNotAllowed = "identity.step_up.method_not_allowed";
+
     public const string RateLimitExceeded = "identity.rate_limit.exceeded";
 
     public const string AccessTokenInvalid = "identity.session.access_token_invalid";

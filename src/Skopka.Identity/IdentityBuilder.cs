@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skopka.Identity.Roles;
 using Skopka.Identity.Sessions;
+using Skopka.Identity.StepUp;
 
 namespace Skopka.Identity;
 
@@ -26,6 +27,20 @@ public sealed class IdentityBuilder<TProfile>
             ServiceDescriptor.Scoped<
                 IIdentitySessionClaimsProvider<TProfile>,
                 IdentityRoleSessionClaimsProvider<TProfile>>());
+
+        return this;
+    }
+
+    public IdentityBuilder<TProfile>
+        AddStepUpAuthorization<TPolicyProvider>()
+        where TPolicyProvider : class, IStepUpPolicyProvider<TProfile>
+    {
+        Services.TryAddScoped<
+            IStepUpPolicyProvider<TProfile>,
+            TPolicyProvider>();
+        Services.TryAddScoped<
+            IIdentityStepUpService<TProfile>,
+            IdentityStepUpService<TProfile>>();
 
         return this;
     }

@@ -17,6 +17,10 @@ Verification tests must cover user/purpose/binding/stamp binding, failed-attempt
 proof expiry and one-time consumption. Use method-provider and store fakes; do not test
 HMAC algorithms in Core.
 
+Step-up tests must cover policy-derived purpose, allowed methods, exact resource
+binding, current-policy re-evaluation, verification maximum age and successful
+consumption before a decision is returned.
+
 Rate-limit orchestration tests must distinguish account failures from per-request client
 hits, preserve dummy password verification on denied account partitions and verify
 resend evaluation order.
