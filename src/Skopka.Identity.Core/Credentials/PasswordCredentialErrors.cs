@@ -22,4 +22,14 @@ public static class PasswordCredentialErrors
             IdentityErrorCodes.InvalidPassword,
             "The password is invalid.",
             ErrorType.Validation);
+
+    public static Error Rejected(string message)
+        => new(
+            IdentityErrorCodes.PasswordRejected,
+            "The password does not satisfy the configured policy.",
+            ErrorType.Validation,
+            new ValidationDetails(new Dictionary<string, string[]>
+            {
+                ["newPassword"] = [message]
+            }));
 }

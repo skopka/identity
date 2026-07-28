@@ -14,10 +14,13 @@ public sealed class PasswordAuthenticationService<TProfile>(
     IPasswordHasher passwordHasher,
     IPasswordVerificationTimingProtector timingProtector,
     IIdentityMetrics metrics,
+    PasswordPolicyOptions passwordPolicyOptions,
     IdentityRateLimitOptions rateLimitOptions,
     IEnumerable<IIdentityRateLimiter<TProfile>> rateLimiters)
     : IPasswordAuthenticationService<TProfile>
 {
+    private readonly PasswordPolicyOptions passwordPolicy =
+        PasswordPolicy.ValidateOptions(passwordPolicyOptions);
     private readonly IIdentityRateLimiter<TProfile>? rateLimiter =
         rateLimiters.FirstOrDefault();
 
@@ -35,11 +38,13 @@ public sealed class PasswordAuthenticationService<TProfile>(
                 IdentityErrors.Validation("login", "Login is required."));
         }
 
-        if (string.IsNullOrEmpty(cmd.Password))
+        var passwordError = PasswordPolicy.ValidateInput(
+            cmd.Password,
+            "password",
+            passwordPolicy);
+        if (passwordError is not null)
         {
-            return Fail(
-                op,
-                IdentityErrors.Validation("password", "Password is required."));
+            return Fail(op, passwordError);
         }
 
         if (!Enum.IsDefined(cmd.Handle))

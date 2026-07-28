@@ -24,6 +24,9 @@ small value objects.
   `IPasswordPepperProvider`, `IPasswordCredentialService<TProfile>`,
   `IPasswordCredentialStore<TProfile>` and `PasswordVerificationResult`. Keep verifier
   strings opaque to consumers.
+- Define bounded password-policy options and
+  `IPasswordValidator<TProfile>` extension contracts. Validator context may expose the
+  user and mutation kind, but must not expose verifier/hash implementation details.
 - Define authentication contracts such as `IPasswordAuthenticationService<TProfile>`,
   `IIdentityUserLookupStore<TProfile>` and `IPasswordVerificationTimingProtector`.
 - Define security stamp contracts such as `ISecurityStampService<TProfile>` and
@@ -68,6 +71,8 @@ small value objects.
   high-level use-case command records.
 - All async public contracts accept `CancellationToken ct`.
 - Expected domain failures are represented by `OperationResult` and stable error codes.
+- Password validators return `OperationResult`, accept cancellation and may perform
+  asynchronous application checks. They do not hash or persist passwords.
 - Confirmation commands include the target handle and protected token, but intentionally
   omit `ExpectedVersion`. Password reset includes the protected token and new password.
 - Verification methods return opaque persisted verifiers and optional delivery codes.

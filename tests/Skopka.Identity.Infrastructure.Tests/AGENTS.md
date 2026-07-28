@@ -6,6 +6,9 @@ Credential tests must cover verifier format handling, wrong passwords, parameter
 upgrades, pepper rotation and malformed/untrusted verifier input. Reduced work factors
 are allowed only in tests to keep the suite fast.
 
+Credential DI tests must cover password-policy configuration and custom validator
+registration independently of the selected hasher.
+
 Data Protection action-token tests must cover round-trip, tampering, purpose separation,
 URL-safe encoding and DI registration. Use an ephemeral provider only inside tests.
 

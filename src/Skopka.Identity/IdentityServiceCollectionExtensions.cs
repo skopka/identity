@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skopka.Identity;
+using Skopka.Identity.Credentials;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Security;
@@ -20,6 +21,7 @@ public static class IdentityServiceCollectionExtensions
         services.TryAddSingleton<IUserOperationPolicy, DefaultUserOperationPolicy>();
         services.TryAddSingleton<IIdentityMetrics, IdentityMetrics>();
         services.TryAddSingleton<ISecurityStampGenerator, DefaultSecurityStampGenerator>();
+        services.TryAddSingleton(new PasswordPolicyOptions());
         services.TryAddSingleton(new IdentityRateLimitOptions());
         services.TryAddSingleton(new IdentitySessionOptions());
         services.TryAddEnumerable(

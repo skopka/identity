@@ -254,6 +254,32 @@ public sealed class PasswordHasherTests
                 IPasswordAuthenticationService<TestProfile>>());
     }
 
+    [Fact]
+    public void DependencyInjectionConfiguresPasswordPolicyAndValidators()
+    {
+        var services = new ServiceCollection();
+
+        services
+            .AddSkopkaIdentity<TestProfile>()
+            .ConfigurePasswordPolicy(options =>
+            {
+                options.MinimumLength = 20;
+                options.MaximumLength = 256;
+            })
+            .AddPasswordValidator<TestPasswordValidator>();
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var options = provider.GetRequiredService<PasswordPolicyOptions>();
+        var validators = scope.ServiceProvider.GetServices<
+            IPasswordValidator<TestProfile>>();
+
+        Assert.Equal(20, options.MinimumLength);
+        Assert.Equal(256, options.MaximumLength);
+        Assert.Single(validators, validator => validator is TestPasswordValidator);
+    }
+
     public sealed record TestProfile(string DisplayName);
 
     private static Pbkdf2PasswordHasherOptions FastPbkdf2Options()
@@ -305,6 +331,15 @@ public sealed class PasswordHasherTests
             string? passwordVerifier,
             string? newSecurityStamp,
             DateTimeOffset now,
+            CancellationToken ct)
+            => Task.FromResult(OperationResultFactory.Success());
+    }
+
+    private sealed class TestPasswordValidator
+        : IPasswordValidator<TestProfile>
+    {
+        public Task<OperationResult> ValidateAsync(
+            PasswordValidationContext<TestProfile> context,
             CancellationToken ct)
             => Task.FromResult(OperationResultFactory.Success());
     }

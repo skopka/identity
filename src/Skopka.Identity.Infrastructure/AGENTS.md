@@ -41,6 +41,8 @@ It is not the place for core business rules.
   `IPasswordCredentialService<TProfile>`, `IPasswordAuthenticationService<TProfile>` and
   a singleton dummy-verification workload. Do not make the facade package depend on
   Argon2.
+- Hashers implement only verifier creation and verification. Password length policy and
+  custom validators are enforced by Core before invoking a hasher.
 - `DataProtectionIdentityActionTokenProvider` cryptographically separates each token
   purpose and emits URL-safe protected payloads. Malformed, tampered and cross-purpose
   tokens must fail without throwing expected validation exceptions.

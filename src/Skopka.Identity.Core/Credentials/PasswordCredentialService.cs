@@ -14,9 +14,15 @@ public sealed class PasswordCredentialService<TProfile>(
     ISecurityStampGenerator securityStampGenerator,
     IUserOperationPolicy policy,
     IIdentityMetrics metrics,
+    PasswordPolicyOptions passwordPolicyOptions,
+    IEnumerable<IPasswordValidator<TProfile>> passwordValidators,
     IEnumerable<IIdentityActionTokenProvider> actionTokenProviders)
     : IPasswordCredentialService<TProfile>
 {
+    private readonly PasswordPolicyOptions passwordPolicy =
+        PasswordPolicy.ValidateOptions(passwordPolicyOptions);
+    private readonly IReadOnlyCollection<IPasswordValidator<TProfile>>
+        registeredPasswordValidators = passwordValidators.ToArray();
     private readonly IIdentityActionTokenProvider? actionTokenProvider =
         actionTokenProviders.FirstOrDefault();
 
@@ -27,7 +33,9 @@ public sealed class PasswordCredentialService<TProfile>(
         using var op = metrics.Begin("credential.password.set");
         var now = DateTimeOffset.UtcNow;
 
-        var validationError = ValidatePassword(cmd.NewPassword, "newPassword");
+        var validationError = PasswordPolicy.ValidateNewPassword(
+            cmd.NewPassword,
+            passwordPolicy);
         if (validationError is not null)
         {
             return Fail(op, validationError);
@@ -44,6 +52,16 @@ public sealed class PasswordCredentialService<TProfile>(
         if (currentVerifier is not null)
         {
             return Fail(op, PasswordCredentialErrors.AlreadySet());
+        }
+
+        var policyResult = await ValidateCustomPasswordPolicyAsync(
+            user!,
+            cmd.NewPassword,
+            PasswordMutation.Set,
+            ct);
+        if (policyResult is not null)
+        {
+            return Finish(op, policyResult);
         }
 
         var passwordVerifier = passwordHasher.HashPassword(cmd.NewPassword);
@@ -66,8 +84,13 @@ public sealed class PasswordCredentialService<TProfile>(
         using var op = metrics.Begin("credential.password.change");
         var now = DateTimeOffset.UtcNow;
 
-        var validationError = ValidatePassword(cmd.CurrentPassword, "currentPassword")
-            ?? ValidatePassword(cmd.NewPassword, "newPassword");
+        var validationError = PasswordPolicy.ValidateInput(
+                cmd.CurrentPassword,
+                "currentPassword",
+                passwordPolicy)
+            ?? PasswordPolicy.ValidateNewPassword(
+                cmd.NewPassword,
+                passwordPolicy);
         if (validationError is not null)
         {
             return Fail(op, validationError);
@@ -92,6 +115,16 @@ public sealed class PasswordCredentialService<TProfile>(
         if (verification == PasswordVerificationResult.Failed)
         {
             return Fail(op, PasswordCredentialErrors.Invalid());
+        }
+
+        var policyResult = await ValidateCustomPasswordPolicyAsync(
+            user!,
+            cmd.NewPassword,
+            PasswordMutation.Change,
+            ct);
+        if (policyResult is not null)
+        {
+            return Finish(op, policyResult);
         }
 
         var passwordVerifier = passwordHasher.HashPassword(cmd.NewPassword);
@@ -146,7 +179,9 @@ public sealed class PasswordCredentialService<TProfile>(
         using var op = metrics.Begin("credential.password.reset");
         var now = DateTimeOffset.UtcNow;
 
-        var validationError = ValidatePassword(cmd.NewPassword, "newPassword");
+        var validationError = PasswordPolicy.ValidateNewPassword(
+            cmd.NewPassword,
+            passwordPolicy);
         if (validationError is not null)
         {
             return Fail(op, validationError);
@@ -172,6 +207,16 @@ public sealed class PasswordCredentialService<TProfile>(
             return Fail(op, tokenError);
         }
 
+        var policyResult = await ValidateCustomPasswordPolicyAsync(
+            user,
+            cmd.NewPassword,
+            PasswordMutation.Reset,
+            ct);
+        if (policyResult is not null)
+        {
+            return Finish(op, policyResult);
+        }
+
         var currentVerifier = await credentialStore.FindPasswordVerifierAsync(
             cmd.UserId,
             ct);
@@ -195,7 +240,10 @@ public sealed class PasswordCredentialService<TProfile>(
         using var op = metrics.Begin("credential.password.verify");
         var now = DateTimeOffset.UtcNow;
 
-        var validationError = ValidatePassword(cmd.Password, "password");
+        var validationError = PasswordPolicy.ValidateInput(
+            cmd.Password,
+            "password",
+            passwordPolicy);
         if (validationError is not null)
         {
             return Fail(op, validationError);
@@ -282,10 +330,28 @@ public sealed class PasswordCredentialService<TProfile>(
             : IdentityErrors.Deleted();
     }
 
-    private static Error? ValidatePassword(string? password, string field)
-        => string.IsNullOrEmpty(password)
-            ? IdentityErrors.Validation(field, "Password is required.")
-            : null;
+    private async Task<OperationResult?> ValidateCustomPasswordPolicyAsync(
+        IdentityUser<TProfile> user,
+        string password,
+        PasswordMutation mutation,
+        CancellationToken ct)
+    {
+        var context = new PasswordValidationContext<TProfile>(
+            user,
+            password,
+            mutation);
+
+        foreach (var validator in registeredPasswordValidators)
+        {
+            var result = await validator.ValidateAsync(context, ct);
+            if (!result.IsSuccess)
+            {
+                return result;
+            }
+        }
+
+        return null;
+    }
 
     private static OperationResult Fail(IIdentityOpScope op, Error error)
     {

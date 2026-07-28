@@ -140,6 +140,7 @@ public sealed class IdentityActionTokenTests
             userStore,
             "hash:old password");
         var provider = new FakeActionTokenProvider();
+        var validator = new RecordingPasswordValidator();
         var token = provider.Add(
             CreatePayload(
                 userStore.User,
@@ -152,6 +153,12 @@ public sealed class IdentityActionTokenTests
             new FakeSecurityStampGenerator(),
             new DefaultUserOperationPolicy(),
             new NoopIdentityMetrics(),
+            new PasswordPolicyOptions
+            {
+                MinimumLength = 8,
+                MaximumLength = 128
+            },
+            [validator],
             [provider]);
 
         var command = new ResetPasswordCommand(
@@ -166,6 +173,7 @@ public sealed class IdentityActionTokenTests
         Assert.Equal("hash:new password", credentialStore.PasswordVerifier);
         Assert.Equal("NEW-STAMP", userStore.User.SecurityStamp);
         Assert.Equal(1, credentialStore.ReplaceCalls);
+        Assert.Equal(PasswordMutation.Reset, validator.LastContext?.Mutation);
     }
 
     [Fact]
@@ -186,6 +194,12 @@ public sealed class IdentityActionTokenTests
             new FakeSecurityStampGenerator(),
             new DefaultUserOperationPolicy(),
             new NoopIdentityMetrics(),
+            new PasswordPolicyOptions
+            {
+                MinimumLength = 8,
+                MaximumLength = 128
+            },
+            [],
             [provider]);
 
         var result = await service.ResetPasswordAsync(
@@ -227,6 +241,20 @@ public sealed class IdentityActionTokenTests
             null,
             DateTimeOffset.UtcNow.AddDays(-1),
             DateTimeOffset.UtcNow.AddDays(-1));
+
+    private sealed class RecordingPasswordValidator
+        : IPasswordValidator<TestProfile>
+    {
+        public PasswordValidationContext<TestProfile>? LastContext { get; private set; }
+
+        public Task<OperationResult> ValidateAsync(
+            PasswordValidationContext<TestProfile> context,
+            CancellationToken ct)
+        {
+            LastContext = context;
+            return Task.FromResult(OperationResultFactory.Success());
+        }
+    }
 
     private static void AssertError(OperationResult result, string errorCode)
     {

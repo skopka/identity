@@ -250,6 +250,30 @@ public sealed class PasswordAuthenticationServiceTests
         Assert.Equal(2, hasher.VerifyCalls);
     }
 
+    [Fact]
+    public async Task OversizedPasswordIsRejectedBeforeLookupOrKdf()
+    {
+        var fixture = new Fixture(
+            passwordPolicyOptions: new PasswordPolicyOptions
+            {
+                MinimumLength = 8,
+                MaximumLength = 64
+            });
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.UserName,
+                "alice",
+                new string('x', 65)),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.Validation);
+        Assert.Null(fixture.LookupStore.LastNormalizedUserName);
+        Assert.Empty(fixture.CredentialStore.FindUserIds);
+        Assert.Equal(0, fixture.Hasher.VerifyCalls);
+        Assert.Equal(0, fixture.TimingProtector.SimulateCalls);
+    }
+
     private static void AssertError(
         OperationResult<IdentityUser<TestProfile>> result,
         string errorCode)
@@ -265,7 +289,8 @@ public sealed class PasswordAuthenticationServiceTests
             string? passwordVerifier = "hash:correct",
             DateTimeOffset? blockedAt = null,
             DateTimeOffset? blockedUntil = null,
-            FakeIdentityRateLimiter? rateLimiter = null)
+            FakeIdentityRateLimiter? rateLimiter = null,
+            PasswordPolicyOptions? passwordPolicyOptions = null)
         {
             User = new IdentityUser<TestProfile>(
                 Guid.NewGuid(),
@@ -295,6 +320,11 @@ public sealed class PasswordAuthenticationServiceTests
                 Hasher,
                 TimingProtector,
                 new NoopIdentityMetrics(),
+                passwordPolicyOptions ?? new PasswordPolicyOptions
+                {
+                    MinimumLength = 8,
+                    MaximumLength = 128
+                },
                 new IdentityRateLimitOptions(),
                 rateLimiter is null ? [] : [rateLimiter]);
         }

@@ -9,6 +9,10 @@ algorithm here.
 Cover security stamp generation, explicit rotation, password-triggered rotation and
 validation against user state.
 
+Password tests must cover mandatory minimum/maximum bounds, Unicode code-point counting,
+early oversized-input rejection before KDF and custom-validator ordering after
+credential or token authority checks.
+
 Action-token tests must cover purpose, user, normalized target, security-stamp and expiry
 bindings. Password-reset tests must prove that successful stamp rotation prevents token
 replay.

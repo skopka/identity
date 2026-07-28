@@ -60,7 +60,10 @@ public sealed class PasswordCredentialServiceTests
     [Fact]
     public async Task ChangePasswordReplacesVerifiedCredential()
     {
-        var fixture = new Fixture(passwordVerifier: "hash:current");
+        var validator = new FakePasswordValidator();
+        var fixture = new Fixture(
+            passwordVerifier: "hash:current",
+            passwordValidators: [validator]);
 
         var result = await fixture.Service.ChangePasswordAsync(
             new ChangePasswordCommand(
@@ -74,6 +77,7 @@ public sealed class PasswordCredentialServiceTests
         Assert.Equal("hash:current", fixture.CredentialStore.LastExpectedPasswordVerifier);
         Assert.Equal("hash:new password", fixture.CredentialStore.PasswordVerifier);
         Assert.Equal("NEW-STAMP", fixture.CredentialStore.LastNewSecurityStamp);
+        Assert.Equal(PasswordMutation.Change, validator.LastContext?.Mutation);
     }
 
     [Fact]
@@ -151,6 +155,126 @@ public sealed class PasswordCredentialServiceTests
         Assert.Equal(0, fixture.CredentialStore.ReplaceCalls);
     }
 
+    [Fact]
+    public async Task SetPasswordRejectsPasswordBelowConfiguredMinimum()
+    {
+        var fixture = new Fixture(
+            passwordPolicyOptions: new PasswordPolicyOptions());
+
+        var result = await fixture.Service.SetPasswordAsync(
+            new SetPasswordCommand(
+                fixture.User.Id,
+                fixture.User.Version,
+                "too short"),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.PasswordRejected);
+        Assert.Equal(0, fixture.Hasher.HashCalls);
+        Assert.Equal(0, fixture.CredentialStore.ReplaceCalls);
+    }
+
+    [Fact]
+    public async Task PasswordLengthCountsUnicodeCodePoints()
+    {
+        var fixture = new Fixture(
+            passwordPolicyOptions: new PasswordPolicyOptions
+            {
+                MinimumLength = 8,
+                MaximumLength = 64
+            });
+        var password = string.Concat(Enumerable.Repeat("\U0001F510", 8));
+
+        var result = await fixture.Service.SetPasswordAsync(
+            new SetPasswordCommand(
+                fixture.User.Id,
+                fixture.User.Version,
+                password),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal($"hash:{password}", fixture.CredentialStore.PasswordVerifier);
+    }
+
+    [Fact]
+    public async Task SetPasswordRejectsPasswordAboveConfiguredMaximum()
+    {
+        var fixture = new Fixture(
+            passwordPolicyOptions: new PasswordPolicyOptions
+            {
+                MinimumLength = 8,
+                MaximumLength = 64
+            });
+
+        var result = await fixture.Service.SetPasswordAsync(
+            new SetPasswordCommand(
+                fixture.User.Id,
+                fixture.User.Version,
+                new string('x', 65)),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.PasswordRejected);
+        Assert.Equal(0, fixture.Hasher.HashCalls);
+        Assert.Equal(0, fixture.CredentialStore.ReplaceCalls);
+    }
+
+    [Theory]
+    [InlineData(7, 64)]
+    [InlineData(8, 63)]
+    [InlineData(8, 1025)]
+    [InlineData(65, 64)]
+    public void PasswordPolicyRejectsUnsafeConfiguration(
+        int minimumLength,
+        int maximumLength)
+    {
+        Assert.ThrowsAny<ArgumentException>(
+            () => new Fixture(
+                passwordPolicyOptions: new PasswordPolicyOptions
+                {
+                    MinimumLength = minimumLength,
+                    MaximumLength = maximumLength
+                }));
+    }
+
+    [Fact]
+    public async Task CustomValidatorRejectsPasswordBeforeHashing()
+    {
+        var validator = new FakePasswordValidator(rejects: true);
+        var fixture = new Fixture(passwordValidators: [validator]);
+
+        var result = await fixture.Service.SetPasswordAsync(
+            new SetPasswordCommand(
+                fixture.User.Id,
+                fixture.User.Version,
+                "new password"),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.PasswordRejected);
+        Assert.Equal(PasswordMutation.Set, validator.LastContext?.Mutation);
+        Assert.Equal(fixture.User, validator.LastContext?.User);
+        Assert.Equal(0, fixture.Hasher.HashCalls);
+        Assert.Equal(0, fixture.CredentialStore.ReplaceCalls);
+    }
+
+    [Fact]
+    public async Task ChangePasswordValidatesCurrentPasswordBeforeCustomPolicy()
+    {
+        var validator = new FakePasswordValidator(rejects: true);
+        var fixture = new Fixture(
+            passwordVerifier: "hash:current",
+            passwordValidators: [validator]);
+
+        var result = await fixture.Service.ChangePasswordAsync(
+            new ChangePasswordCommand(
+                fixture.User.Id,
+                fixture.User.Version,
+                "wrong",
+                "new password"),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.InvalidPassword);
+        Assert.Null(validator.LastContext);
+    }
+
     private static void AssertError(OperationResult result, string errorCode)
     {
         Assert.False(result.IsSuccess);
@@ -161,7 +285,9 @@ public sealed class PasswordCredentialServiceTests
     {
         public Fixture(
             string? passwordVerifier = null,
-            UserFlags flags = UserFlags.None)
+            UserFlags flags = UserFlags.None,
+            PasswordPolicyOptions? passwordPolicyOptions = null,
+            IReadOnlyCollection<IPasswordValidator<TestProfile>>? passwordValidators = null)
         {
             User = new IdentityUser<TestProfile>(
                 Guid.NewGuid(),
@@ -189,6 +315,12 @@ public sealed class PasswordCredentialServiceTests
                 new FakeSecurityStampGenerator(),
                 new DefaultUserOperationPolicy(),
                 new NoopIdentityMetrics(),
+                passwordPolicyOptions ?? new PasswordPolicyOptions
+                {
+                    MinimumLength = 8,
+                    MaximumLength = 128
+                },
+                passwordValidators ?? [],
                 []);
         }
 
@@ -238,8 +370,13 @@ public sealed class PasswordCredentialServiceTests
     private sealed class FakePasswordHasher : IPasswordHasher
     {
         public bool LegacyVerifierNeedsRehash { get; set; }
+        public int HashCalls { get; private set; }
 
-        public string HashPassword(string password) => $"hash:{password}";
+        public string HashPassword(string password)
+        {
+            HashCalls++;
+            return $"hash:{password}";
+        }
 
         public PasswordVerificationResult VerifyHashedPassword(
             string passwordVerifier,
@@ -255,6 +392,25 @@ public sealed class PasswordCredentialServiceTests
             return passwordVerifier == $"hash:{providedPassword}"
                 ? PasswordVerificationResult.Success
                 : PasswordVerificationResult.Failed;
+        }
+    }
+
+    private sealed class FakePasswordValidator(bool rejects = false)
+        : IPasswordValidator<TestProfile>
+    {
+        public PasswordValidationContext<TestProfile>? LastContext { get; private set; }
+
+        public Task<OperationResult> ValidateAsync(
+            PasswordValidationContext<TestProfile> context,
+            CancellationToken ct)
+        {
+            LastContext = context;
+            return Task.FromResult(
+                rejects
+                    ? OperationResultFactory.Fail(
+                        PasswordCredentialErrors.Rejected(
+                            "The password is present in a blocklist."))
+                    : OperationResultFactory.Success());
         }
     }
 

@@ -79,6 +79,9 @@ file first and then the module-local file:
 - `IUserOperationPolicy` decides whether the current user flags allow mutation.
 - `IProfilePatch<TProfile>` applies partial profile changes.
 - `IIdentityMetrics` and `IIdentityOpScope` measure service operations.
+- `PasswordPolicyOptions` defines the mandatory bounded baseline, while
+  `IPasswordValidator<TProfile>` lets applications add asynchronous checks such as
+  password blocklists or breached-password services.
 
 All user-service methods return `OperationResult` / `OperationResult<T>` and accept
 `CancellationToken ct`.
@@ -174,6 +177,15 @@ Preserve these rules:
 - Restore may fail if unique handles were occupied after deletion.
 - Credentials are separate from profile data. Storage must hide password implementation
   details such as hash, salt and pepper.
+- Password policy defaults to 15 through 128 Unicode code points. Configuration may
+  lower the minimum to 8, must support a maximum of at least 64 and cannot raise the
+  resource-safety ceiling above 1024.
+- Do not normalize passwords or require upper-case, lower-case, digit or symbol
+  composition. Application-specific blocklist and breached-password checks belong in
+  `IPasswordValidator<TProfile>`.
+- Reject empty or oversized password input before any real or dummy password KDF.
+  Existing/current passwords are checked only for input bounds so legacy short
+  passwords can still authenticate and be changed.
 - Password hashing contracts live under `Skopka.Identity.Credentials`. Infrastructure
   provides `Pbkdf2PasswordHasher` and `Argon2idPepperedPasswordHasher`. HMAC-SHA256 is
   used as a peppered pre-hash, not as encryption. Pepper keys remain outside persistence

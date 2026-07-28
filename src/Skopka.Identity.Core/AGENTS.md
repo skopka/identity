@@ -13,6 +13,8 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
 
 - Implement `IIdentityUserService<TProfile>`.
 - Implement `IPasswordCredentialService<TProfile>`.
+- Enforce the mandatory password length baseline and orchestrate registered
+  `IPasswordValidator<TProfile>` implementations.
 - Implement `IPasswordAuthenticationService<TProfile>` and dummy verification workload.
 - Implement `ISecurityStampService<TProfile>` and the default random stamp generator.
 - Implement `IIdentityActionTokenIssuer<TProfile>` and validate action-token bindings in
@@ -68,6 +70,15 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
 - Active permanent or temporary blocks reject authentication after password verification;
   expired temporary blocks do not reject authentication.
 - Password set/change/removal rotates the security stamp; technical rehash does not.
+- New passwords are measured in Unicode code points and checked against the configured
+  minimum/maximum without trimming or normalization. Do not add character-class
+  composition rules.
+- Apply cheap required/maximum checks before any real or dummy password KDF. Do not
+  apply the current minimum to existing passwords, because legacy short passwords must
+  remain usable long enough to replace them.
+- Run custom password validators only after authority is established: after confirming
+  no password exists for set, after the current password succeeds for change and after
+  the reset token succeeds for reset. Hash only after every validator succeeds.
 - Soft delete rotates the security stamp; restore preserves the post-delete stamp.
 - Stamp validation rejects deleted and actively blocked users.
 - Password reset does not require the old password or expected version. It validates a
