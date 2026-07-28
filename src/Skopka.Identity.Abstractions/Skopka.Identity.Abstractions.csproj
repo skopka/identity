@@ -9,7 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Skopka.Abstraction.OperationResult" Version="0.1.0" />
+        <PackageReference Include="Skopka.Abstraction.OperationResult" />
     </ItemGroup>
 
 </Project>

@@ -391,6 +391,9 @@ where appropriate.
 - C# with nullable reference types and implicit usings.
 - Current target framework is `net10.0`.
 - Root namespace is `Skopka.Identity`.
+- Package versions are managed centrally in `Directory.Packages.props`. Do not add
+  `Version` metadata to project-level `PackageReference` items. Keep Microsoft ASP.NET
+  Core, EF Core and Extensions packages on the same servicing version.
 - Prefer records for commands/DTOs and sealed classes for concrete implementations.
 - Keep public contracts small and stable.
 - Add abstractions only when required by a concrete scenario.

@@ -6,6 +6,23 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    groups:
+      microsoft-dotnet:
+        patterns:
+          - dotnet-ef
+          - Microsoft.AspNetCore.*
+          - Microsoft.EntityFrameworkCore*
+          - Microsoft.Extensions.*
+        update-types:
+          - minor
+          - patch
+      test-platform:
+        patterns:
+          - Microsoft.NET.Test.Sdk
+          - xunit*
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: github-actions
     directory: /
