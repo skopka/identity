@@ -20,6 +20,7 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
 - Register `IVerificationChallengeStore<TProfile>` through `UsePostgreSql`.
 - Register `IRateLimitBucketStore<TProfile>` through `UsePostgreSql`.
 - Register `IIdentityRefreshSessionStore<TProfile>` through `UsePostgreSql`.
+- Register role and user-role stores through `UsePostgreSql`.
 
 ## Boundaries
 
@@ -59,3 +60,5 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
   `(scope, key_hash)` primary key.
 - Session migrations create `identity_refresh_sessions` with token/session/user lookup
   indexes, digest-only token storage and an optimistic concurrency version.
+- Role migrations create `identity_roles` and `identity_user_roles`, with a unique
+  normalized role-name index and stable key/foreign-key names used by exception mapping.

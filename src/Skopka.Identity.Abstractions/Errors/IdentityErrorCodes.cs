@@ -13,6 +13,10 @@ public static class IdentityErrorCodes
     public const string Validation = "identity.validation.failed";
     public const string UserDeleted = "identity.user.deleted";
 
+    public const string RoleNotFound = "identity.role.not_found";
+    public const string DuplicateRoleName = "identity.role.name_duplicate";
+    public const string RoleAlreadyAssigned = "identity.role.already_assigned";
+
     public const string PasswordAlreadySet = "identity.password.already_set";
     public const string PasswordNotSet = "identity.password.not_set";
     public const string InvalidPassword = "identity.password.invalid";

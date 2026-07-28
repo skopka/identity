@@ -26,3 +26,6 @@ refresh rotation, replay family revoke and online access validation after revoke
 
 Claims tests must cover default user projection, repeated custom roles, reserved claims
 and projection failure before session persistence.
+
+Role tests must cover normalization, duplicate names, optimistic concurrency, hierarchy
+cycles, protected-user mutation policy and direct-membership claim projection.

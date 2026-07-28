@@ -25,6 +25,11 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   access validation, revoke and bounded pruning.
 - Provide default projection for user name/email/phone session claims and aggregate
   additional `IIdentitySessionClaimsProvider<TProfile>` implementations.
+- Implement optional role CRUD and direct user-role membership orchestration through
+  `IdentityRoleService<TProfile>`, including role-name normalization and hierarchy
+  validation.
+- Project direct role memberships as repeated `role` session claims when roles are
+  enabled.
 - Provide default domain services such as `DefaultIdentityNormalizer`,
   `DefaultUserOperationPolicy` and default/noop metrics implementations.
 - Create domain errors through `IdentityErrors`.
@@ -95,6 +100,11 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   intentionally weaker immediate-revocation semantics.
 - Project and validate claims before creating or rotating refresh persistence so a
   failing custom provider cannot consume a usable refresh token.
+- Role assignment/removal follows normal user mutation policy and rejects deleted,
+  `System` and `Protected` users. Role membership does not bump the user version or
+  security stamp.
+- Validate role parent references and cycles, but do not expand parent roles into
+  inherited JWT claims.
 
 ## Implementation Style
 

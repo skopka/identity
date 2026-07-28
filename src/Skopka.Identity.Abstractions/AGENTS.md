@@ -41,6 +41,8 @@ small value objects.
 - Define bounded session-claim values and
   `IIdentitySessionClaimsProvider<TProfile>` without depending on
   `System.Security.Claims` or ASP.NET Core.
+- Define role CRUD and direct membership contracts under `Roles`. Role store inputs
+  carry normalized names prepared by Core; membership APIs use stable role ids.
 
 ## Boundaries
 
@@ -72,3 +74,5 @@ small value objects.
   store models carry digests and rotation state, never plaintext refresh secrets.
 - Protocol/session JWT claims are reserved. Custom providers may emit repeated `role`
   claims but cannot replace issuer, audience, subject, token/session ids or timestamps.
+- `IdentityRole.ParentId` is hierarchy metadata only. The public contract does not imply
+  inherited membership or authorization.

@@ -7,6 +7,7 @@ using Skopka.Identity.Credentials;
 using Skopka.Identity.Ef;
 using Skopka.Identity.Ef.PostgreSql;
 using Skopka.Identity.RateLimiting;
+using Skopka.Identity.Roles;
 using Skopka.Identity.Sessions;
 using Skopka.Identity.Verification;
 
@@ -50,6 +51,12 @@ public static class PostgreSqlIdentityBuilderExtensions
         builder.Services.TryAddScoped<
             IIdentityRefreshSessionStore<TProfile>,
             EfIdentityRefreshSessionStore<TProfile>>();
+        builder.Services.TryAddScoped<
+            IIdentityRoleStore<TProfile>,
+            EfIdentityRoleStore<TProfile>>();
+        builder.Services.TryAddScoped<
+            IIdentityUserRoleStore<TProfile>,
+            EfIdentityUserRoleStore<TProfile>>();
         builder.Services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IEfIdentityExceptionMapper, PostgreSqlIdentityExceptionMapper>());
 

@@ -22,6 +22,8 @@ identity stores when it is added.
   `IRateLimitBucketStore<TProfile>`.
 - Implement `EfIdentityRefreshSessionStore<TProfile>` against
   `IIdentityRefreshSessionStore<TProfile>`.
+- Implement role CRUD and direct membership stores against
+  `IIdentityRoleStore<TProfile>` and `IIdentityUserRoleStore<TProfile>`.
 - Map EF entities to public `IdentityUser<TProfile>` models.
 - Configure generic EF relationships, keys, concurrency tokens and timestamps.
 - Translate EF concurrency conflicts into identity concurrency errors.
@@ -40,6 +42,10 @@ identity stores when it is added.
 - `auth_users` stores normalized handles, confirmation flags, flags, version and
   deleted/blocked/audit timestamps.
 - `user_profiles` stores display handles and the generic `Profile`.
+- `identity_roles` stores display/normalized names, optional parent metadata, version and
+  audit timestamps.
+- `identity_user_roles` stores direct memberships with a composite key and assignment
+  timestamp.
 - `Version` must be configured as an optimistic concurrency token.
 - Store operations must update `ModifiedAt` and bump version consistently.
 - Soft delete uses `DeletedAt`; normal uniqueness should apply only to non-deleted users.
@@ -69,3 +75,7 @@ identity stores when it is added.
   user, stamp and absolute expiry bindings.
 - Rotated rows remain available for replay detection. Reuse revokes the entire logical
   session; revoke and pruning operations retry optimistic concurrency races.
+- Role names are unique by normalized name. Role version is a concurrency token.
+  Deleting a role cascades memberships and sets child `ParentId` values to null.
+- Removing a missing membership is idempotent; duplicate assignment returns the stable
+  role-already-assigned conflict.

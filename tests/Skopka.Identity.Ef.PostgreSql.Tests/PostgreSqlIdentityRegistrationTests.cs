@@ -6,6 +6,7 @@ using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.RateLimiting;
+using Skopka.Identity.Roles;
 using Skopka.Identity.Security;
 using Skopka.Identity.Sessions;
 using Skopka.Identity.Users;
@@ -23,6 +24,7 @@ public sealed class PostgreSqlIdentityRegistrationTests
 
         services
             .AddSkopkaIdentity<TestProfile>()
+            .AddRoles()
             .UsePostgreSql("Host=localhost;Database=skopka_identity_di_tests");
 
         using var provider = services.BuildServiceProvider();
@@ -59,6 +61,22 @@ public sealed class PostgreSqlIdentityRegistrationTests
         Assert.IsType<EfIdentityRefreshSessionStore<TestProfile>>(
             scopedProvider.GetRequiredService<
                 IIdentityRefreshSessionStore<TestProfile>>());
+        Assert.IsType<DefaultIdentityRoleNormalizer>(
+            scopedProvider.GetRequiredService<IIdentityRoleNormalizer>());
+        Assert.IsType<IdentityRoleService<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentityRoleService<TestProfile>>());
+        Assert.IsType<EfIdentityRoleStore<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentityRoleStore<TestProfile>>());
+        Assert.IsType<EfIdentityUserRoleStore<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentityUserRoleStore<TestProfile>>());
+        Assert.Contains(
+            scopedProvider.GetServices<
+                IIdentitySessionClaimsProvider<TestProfile>>(),
+            claimsProvider =>
+                claimsProvider is IdentityRoleSessionClaimsProvider<TestProfile>);
 
         var providerContext = scopedProvider.GetRequiredService<PostgreSqlIdentityDbContext<TestProfile>>();
         var storeContext = scopedProvider.GetRequiredService<IdentityDbContext<TestProfile>>();
@@ -89,11 +107,16 @@ public sealed class PostgreSqlIdentityRegistrationTests
             name => name.EndsWith(
                 "_AddIdentityRefreshSessions",
                 StringComparison.Ordinal));
+        var roleMigration = Assert.Single(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith(
+                "_AddIdentityRoles",
+                StringComparison.Ordinal));
         Assert.False(providerContext.Database.HasPendingModelChanges());
 
         var script = providerContext.GetService<IMigrator>().GenerateScript(
             fromMigration: null,
-            toMigration: refreshSessionMigration);
+            toMigration: roleMigration);
 
         Assert.Contains("CREATE TABLE auth_users", script, StringComparison.Ordinal);
         Assert.Contains("CREATE TABLE user_profiles", script, StringComparison.Ordinal);
@@ -111,6 +134,14 @@ public sealed class PostgreSqlIdentityRegistrationTests
             StringComparison.Ordinal);
         Assert.Contains(
             "CREATE TABLE identity_refresh_sessions",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "CREATE TABLE identity_roles",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "CREATE TABLE identity_user_roles",
             script,
             StringComparison.Ordinal);
     }

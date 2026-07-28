@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Skopka.Identity.Ef.Entities;
 using Skopka.Identity.RateLimiting;
+using Skopka.Identity.Roles;
 using Skopka.Identity.Sessions;
 using Skopka.Identity.Verification;
 using Xunit;
@@ -96,6 +97,26 @@ public sealed class PostgreSqlIdentityModelTests
             refreshSessionType
                 .FindProperty(nameof(RefreshSessionEntity.SecurityStamp))!
                 .GetMaxLength());
+
+        var roleType = context.Model.FindEntityType(typeof(RoleEntity));
+        Assert.NotNull(roleType);
+        Assert.True(
+            roleType
+                .FindProperty(nameof(RoleEntity.Version))!
+                .IsConcurrencyToken);
+        Assert.Equal(
+            IdentityRoleLimits.MaximumNameLength,
+            roleType
+                .FindProperty(nameof(RoleEntity.NormalizedName))!
+                .GetMaxLength());
+        AssertUniqueIndex(
+            roleType,
+            "ux_identity_roles_normalized_name");
+
+        var membershipType = context.Model.FindEntityType(
+            typeof(UserRoleEntity));
+        Assert.NotNull(membershipType);
+        Assert.Equal(2, membershipType.FindPrimaryKey()!.Properties.Count);
     }
 
     private static void AssertUniqueFilteredIndex(
@@ -109,6 +130,18 @@ public sealed class PostgreSqlIdentityModelTests
 
         Assert.True(index.IsUnique);
         Assert.Equal(filter, index.GetFilter());
+    }
+
+    private static void AssertUniqueIndex(
+        Microsoft.EntityFrameworkCore.Metadata.IReadOnlyEntityType entityType,
+        string databaseName)
+    {
+        var index = Assert.Single(
+            entityType.GetIndexes(),
+            candidate => candidate.GetDatabaseName() == databaseName);
+
+        Assert.True(index.IsUnique);
+        Assert.Null(index.GetFilter());
     }
 
     public sealed record TestProfile(string DisplayName);

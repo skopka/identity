@@ -68,6 +68,9 @@ file first and then the module-local file:
   cryptography and wire formats from Core.
 - `IIdentitySessionClaimsProvider<TProfile>` projects user/application claims into each
   newly issued access token. Multiple providers and repeated `role` claims are allowed.
+- `IIdentityRoleService<TProfile>` owns role CRUD and direct user-role membership.
+- `IIdentityRoleStore<TProfile>` and `IIdentityUserRoleStore<TProfile>` are the role
+  persistence ports used by Core.
 - `IIdentityNormalizer` normalizes userName/email/phone before persistence and checks.
 - `IUserOperationPolicy` decides whether the current user flags allow mutation.
 - `IProfilePatch<TProfile>` applies partial profile changes.
@@ -221,9 +224,9 @@ Preserve these rules:
 - JWT access tokens are short-lived and contain user id, logical session id, token id,
   timestamps and format version. Do not expose the raw security stamp as a JWT claim.
 - The default session claims provider projects available user name, email/confirmation
-  and phone/confirmation values. Applications add roles or domain claims through
-  `AddSessionClaimsProvider<TProvider>()`; the current library does not yet own role
-  membership persistence.
+  and phone/confirmation values. Optional roles add direct memberships through
+  `AddRoles()`; applications add other domain claims through
+  `AddSessionClaimsProvider<TProvider>()`.
 - Claim providers cannot override JWT protocol/session claims such as `iss`, `aud`,
   `sub`, `jti`, `sid`, `iat`, `nbf`, `exp` or `skp_ver`. Claims are count/size bounded
   and projected before refresh persistence changes.
@@ -242,8 +245,9 @@ Preserve these rules:
   application's `OnTokenValidated` callback.
 - Hosts still call `UseAuthentication()` and `UseAuthorization()` in their ASP.NET Core
   middleware pipeline. Claims embedded in a stateless token remain unchanged until a
-  new token is issued; authorization-sensitive role changes should rotate the security
-  stamp or use online validation.
+  new token is issued. Role changes appear on the next create/refresh; applications
+  needing immediate effect should revoke the user's sessions and enable online session
+  validation, or evaluate membership from storage in an authorization policy.
 - Hosts must schedule `IIdentitySessionService<TProfile>.PruneAsync()` in bounded batches.
   Revoked and rotated rows remain until expiry plus retention so replay can be detected.
 - Action tokens are stateless and do not require EF entities. The default Infrastructure
@@ -288,6 +292,11 @@ EF Core storage is split:
   - refresh-token digest and security-stamp snapshot
   - absolute expiry, rotation/revoke timestamps and replacement link
   - optimistic concurrency version
+- `identity_roles`
+  - display and unique normalized names
+  - optional parent metadata, version and audit timestamps
+- `identity_user_roles`
+  - direct user-role memberships and assignment timestamp
 - planned later:
   - `user_external_logins`
 
@@ -317,10 +326,14 @@ implemented as a separate subsystem. Persistent account/client rate limiting,
 challenge-start throttling and resend cooldown are implemented. JWT access tokens and
 persistent refresh sessions now support strict rotation, replay detection, online
 validation and revoke. ASP.NET Core JWT bearer integration and extensible claims
-projection are implemented; a full role membership store is not. The next major areas
-are exchanging step-up proofs into authorization decisions and implementing external
-login/role membership adapters. Keep transport token issuance out of password/OTP
+projection are implemented. Optional role CRUD, direct membership persistence and JWT
+role projection are implemented. The next major areas are exchanging step-up proofs
+into authorization decisions and implementing external login adapters. Keep transport
+token issuance out of password/OTP
 cryptographic providers and EF stores.
+
+`IdentityRole.ParentId` is validated against missing parents and cycles, but does not
+imply inherited membership or inherited JWT claims.
 
 Do not move EF responsibilities into Core. Do not move domain policy decisions into EF
 unless the store is only translating database outcomes into domain errors.

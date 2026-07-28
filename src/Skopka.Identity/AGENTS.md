@@ -54,6 +54,12 @@ install and configure without moving domain or persistence logic into the facade
 - The default session claims provider projects user handles and confirmation state.
   Applications attach role/domain projections with
   `IdentityBuilder<TProfile>.AddSessionClaimsProvider<TProvider>()`.
+- Roles remain optional and are enabled with `IdentityBuilder<TProfile>.AddRoles()`.
+  This registers role orchestration and the direct-membership JWT claims provider;
+  persistence adapters provide the stores.
+- Role changes are visible in newly created or refreshed access tokens. Existing JWTs
+  keep their embedded role claims until expiry. Session revocation invalidates them
+  immediately only when online session validation is enabled.
 - ASP.NET Core bearer setup remains in the optional Infrastructure package through
   `UseJwtBearerAuthentication<TProfile>()`; hosts own middleware ordering and
   authorization policies.
