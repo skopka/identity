@@ -409,3 +409,11 @@ If tests are added or a test project appears, also run the relevant `dotnet test
 `Skopka.Identity.Ef.PostgreSql.Tests` contains an explicit Testcontainers integration
 test. Running the complete suite requires Docker and access to the pinned
 `postgres:17-alpine` image; the test never falls back to a developer-local database.
+
+Release documentation lives in `README.md`, `SECURITY.md`, `CONTRIBUTING.md` and
+`docs/`. Keep setup examples, package metadata, CI commands and documented security
+semantics aligned with the public API.
+
+Package metadata is centralized in `Directory.Build.props`; module-specific descriptions
+remain in source project files. CI must build, run the real PostgreSQL test, audit NuGet
+dependencies and pack all six source packages without publishing them.

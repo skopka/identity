@@ -5,6 +5,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <RootNamespace>Skopka.Identity</RootNamespace>
+        <Description>Public contracts, user models, commands and extension points for Skopka.Identity.</Description>
     </PropertyGroup>
 
     <ItemGroup>

@@ -5,6 +5,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <RootNamespace>Skopka.Identity.Ef</RootNamespace>
+        <Description>PostgreSQL Entity Framework Core provider, stores and packaged migrations for Skopka.Identity.</Description>
     </PropertyGroup>
 
     <ItemGroup>

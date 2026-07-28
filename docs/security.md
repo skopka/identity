@@ -1,0 +1,141 @@
+# Security Model
+
+This document describes the intended boundaries and deployment requirements. It is not
+a substitute for an application-specific threat model or independent security review.
+
+## Passwords
+
+- New passwords default to 15 through 128 Unicode code points.
+- Applications with mandatory MFA may lower the configured minimum to 8.
+- The maximum cannot be configured below 64 or above 1024.
+- Passwords are not trimmed, normalized or subjected to upper/digit/symbol rules.
+- Oversized input is rejected before a real or dummy KDF operation.
+- Existing passwords are checked against the maximum but not the current minimum, so a
+  legacy short password can still be authenticated and replaced.
+- `IPasswordValidator<TProfile>` can add asynchronous blocklist or breached-password
+  checks after the caller has established authority for the mutation.
+
+PBKDF2-HMAC-SHA256 is available without an application secret. The Argon2id provider
+first applies HMAC-SHA256 with an application-managed pepper and then runs Argon2id.
+
+Do not log passwords, verifier strings, pepper material or password-reset tokens.
+
+## Secret Inventory
+
+Use independent random keys for each purpose:
+
+| Secret | Minimum / storage requirement |
+| --- | --- |
+| Password pepper | At least 32 bytes, secret manager or HSM-backed provider |
+| JWT signing key | At least 32 bytes, shared by issuers and validators |
+| OTP HMAC key | At least 32 bytes, retained through challenge expiry |
+| Rate-limit partition key | At least 32 bytes, shared by all database writers |
+| Data Protection key ring | Persisted and protected outside the application database |
+
+Never reuse one key for multiple rows in this table.
+
+Pepper and OTP providers support key ids so historical keys can remain available during
+rotation. Remove an old key only after no valid verifier or challenge can reference it.
+
+Rotating a JWT signing key invalidates every access token signed only by the old key.
+Plan overlap or coordinated rollout at the application layer if uninterrupted
+validation is required.
+
+## Action Tokens
+
+Email confirmation, phone confirmation and password reset use ASP.NET Core Data
+Protection. Tokens are bound to:
+
+- action purpose;
+- user id;
+- current security stamp;
+- current normalized handle when applicable;
+- issue and expiry times.
+
+Persist and share the Data Protection key ring across replicas. An ephemeral key ring
+invalidates outstanding tokens after restart and makes tokens instance-specific.
+
+Action tokens are bearer secrets but are not OTP or MFA authenticators.
+
+## Verification and Step-Up
+
+Verification challenges bind the user, server-created purpose, intent binding, method
+and current security stamp. Failed-attempt limits and expiry are enforced independently
+of the verification method.
+
+Core persists only a SHA-256 digest of the high-entropy verification proof. Proofs are
+one-time and short-lived.
+
+Step-up policy owns the required verification purpose, assurance and permitted methods.
+The business use case owns the action/resource binding. Do not accept either value
+unmodified from an untrusted client.
+
+A successful step-up decision does not replace role or domain authorization.
+
+## JWT and Refresh Sessions
+
+Access tokens should remain short-lived. With default stateless JwtBearer validation:
+
+- a signed token remains usable until expiry;
+- password/security-stamp changes do not immediately revoke that token;
+- role changes do not rewrite existing claims.
+
+Enable `ValidateSessionOnEveryRequest` when every request must verify the persisted
+session and current user state. This provides faster revocation at the cost of a database
+lookup.
+
+Refresh tokens are random opaque secrets. Persistence stores digests, rotation state
+and the security-stamp snapshot, never plaintext tokens. Reuse of a rotated token revokes
+the complete logical session.
+
+## Rate Limiting
+
+The host creates trusted account/client partition inputs. Raw IP addresses or request
+body values should not be persisted directly. The HMAC partition adapter obscures values
+before storage but does not make low-entropy values safe to expose.
+
+Client partitions count every request. Account partitions count credential failures and
+reset only after a correct password.
+
+## Protected Users
+
+`System` and `Protected` users cannot be changed through normal APIs. This policy is a
+domain guard, not a replacement for endpoint authorization.
+
+Soft delete hides users from active handle lookup but retains their data. Decide at the
+application level when legal or operational requirements require irreversible erasure.
+
+## Deployment Checklist
+
+- Store every key outside source control and ordinary application settings.
+- Use TLS for PostgreSQL and all public endpoints.
+- Run packaged migrations as a controlled deployment step.
+- Back up and test restoration of the database and Data Protection key ring together.
+- Configure short JWT lifetimes appropriate to stateless revocation delay.
+- Enable online session validation for endpoints that require immediate revocation.
+- Configure persistent account and client rate limiting.
+- Register a breached-password/blocklist validator.
+- Keep logs free of credentials, tokens, OTP values and sensitive profile fields.
+- Protect confirmation, reset, refresh and verification endpoints against CSRF and
+  enumeration at the transport layer.
+- Perform application authorization after authentication and step-up checks.
+- Monitor duplicate conflicts, rate-limit decisions, verification failures and refresh
+  token reuse without recording submitted secrets.
+- Run the PostgreSQL integration test against every supported PostgreSQL major version
+  before claiming compatibility.
+
+## Known Gaps
+
+The current pre-1.0 release does not include:
+
+- external login provider orchestration;
+- TOTP;
+- WebAuthn/passkeys;
+- recovery codes;
+- cookie sign-in;
+- controllers, Razor UI or delivery adapters;
+- automatic JWT signing-key overlap;
+- a built-in breached-password data source.
+
+Applications that require these capabilities must provide them outside the current
+library or wait for the corresponding contracts and adapters.

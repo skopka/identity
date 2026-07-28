@@ -4,6 +4,7 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <Description>Consumer-facing dependency injection and composition package for Skopka.Identity.</Description>
     </PropertyGroup>
 
     <ItemGroup>

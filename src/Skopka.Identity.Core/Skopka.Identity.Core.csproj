@@ -5,6 +5,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <RootNamespace>Skopka.Identity</RootNamespace>
+        <Description>Core identity orchestration, validation and default domain services for Skopka.Identity.</Description>
     </PropertyGroup>
 
     <ItemGroup>
