@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  build-test-pack:
+    name: Build, test and pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore Skopka.Identity.slnx
+
+      - name: Build
+        run: >
+          dotnet build Skopka.Identity.slnx
+          --configuration Release
+          --no-restore
+
+      - name: Test
+        run: >
+          dotnet test Skopka.Identity.slnx
+          --configuration Release
+          --no-build
+          --logger trx
+          --results-directory artifacts/test-results
+
+      - name: Audit NuGet dependencies
+        run: >
+          dotnet list Skopka.Identity.slnx package
+          --vulnerable
+          --include-transitive
+          --no-restore
+
+      - name: Pack
+        run: >
+          dotnet pack Skopka.Identity.slnx
+          --configuration Release
+          --no-build
+          --output artifacts/packages
+
+      - name: Upload NuGet packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-packages
+          path: |
+            artifacts/packages/*.nupkg
+            artifacts/packages/*.snupkg
+          if-no-files-found: error
+          retention-days: 14
