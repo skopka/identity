@@ -405,3 +405,7 @@ dotnet build Skopka.Identity.slnx
 ```
 
 If tests are added or a test project appears, also run the relevant `dotnet test`.
+
+`Skopka.Identity.Ef.PostgreSql.Tests` contains an explicit Testcontainers integration
+test. Running the complete suite requires Docker and access to the pinned
+`postgres:17-alpine` image; the test never falls back to a developer-local database.

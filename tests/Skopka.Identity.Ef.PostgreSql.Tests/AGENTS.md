@@ -20,3 +20,9 @@ does not add a PostgreSQL entity or migration; it consumes existing Verification
 This project verifies PostgreSQL-specific EF model annotations and exception mapping.
 Tests that require a live PostgreSQL server should be explicit integration tests and
 must not silently depend on a developer-local database.
+
+Real PostgreSQL integration tests use `Testcontainers.PostgreSql` with a pinned
+PostgreSQL major version. They must apply packaged migrations and exercise JSONB
+round-trip, provider constraint mapping, filtered unique indexes and database-level
+optimistic concurrency through independent contexts. Docker is an explicit prerequisite;
+do not fall back to a configured or developer-local connection string.
