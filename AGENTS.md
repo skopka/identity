@@ -66,6 +66,8 @@ file first and then the module-local file:
 - `IIdentityRefreshSessionStore<TProfile>` persists refresh-token rotation chains.
 - `IIdentityAccessTokenProvider` and `IIdentityRefreshTokenProvider` isolate token
   cryptography and wire formats from Core.
+- `IIdentitySessionClaimsProvider<TProfile>` projects user/application claims into each
+  newly issued access token. Multiple providers and repeated `role` claims are allowed.
 - `IIdentityNormalizer` normalizes userName/email/phone before persistence and checks.
 - `IUserOperationPolicy` decides whether the current user flags allow mutation.
 - `IProfilePatch<TProfile>` applies partial profile changes.
@@ -218,6 +220,13 @@ Preserve these rules:
   blocked authentication state before persisting a session.
 - JWT access tokens are short-lived and contain user id, logical session id, token id,
   timestamps and format version. Do not expose the raw security stamp as a JWT claim.
+- The default session claims provider projects available user name, email/confirmation
+  and phone/confirmation values. Applications add roles or domain claims through
+  `AddSessionClaimsProvider<TProvider>()`; the current library does not yet own role
+  membership persistence.
+- Claim providers cannot override JWT protocol/session claims such as `iss`, `aud`,
+  `sub`, `jti`, `sid`, `iat`, `nbf`, `exp` or `skp_ver`. Claims are count/size bounded
+  and projected before refresh persistence changes.
 - Refresh tokens are opaque 256-bit random secrets. Persistence stores only their
   SHA-256 digest and the non-secret token id needed for lookup.
 - Refresh rotation is strict and one-time. Reuse of a rotated token revokes every token
@@ -226,6 +235,15 @@ Preserve these rules:
 - Cryptographic JWT validation is stateless until access-token expiry.
   `ValidateAccessTokenAsync` adds an online database/stamp check when immediate session
   revoke, password-change or user-block enforcement is required.
+- `UseJwtBearerAuthentication<TProfile>()` configures ASP.NET Core JWT bearer validation
+  against the same HMAC key, issuer and audience used by `UseJwtSessions<TProfile>()`.
+  It also registers standard authorization services. Stateless validation is the
+  default. `ValidateSessionOnEveryRequest` composes an online session check after the
+  application's `OnTokenValidated` callback.
+- Hosts still call `UseAuthentication()` and `UseAuthorization()` in their ASP.NET Core
+  middleware pipeline. Claims embedded in a stateless token remain unchanged until a
+  new token is issued; authorization-sensitive role changes should rotate the security
+  stamp or use online validation.
 - Hosts must schedule `IIdentitySessionService<TProfile>.PruneAsync()` in bounded batches.
   Revoked and rotated rows remain until expiry plus retention so replay can be detected.
 - Action tokens are stateless and do not require EF entities. The default Infrastructure
@@ -298,10 +316,11 @@ action tokens are implemented. Verification challenges and generated HMAC OTP ar
 implemented as a separate subsystem. Persistent account/client rate limiting,
 challenge-start throttling and resend cooldown are implemented. JWT access tokens and
 persistent refresh sessions now support strict rotation, replay detection, online
-validation and revoke. The next major areas are ASP.NET authentication middleware and
-claims/roles projection, followed by exchanging step-up proofs into authorization
-decisions. Keep transport token issuance out of password/OTP cryptographic providers and
-EF stores.
+validation and revoke. ASP.NET Core JWT bearer integration and extensible claims
+projection are implemented; a full role membership store is not. The next major areas
+are exchanging step-up proofs into authorization decisions and implementing external
+login/role membership adapters. Keep transport token issuance out of password/OTP
+cryptographic providers and EF stores.
 
 Do not move EF responsibilities into Core. Do not move domain policy decisions into EF
 unless the store is only translating database outcomes into domain errors.

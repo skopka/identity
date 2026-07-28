@@ -13,6 +13,7 @@ public sealed class IdentitySessionService<TProfile>(
     IIdentityRefreshSessionStore<TProfile> sessionStore,
     IIdentityAccessTokenProvider accessTokenProvider,
     IIdentityRefreshTokenProvider refreshTokenProvider,
+    IEnumerable<IIdentitySessionClaimsProvider<TProfile>> claimsProviders,
     IdentitySessionOptions options,
     IIdentityMetrics metrics)
     : IIdentitySessionService<TProfile>
@@ -50,6 +51,13 @@ public sealed class IdentitySessionService<TProfile>(
         var refreshTokenId = Guid.NewGuid();
         var refreshToken = refreshTokenProvider.Generate(refreshTokenId);
         var refreshExpiresAt = now.Add(options.RefreshSessionLifetime);
+        var issued = await IssueTokensAsync(
+            user,
+            sessionId,
+            refreshToken.Token,
+            refreshExpiresAt,
+            now,
+            ct);
         var createResult = await sessionStore.CreateAsync(
             new NewRefreshSession(
                 refreshTokenId,
@@ -67,13 +75,6 @@ public sealed class IdentitySessionService<TProfile>(
                 op,
                 createResult.Errors);
         }
-
-        var issued = IssueTokens(
-            user.Id,
-            sessionId,
-            refreshToken.Token,
-            refreshExpiresAt,
-            now);
 
         op.Success();
         return OperationResultFactory.Success(issued);
@@ -149,6 +150,13 @@ public sealed class IdentitySessionService<TProfile>(
             replacementToken.TokenHash,
             current.SecurityStamp,
             current.ExpiresAt);
+        var issued = await IssueTokensAsync(
+            user,
+            current.SessionId,
+            replacementToken.Token,
+            current.ExpiresAt,
+            now,
+            ct);
 
         var rotateResult = await sessionStore.RotateAsync(
             current.TokenId,
@@ -175,13 +183,6 @@ public sealed class IdentitySessionService<TProfile>(
                 op,
                 rotateResult.Errors);
         }
-
-        var issued = IssueTokens(
-            current.UserId,
-            current.SessionId,
-            replacementToken.Token,
-            current.ExpiresAt,
-            now);
 
         op.Success();
         return OperationResultFactory.Success(issued);
@@ -312,24 +313,27 @@ public sealed class IdentitySessionService<TProfile>(
         return removed;
     }
 
-    private IssuedIdentitySession IssueTokens(
-        Guid userId,
+    private async Task<IssuedIdentitySession> IssueTokensAsync(
+        IdentityUser<TProfile> user,
         Guid sessionId,
         string refreshToken,
         DateTimeOffset refreshExpiresAt,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        CancellationToken ct)
     {
         var accessExpiresAt = Min(
             now.Add(options.AccessTokenLifetime),
             refreshExpiresAt);
+        var claims = await GetClaimsAsync(user, ct);
         var accessToken = accessTokenProvider.Generate(
             new IdentityAccessTokenPayload(
                 CurrentAccessTokenFormatVersion,
                 Guid.NewGuid(),
-                userId,
+                user.Id,
                 sessionId,
                 now,
-                accessExpiresAt));
+                accessExpiresAt,
+                claims));
 
         return new IssuedIdentitySession(
             sessionId,
@@ -338,6 +342,75 @@ public sealed class IdentitySessionService<TProfile>(
             refreshToken,
             refreshExpiresAt);
     }
+
+    private async Task<IReadOnlyList<IdentitySessionClaim>> GetClaimsAsync(
+        IdentityUser<TProfile> user,
+        CancellationToken ct)
+    {
+        var claims = new List<IdentitySessionClaim>();
+
+        foreach (var provider in claimsProviders)
+        {
+            var projected = await provider.GetClaimsAsync(user, ct)
+                ?? throw new InvalidOperationException(
+                    "A session claims provider returned null.");
+            claims.AddRange(projected);
+
+            if (claims.Count > IdentitySessionClaimLimits.MaximumClaimCount)
+            {
+                throw new InvalidOperationException(
+                    "Session claims exceed the supported count.");
+            }
+        }
+
+        foreach (var claim in claims)
+        {
+            ValidateClaim(claim);
+        }
+
+        return claims;
+    }
+
+    private static void ValidateClaim(IdentitySessionClaim claim)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+
+        if (string.IsNullOrWhiteSpace(claim.Type)
+            || claim.Type.Length
+                > IdentitySessionClaimLimits.MaximumTypeLength)
+        {
+            throw new InvalidOperationException(
+                "A session claim type is invalid.");
+        }
+
+        if (claim.Value is null
+            || claim.Value.Length
+                > IdentitySessionClaimLimits.MaximumValueLength)
+        {
+            throw new InvalidOperationException(
+                "A session claim value is invalid.");
+        }
+
+        if (ReservedClaimTypes.Contains(claim.Type))
+        {
+            throw new InvalidOperationException(
+                $"Session claim '{claim.Type}' is reserved.");
+        }
+    }
+
+    private static readonly HashSet<string> ReservedClaimTypes =
+        new(StringComparer.Ordinal)
+        {
+            "iss",
+            "aud",
+            "exp",
+            "nbf",
+            "iat",
+            "jti",
+            "sub",
+            IdentitySessionClaimTypes.SessionId,
+            IdentitySessionClaimTypes.FormatVersion,
+        };
 
     private bool TryReadRefreshToken(
         string token,

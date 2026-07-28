@@ -23,3 +23,6 @@ resend evaluation order.
 
 Session tests must verify stale-stamp rejection, absolute expiry preservation, one-time
 refresh rotation, replay family revoke and online access validation after revoke.
+
+Claims tests must cover default user projection, repeated custom roles, reserved claims
+and projection failure before session persistence.

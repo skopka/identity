@@ -1,5 +1,15 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using Skopka.Abstraction.OperationResult;
+using Skopka.Identity.Errors;
 using Skopka.Identity.Sessions;
+using Skopka.Identity.Users;
 using Xunit;
 
 namespace Skopka.Identity.Infrastructure.Tests;
@@ -10,7 +20,13 @@ public sealed class JwtSessionProviderTests
     public async Task JwtProviderRoundTripsBoundSessionClaims()
     {
         using var provider = CreateJwtProvider();
-        var payload = CreatePayload();
+        var payload = CreatePayload(
+            claims:
+            [
+                new(IdentitySessionClaimTypes.Name, "alice"),
+                new(IdentitySessionClaimTypes.Role, "admin"),
+                new(IdentitySessionClaimTypes.Role, "auditor"),
+            ]);
 
         var token = provider.Generate(payload);
         var validated = await provider.ValidateAsync(
@@ -28,6 +44,10 @@ public sealed class JwtSessionProviderTests
         Assert.Equal(
             payload.ExpiresAt.ToUnixTimeSeconds(),
             validated.ExpiresAt.ToUnixTimeSeconds());
+        Assert.Equal(
+            2,
+            validated.Claims!.Count(
+                claim => claim.Type == IdentitySessionClaimTypes.Role));
     }
 
     [Fact]
@@ -132,12 +152,115 @@ public sealed class JwtSessionProviderTests
                     == typeof(IdentitySessionService<TestProfile>));
     }
 
+    [Fact]
+    public async Task JwtBearerIntegrationBuildsNameAndRolePrincipal()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services
+            .AddSkopkaIdentity<TestProfile>()
+            .UseJwtSessions(
+                CreateSigningKey(),
+                jwt =>
+                {
+                    jwt.Issuer = "https://issuer.example";
+                    jwt.Audience = "identity-api";
+                    jwt.ClockSkew = TimeSpan.Zero;
+                })
+            .AddSessionClaimsProvider<TestClaimsProvider>()
+            .UseJwtBearerAuthentication();
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var tokenProvider = serviceProvider
+            .GetRequiredService<IIdentityAccessTokenProvider>();
+        var token = tokenProvider.Generate(
+            CreatePayload(
+                claims:
+                [
+                    new(IdentitySessionClaimTypes.Name, "alice"),
+                    new(IdentitySessionClaimTypes.Role, "admin"),
+                    new(IdentitySessionClaimTypes.Role, "auditor"),
+                ]));
+        using var scope = serviceProvider.CreateScope();
+        var httpContext = new DefaultHttpContext
+        {
+            RequestServices = scope.ServiceProvider,
+        };
+        httpContext.Request.Headers.Authorization = $"Bearer {token}";
+
+        var result = await httpContext.AuthenticateAsync();
+        var bearerOptions = serviceProvider
+            .GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
+            .Get(JwtBearerDefaults.AuthenticationScheme);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("alice", result.Principal!.Identity!.Name);
+        Assert.True(result.Principal.IsInRole("admin"));
+        Assert.True(result.Principal.IsInRole("auditor"));
+        Assert.False(bearerOptions.MapInboundClaims);
+        Assert.Equal(
+            IdentitySessionClaimTypes.Name,
+            bearerOptions.TokenValidationParameters.NameClaimType);
+        Assert.Equal(
+            IdentitySessionClaimTypes.Role,
+            bearerOptions.TokenValidationParameters.RoleClaimType);
+        Assert.Contains(
+            SecurityAlgorithms.HmacSha256,
+            bearerOptions.TokenValidationParameters.ValidAlgorithms);
+        Assert.NotNull(
+            serviceProvider.GetRequiredService<IAuthorizationService>());
+    }
+
+    [Fact]
+    public async Task JwtBearerOnlineValidationRejectsRevokedSession()
+    {
+        var services = new ServiceCollection();
+        var applicationEventCalled = false;
+        services.AddLogging();
+        services
+            .AddSkopkaIdentity<TestProfile>()
+            .UseJwtSessions(
+                CreateSigningKey(),
+                jwt =>
+                {
+                    jwt.Issuer = "https://issuer.example";
+                    jwt.Audience = "identity-api";
+                    jwt.ClockSkew = TimeSpan.Zero;
+                })
+            .UseJwtBearerAuthentication(
+                options => options.ValidateSessionOnEveryRequest = true,
+                bearer => bearer.Events.OnTokenValidated = _ =>
+                {
+                    applicationEventCalled = true;
+                    return Task.CompletedTask;
+                });
+        var sessionService = new RejectingSessionService();
+        services.RemoveAll<IIdentitySessionService<TestProfile>>();
+        services.AddScoped<IIdentitySessionService<TestProfile>>(
+            _ => sessionService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var token = serviceProvider
+            .GetRequiredService<IIdentityAccessTokenProvider>()
+            .Generate(CreatePayload());
+        using var scope = serviceProvider.CreateScope();
+        var httpContext = new DefaultHttpContext
+        {
+            RequestServices = scope.ServiceProvider,
+        };
+        httpContext.Request.Headers.Authorization = $"Bearer {token}";
+
+        var result = await httpContext.AuthenticateAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.True(applicationEventCalled);
+        Assert.True(sessionService.ValidateCalled);
+    }
+
     private static HmacJwtAccessTokenProvider CreateJwtProvider(
         string audience = "identity-api")
         => new(
-            Enumerable.Range(1, 32)
-                .Select(value => (byte)value)
-                .ToArray(),
+            CreateSigningKey(),
             new JwtAccessTokenOptions
             {
                 Issuer = "https://issuer.example",
@@ -147,7 +270,8 @@ public sealed class JwtSessionProviderTests
 
     private static IdentityAccessTokenPayload CreatePayload(
         DateTimeOffset? issuedAt = null,
-        DateTimeOffset? expiresAt = null)
+        DateTimeOffset? expiresAt = null,
+        IReadOnlyList<IdentitySessionClaim>? claims = null)
     {
         var issued = issuedAt ?? DateTimeOffset.UtcNow;
         return new IdentityAccessTokenPayload(
@@ -156,7 +280,67 @@ public sealed class JwtSessionProviderTests
             Guid.NewGuid(),
             Guid.NewGuid(),
             issued,
-            expiresAt ?? issued.AddMinutes(5));
+            expiresAt ?? issued.AddMinutes(5),
+            claims);
+    }
+
+    private static byte[] CreateSigningKey()
+        => Enumerable.Range(1, 32)
+            .Select(value => (byte)value)
+            .ToArray();
+
+    private sealed class TestClaimsProvider
+        : IIdentitySessionClaimsProvider<TestProfile>
+    {
+        public Task<IReadOnlyCollection<IdentitySessionClaim>>
+            GetClaimsAsync(
+                IdentityUser<TestProfile> user,
+                CancellationToken ct)
+            => Task.FromResult<IReadOnlyCollection<IdentitySessionClaim>>(
+                [new(IdentitySessionClaimTypes.Role, "custom")]);
+    }
+
+    private sealed class RejectingSessionService
+        : IIdentitySessionService<TestProfile>
+    {
+        public bool ValidateCalled { get; private set; }
+
+        public Task<OperationResult<IdentityUser<TestProfile>>>
+            ValidateAccessTokenAsync(
+                string accessToken,
+                CancellationToken ct)
+        {
+            ValidateCalled = true;
+            return Task.FromResult(
+                OperationResultFactory.Fail<IdentityUser<TestProfile>>(
+                    new Error(
+                        IdentityErrorCodes.AccessTokenInvalid,
+                        "Invalid.",
+                        ErrorType.Unauthorized)));
+        }
+
+        public Task<OperationResult<IssuedIdentitySession>> CreateAsync(
+            CreateIdentitySessionCommand command,
+            CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public Task<OperationResult<IssuedIdentitySession>> RefreshAsync(
+            RefreshIdentitySessionCommand command,
+            CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public Task<OperationResult> RevokeAsync(
+            RevokeIdentitySessionCommand command,
+            CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public Task<OperationResult> RevokeAllAsync(
+            RevokeAllIdentitySessionsCommand command,
+            CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public Task<int> PruneAsync(CancellationToken ct)
+            => throw new NotSupportedException();
     }
 
     public sealed record TestProfile(string DisplayName);

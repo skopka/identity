@@ -38,6 +38,9 @@ small value objects.
   partition-hasher contracts. Do not reference ASP.NET rate-limiter or HTTP types.
 - Define transport-neutral session contracts under `Sessions`: access/refresh providers,
   session commands, issued token pairs, refresh persistence models and store ports.
+- Define bounded session-claim values and
+  `IIdentitySessionClaimsProvider<TProfile>` without depending on
+  `System.Security.Claims` or ASP.NET Core.
 
 ## Boundaries
 
@@ -67,3 +70,5 @@ small value objects.
   not raw client DTO fields and must remain nullable for non-HTTP/background callers.
 - Session contracts expose no IdentityModel, JWT bearer middleware or EF types. Refresh
   store models carry digests and rotation state, never plaintext refresh secrets.
+- Protocol/session JWT claims are reserved. Custom providers may emit repeated `role`
+  claims but cannot replace issuer, audience, subject, token/session ids or timestamps.

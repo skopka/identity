@@ -22,6 +22,10 @@ public static class IdentityServiceCollectionExtensions
         services.TryAddSingleton<ISecurityStampGenerator, DefaultSecurityStampGenerator>();
         services.TryAddSingleton(new IdentityRateLimitOptions());
         services.TryAddSingleton(new IdentitySessionOptions());
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<
+                IIdentitySessionClaimsProvider<TProfile>,
+                DefaultIdentitySessionClaimsProvider<TProfile>>());
         services.TryAddScoped<IIdentityUserService<TProfile>, IdentityUserService<TProfile>>();
         services.TryAddScoped<
             ISecurityStampService<TProfile>,

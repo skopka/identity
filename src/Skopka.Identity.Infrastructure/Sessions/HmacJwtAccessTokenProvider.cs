@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Security.Claims;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
@@ -7,9 +8,6 @@ namespace Skopka.Identity.Sessions;
 public sealed class HmacJwtAccessTokenProvider
     : IIdentityAccessTokenProvider, IDisposable
 {
-    private const string SessionIdClaim = "sid";
-    private const string FormatVersionClaim = "skp_ver";
-
     private readonly byte[] signingKey;
     private readonly JsonWebTokenHandler handler;
     private readonly SigningCredentials signingCredentials;
@@ -52,6 +50,7 @@ public sealed class HmacJwtAccessTokenProvider
             ValidateLifetime = true,
             ClockSkew = options.ClockSkew,
             ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+            ValidTypes = ["JWT"],
         };
         handler = new JsonWebTokenHandler
         {
@@ -73,16 +72,28 @@ public sealed class HmacJwtAccessTokenProvider
             NotBefore = payload.IssuedAt.UtcDateTime,
             Expires = payload.ExpiresAt.UtcDateTime,
             SigningCredentials = signingCredentials,
+            Subject = new ClaimsIdentity(
+                (payload.Claims ?? [])
+                    .Select(CreateClaim)),
             Claims = new Dictionary<string, object>
             {
                 [JwtRegisteredClaimNames.Sub] = payload.UserId.ToString("N"),
                 [JwtRegisteredClaimNames.Jti] = payload.TokenId.ToString("N"),
-                [SessionIdClaim] = payload.SessionId.ToString("N"),
-                [FormatVersionClaim] = payload.FormatVersion,
+                [IdentitySessionClaimTypes.SessionId] =
+                    payload.SessionId.ToString("N"),
+                [IdentitySessionClaimTypes.FormatVersion] =
+                    payload.FormatVersion,
             },
         };
 
-        return handler.CreateToken(descriptor);
+        var token = handler.CreateToken(descriptor);
+        if (token.Length > SessionLimits.MaximumTokenLength)
+        {
+            throw new InvalidOperationException(
+                "The generated access token exceeds the supported length.");
+        }
+
+        return token;
     }
 
     public async Task<IdentityAccessTokenPayload?> ValidateAsync(
@@ -105,9 +116,12 @@ public sealed class HmacJwtAccessTokenProvider
             || result.SecurityToken is not JsonWebToken jwt
             || !TryReadGuid(jwt, JwtRegisteredClaimNames.Jti, out var tokenId)
             || !TryReadGuid(jwt, JwtRegisteredClaimNames.Sub, out var userId)
-            || !TryReadGuid(jwt, SessionIdClaim, out var sessionId)
+            || !TryReadGuid(
+                jwt,
+                IdentitySessionClaimTypes.SessionId,
+                out var sessionId)
             || !jwt.TryGetPayloadValue<int>(
-                FormatVersionClaim,
+                IdentitySessionClaimTypes.FormatVersion,
                 out var formatVersion))
         {
             return null;
@@ -119,7 +133,13 @@ public sealed class HmacJwtAccessTokenProvider
             userId,
             sessionId,
             new DateTimeOffset(jwt.ValidFrom, TimeSpan.Zero),
-            new DateTimeOffset(jwt.ValidTo, TimeSpan.Zero));
+            new DateTimeOffset(jwt.ValidTo, TimeSpan.Zero),
+            result.ClaimsIdentity.Claims
+                .Where(claim => !ReservedClaimTypes.Contains(claim.Type))
+                .Select(claim => new IdentitySessionClaim(
+                    claim.Type,
+                    claim.Value))
+                .ToArray());
     }
 
     public void Dispose()
@@ -133,6 +153,9 @@ public sealed class HmacJwtAccessTokenProvider
         CryptographicOperations.ZeroMemory(signingKey);
     }
 
+    internal TokenValidationParameters CreateTokenValidationParameters()
+        => validationParameters.Clone();
+
     private static bool TryReadGuid(
         JsonWebToken jwt,
         string claim,
@@ -142,4 +165,47 @@ public sealed class HmacJwtAccessTokenProvider
         return jwt.TryGetPayloadValue<string>(claim, out var text)
             && Guid.TryParseExact(text, "N", out value);
     }
+
+    private static Claim CreateClaim(IdentitySessionClaim claim)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+
+        if (string.IsNullOrWhiteSpace(claim.Type)
+            || claim.Type.Length
+                > IdentitySessionClaimLimits.MaximumTypeLength
+            || claim.Value is null
+            || claim.Value.Length
+                > IdentitySessionClaimLimits.MaximumValueLength
+            || ReservedClaimTypes.Contains(claim.Type))
+        {
+            throw new ArgumentException(
+                "The access token contains an invalid custom claim.",
+                nameof(claim));
+        }
+
+        var valueType = claim.Type is
+            IdentitySessionClaimTypes.EmailVerified
+            or IdentitySessionClaimTypes.PhoneNumberVerified
+                ? ClaimValueTypes.Boolean
+                : ClaimValueTypes.String;
+
+        return new Claim(
+            claim.Type,
+            claim.Value,
+            valueType);
+    }
+
+    private static readonly HashSet<string> ReservedClaimTypes =
+        new(StringComparer.Ordinal)
+        {
+            JwtRegisteredClaimNames.Iss,
+            JwtRegisteredClaimNames.Aud,
+            JwtRegisteredClaimNames.Exp,
+            JwtRegisteredClaimNames.Nbf,
+            JwtRegisteredClaimNames.Iat,
+            JwtRegisteredClaimNames.Jti,
+            JwtRegisteredClaimNames.Sub,
+            IdentitySessionClaimTypes.SessionId,
+            IdentitySessionClaimTypes.FormatVersion,
+        };
 }

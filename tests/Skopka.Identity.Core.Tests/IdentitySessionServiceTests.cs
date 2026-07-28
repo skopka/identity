@@ -28,6 +28,10 @@ public sealed class IdentitySessionServiceTests
         Assert.Equal(result.Value.SessionId, stored.SessionId);
         Assert.Equal(stored.ExpiresAt, result.Value.RefreshTokenExpiresAt);
         Assert.NotEqual(result.Value.RefreshToken, stored.TokenHash);
+        Assert.Contains(
+            fixture.AccessTokenProvider.LastGeneratedPayload!.Claims!,
+            claim => claim.Type == IdentitySessionClaimTypes.Email
+                && claim.Value == fixture.UserStore.User.Email);
     }
 
     [Fact]
@@ -57,6 +61,49 @@ public sealed class IdentitySessionServiceTests
         Assert.Equal(
             created.RefreshTokenExpiresAt,
             created.AccessTokenExpiresAt);
+    }
+
+    [Fact]
+    public async Task CustomClaimsProviderCanProjectRepeatedRoles()
+    {
+        var fixture = new Fixture(
+            additionalClaimsProviders: [new RoleClaimsProvider()]);
+
+        await fixture.CreateAsync();
+
+        var claims = fixture.AccessTokenProvider
+            .LastGeneratedPayload!
+            .Claims!;
+        Assert.Contains(
+            claims,
+            claim => claim is
+            {
+                Type: IdentitySessionClaimTypes.Role,
+                Value: "admin",
+            });
+        Assert.Contains(
+            claims,
+            claim => claim is
+            {
+                Type: IdentitySessionClaimTypes.Role,
+                Value: "auditor",
+            });
+    }
+
+    [Fact]
+    public async Task InvalidCustomClaimsDoNotPersistSession()
+    {
+        var fixture = new Fixture(
+            additionalClaimsProviders: [new ReservedClaimsProvider()]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fixture.Service.CreateAsync(
+                new CreateIdentitySessionCommand(
+                    fixture.UserStore.User.Id,
+                    fixture.UserStore.User.SecurityStamp),
+                CancellationToken.None));
+
+        Assert.Empty(fixture.SessionStore.Sessions);
     }
 
     [Fact]
@@ -152,17 +199,30 @@ public sealed class IdentitySessionServiceTests
     {
         public Fixture(
             TimeSpan? accessTokenLifetime = null,
-            TimeSpan? refreshSessionLifetime = null)
+            TimeSpan? refreshSessionLifetime = null,
+            IEnumerable<IIdentitySessionClaimsProvider<TestProfile>>?
+                additionalClaimsProviders = null)
         {
             UserStore = new FakeUserStore(CreateUser());
             SessionStore = new FakeSessionStore();
             AccessTokenProvider = new FakeAccessTokenProvider();
             RefreshTokenProvider = new FakeRefreshTokenProvider();
+            var claimsProviders =
+                new List<IIdentitySessionClaimsProvider<TestProfile>>
+                {
+                    new DefaultIdentitySessionClaimsProvider<TestProfile>(),
+                };
+            if (additionalClaimsProviders is not null)
+            {
+                claimsProviders.AddRange(additionalClaimsProviders);
+            }
+
             Service = new IdentitySessionService<TestProfile>(
                 UserStore,
                 SessionStore,
                 AccessTokenProvider,
                 RefreshTokenProvider,
+                claimsProviders,
                 new IdentitySessionOptions
                 {
                     AccessTokenLifetime = accessTokenLifetime
@@ -196,8 +256,11 @@ public sealed class IdentitySessionServiceTests
     {
         private readonly Dictionary<string, IdentityAccessTokenPayload> tokens = [];
 
+        public IdentityAccessTokenPayload? LastGeneratedPayload { get; private set; }
+
         public string Generate(IdentityAccessTokenPayload payload)
         {
+            LastGeneratedPayload = payload;
             var token = $"access-{tokens.Count + 1}";
             tokens.Add(token, payload);
             return token;
@@ -210,6 +273,31 @@ public sealed class IdentitySessionServiceTests
                 tokens.TryGetValue(token, out var payload)
                     ? payload
                     : null);
+    }
+
+    private sealed class RoleClaimsProvider
+        : IIdentitySessionClaimsProvider<TestProfile>
+    {
+        public Task<IReadOnlyCollection<IdentitySessionClaim>>
+            GetClaimsAsync(
+                IdentityUser<TestProfile> user,
+                CancellationToken ct)
+            => Task.FromResult<IReadOnlyCollection<IdentitySessionClaim>>(
+                [
+                    new(IdentitySessionClaimTypes.Role, "admin"),
+                    new(IdentitySessionClaimTypes.Role, "auditor"),
+                ]);
+    }
+
+    private sealed class ReservedClaimsProvider
+        : IIdentitySessionClaimsProvider<TestProfile>
+    {
+        public Task<IReadOnlyCollection<IdentitySessionClaim>>
+            GetClaimsAsync(
+                IdentityUser<TestProfile> user,
+                CancellationToken ct)
+            => Task.FromResult<IReadOnlyCollection<IdentitySessionClaim>>(
+                [new("sub", "forged-user")]);
     }
 
     private sealed class FakeRefreshTokenProvider

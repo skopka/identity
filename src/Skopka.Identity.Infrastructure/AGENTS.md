@@ -73,3 +73,10 @@ It is not the place for core business rules.
 - `UseJwtSessions<TProfile>()` explicitly enables Core session orchestration and its
   token providers. JWT signing keys must be shared by token issuers and validators;
   changing a single configured key invalidates outstanding short-lived access tokens.
+- `UseJwtBearerAuthentication<TProfile>()` configures ASP.NET Core authentication with
+  the same HMAC validation parameters, disables inbound claim remapping and maps `name`
+  and repeated `role` claims for `ClaimsPrincipal`. It also registers standard
+  authorization services.
+- Bearer validation is stateless by default. Optional per-request online session
+  validation must compose with, not replace, the application's `OnTokenValidated`
+  callback.

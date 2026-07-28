@@ -6,4 +6,5 @@ public sealed record IdentityAccessTokenPayload(
     Guid UserId,
     Guid SessionId,
     DateTimeOffset IssuedAt,
-    DateTimeOffset ExpiresAt);
+    DateTimeOffset ExpiresAt,
+    IReadOnlyList<IdentitySessionClaim>? Claims = null);

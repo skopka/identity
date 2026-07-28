@@ -51,3 +51,9 @@ install and configure without moving domain or persistence logic into the facade
 - JWT sessions remain optional and are enabled through Infrastructure with
   `UseJwtSessions<TProfile>()`. The configured persistence provider supplies the refresh
   session store; the facade registers only default session lifetime options.
+- The default session claims provider projects user handles and confirmation state.
+  Applications attach role/domain projections with
+  `IdentityBuilder<TProfile>.AddSessionClaimsProvider<TProvider>()`.
+- ASP.NET Core bearer setup remains in the optional Infrastructure package through
+  `UseJwtBearerAuthentication<TProfile>()`; hosts own middleware ordering and
+  authorization policies.

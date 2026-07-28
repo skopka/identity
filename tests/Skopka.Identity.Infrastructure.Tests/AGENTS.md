@@ -17,3 +17,6 @@ raw identifiers and DI registration with configured policies.
 
 Session adapter tests must cover JWT claims, signature, issuer, audience, expiry,
 tamper rejection, opaque refresh-token parsing and DI registration.
+
+Bearer tests must exercise the real ASP.NET authentication service, `Name`/`IsInRole`
+mapping, optional online session rejection and composition with application events.

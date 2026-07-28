@@ -23,6 +23,8 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   policies in password authentication and Verification Begin.
 - Implement `IIdentitySessionService<TProfile>` issuance, refresh rotation, online
   access validation, revoke and bounded pruning.
+- Provide default projection for user name/email/phone session claims and aggregate
+  additional `IIdentitySessionClaimsProvider<TProfile>` implementations.
 - Provide default domain services such as `DefaultIdentityNormalizer`,
   `DefaultUserOperationPolicy` and default/noop metrics implementations.
 - Create domain errors through `IdentityErrors`.
@@ -91,6 +93,8 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
 - Online access validation checks the cryptographic payload, active refresh session,
   current user state and security-stamp snapshot. Stateless middleware validation has
   intentionally weaker immediate-revocation semantics.
+- Project and validate claims before creating or rotating refresh persistence so a
+  failing custom provider cannot consume a usable refresh token.
 
 ## Implementation Style
 
