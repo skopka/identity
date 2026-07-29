@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  publish:
+    name: Publish NuGet packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Determine version from tag
+        id: version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ -z "$VERSION" ]]; then
+            echo "Release tag must contain a version after the v prefix." >&2
+            exit 1
+          fi
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Restore
+        run: dotnet restore Skopka.Identity.slnx
+
+      - name: Build
+        run: >
+          dotnet build Skopka.Identity.slnx
+          --configuration Release
+          --no-restore
+          -p:Version=${{ steps.version.outputs.value }}
+
+      - name: Test
+        run: >
+          dotnet test Skopka.Identity.slnx
+          --configuration Release
+          --no-build
+          --logger trx
+          --results-directory artifacts/test-results
+
+      - name: Audit NuGet dependencies
+        run: >
+          dotnet list Skopka.Identity.slnx package
+          --vulnerable
+          --include-transitive
+          --no-restore
+
+      - name: Pack
+        run: >
+          dotnet pack Skopka.Identity.slnx
+          --configuration Release
+          --no-build
+          --no-restore
+          --output artifacts/packages
+          -p:Version=${{ steps.version.outputs.value }}
+
+      - name: Verify package set
+        shell: bash
+        run: |
+          NUPKG_COUNT=$(find artifacts/packages -maxdepth 1 -type f -name '*.nupkg' | wc -l)
+          SNUPKG_COUNT=$(find artifacts/packages -maxdepth 1 -type f -name '*.snupkg' | wc -l)
+          if [[ "$NUPKG_COUNT" -ne 6 || "$SNUPKG_COUNT" -ne 6 ]]; then
+            echo "Expected 6 packages and 6 symbol packages, found $NUPKG_COUNT and $SNUPKG_COUNT." >&2
+            exit 1
+          fi
+
+      - name: Push to NuGet.org
+        run: >
+          dotnet nuget push "artifacts/packages/*.nupkg"
+          --api-key "${{ secrets.NUGET_API_KEY }}"
+          --source "https://api.nuget.org/v3/index.json"
+          --skip-duplicate
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/packages/*.nupkg
+            artifacts/packages/*.snupkg

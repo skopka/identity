@@ -23,6 +23,9 @@ dotnet test Skopka.Identity.slnx --configuration Release --no-build
 See [docs/testing.md](docs/testing.md) for filters, package validation and migration
 commands.
 
+Release maintainers should follow [docs/releasing.md](docs/releasing.md). NuGet
+publication is tag-driven and requires the repository `NUGET_API_KEY` Actions secret.
+
 ## Change Guidelines
 
 - Add public contracts only for a concrete use case.
