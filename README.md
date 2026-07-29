@@ -236,6 +236,7 @@ ring in multi-instance deployments.
 - [Migrating from ASP.NET Core Identity](https://github.com/skopka/identity/blob/main/docs/migration-from-aspnet-core-identity.md)
 - [Security model and deployment checklist](https://github.com/skopka/identity/blob/main/docs/security.md)
 - [Build, tests and PostgreSQL integration tests](https://github.com/skopka/identity/blob/main/docs/testing.md)
+- [Release process](https://github.com/skopka/identity/blob/main/docs/releasing.md)
 
 ## License
 

@@ -419,4 +419,7 @@ semantics aligned with the public API.
 
 Package metadata is centralized in `Directory.Build.props`; module-specific descriptions
 remain in source project files. CI must build, run the real PostgreSQL test, audit NuGet
-dependencies and pack all six source packages without publishing them.
+dependencies and pack all six source packages without publishing them. Tag pushes
+matching `v*` publish all six packages through `.github/workflows/release.yml`; keep the
+tag-derived version, package count validation, NuGet.org publication and GitHub Release
+attachments aligned. Release setup and operator steps live in `docs/releasing.md`.
