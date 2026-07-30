@@ -24,6 +24,7 @@ with `Microsoft.AspNetCore.Identity`.
 - PBKDF2-HMAC-SHA256 and peppered Argon2id password verifiers.
 - Configurable password bounds and application-defined asynchronous validators.
 - Password authentication with account/client rate-limiting extension points.
+- Exact normalized active-user lookup for trusted account-message workflows.
 - Email, phone and password-reset action tokens based on ASP.NET Core Data Protection.
 - OTP challenge/proof orchestration with HMAC-protected generated codes.
 - Short-lived JWT access tokens and rotating opaque refresh sessions.

@@ -16,6 +16,8 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
 - Enforce the mandatory password length baseline and orchestrate registered
   `IPasswordValidator<TProfile>` implementations.
 - Implement `IPasswordAuthenticationService<TProfile>` and dummy verification workload.
+- Implement exact normalized active-user lookup through
+  `IIdentityUserLookupService<TProfile>` for trusted application orchestration.
 - Implement `ISecurityStampService<TProfile>` and the default random stamp generator.
 - Implement `IIdentityActionTokenIssuer<TProfile>` and validate action-token bindings in
   confirmation/password-reset use cases.
@@ -70,6 +72,8 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
 - Metrics must mark success and failure consistently.
 - Unknown users, users without password credentials and wrong passwords return the same
   invalid-credentials error.
+- Exact user lookup may return `identity.user.not_found`; public account-recovery and
+  confirmation transports are responsible for suppressing that result.
 - Authentication performs one password KDF verification on every credential-denied path.
 - Active permanent or temporary blocks reject authentication after password verification;
   expired temporary blocks do not reject authentication.

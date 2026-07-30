@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skopka.Identity;
+using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.ExternalLogins;
 using Skopka.Identity.Metrics;
@@ -36,6 +37,9 @@ public static class IdentityServiceCollectionExtensions
                 IIdentitySessionClaimsProvider<TProfile>,
                 DefaultIdentitySessionClaimsProvider<TProfile>>());
         services.TryAddScoped<IIdentityUserService<TProfile>, IdentityUserService<TProfile>>();
+        services.TryAddScoped<
+            IIdentityUserLookupService<TProfile>,
+            IdentityUserLookupService<TProfile>>();
         services.TryAddScoped<
             IIdentityUserQueryService<TProfile>,
             IdentityUserQueryService<TProfile>>();

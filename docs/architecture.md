@@ -24,7 +24,7 @@ This package has no dependency on EF Core, PostgreSQL or ASP.NET authentication.
 Implements identity use cases:
 
 - validation, normalization and mutation policy;
-- user and password lifecycle;
+- exact active-user lookup and password lifecycle;
 - atomic password/external registration and external-login lifecycle;
 - action-token binding;
 - verification challenges and one-time proofs;

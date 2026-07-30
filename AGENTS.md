@@ -48,6 +48,8 @@ file first and then the module-local file:
   user version for optimistic concurrency.
 - `IPasswordAuthenticationService<TProfile>` authenticates an explicit username or email
   login without exposing whether the user or credential exists.
+- `IIdentityUserLookupService<TProfile>` provides an exact normalized active-user email
+  lookup for trusted application workflows such as account-message issuance.
 - `IIdentityUserLookupStore<TProfile>` provides active-user lookup by normalized login
   handles.
 - `ISecurityStampService<TProfile>` rotates and validates session invalidation stamps.
@@ -304,6 +306,9 @@ Preserve these rules:
   the user and initial sign-in method commit atomically.
 - User queries are bounded to 100 rows and use stable `(CreatedAt, Id)` cursor ordering.
   Query services are not endpoint authorization.
+- Exact account workflows use `IIdentityUserLookupService<TProfile>` rather than
+  administrative contains-search. Its not-found result must be suppressed by public
+  recovery/confirmation transports when user enumeration is a concern.
 - Security-event observers run after successful persistence and must enqueue quickly
   without throwing. Durable compliance audit belongs in a host transactional outbox.
 - Action tokens are stateless and do not require EF entities. The default Infrastructure

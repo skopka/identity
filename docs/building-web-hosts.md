@@ -186,6 +186,46 @@ Link and unlink rotate the security stamp and bump the user version. The base do
 allows unlinking the final sign-in method; a self-service account UI should prevent that
 unless the user is intentionally converting to another supported method.
 
+## Email Confirmation and Password Reset
+
+Enable purpose-bound action tokens explicitly:
+
+```csharp
+identity.UseDataProtectionActionTokens();
+```
+
+Use `IIdentityUserLookupService<TProfile>.FindActiveByEmailAsync` for an exact
+normalized lookup before issuing an account message. Do not use the administrative
+`IIdentityUserQueryService<TProfile>` contains-search for this workflow:
+
+```csharp
+var lookedUp = await users.FindActiveByEmailAsync(request.Email, ct);
+if (!lookedUp.IsSuccess)
+{
+    return AcceptedAccountMessageResponse();
+}
+
+var issued = await actionTokens.IssuePasswordResetAsync(
+    lookedUp.Value.Id,
+    ct);
+```
+
+The lookup intentionally returns `identity.user.not_found` to trusted application
+orchestration. Anonymous HTTP endpoints must suppress that result and return the same
+safe response for known and unknown valid addresses. Rate-limit requests and enqueue
+delivery so SMTP/SMS network latency is not part of the anonymous request timing.
+
+Build links from a configured public origin, never an untrusted `Host` header. Keep
+action tokens out of logs, telemetry and referrers. Opening a confirmation link should
+render a no-store page; use an antiforgery-protected POST to perform the mutation so
+mail scanners cannot confirm an address merely by following a link.
+
+Apply password resets through
+`IPasswordCredentialService<TProfile>.ResetPasswordAsync` and email confirmations
+through `IIdentityUserService<TProfile>.ConfirmEmailAsync`. A successful password reset
+rotates the security stamp and invalidates sessions when the host uses online stamp
+validation.
+
 ## Account Sessions
 
 List active logical sessions for the authenticated user:

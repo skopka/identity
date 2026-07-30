@@ -28,6 +28,7 @@ small value objects.
   `IPasswordValidator<TProfile>` extension contracts. Validator context may expose the
   user and mutation kind, but must not expose verifier/hash implementation details.
 - Define authentication contracts such as `IPasswordAuthenticationService<TProfile>`,
+  `IIdentityUserLookupService<TProfile>`,
   `IIdentityUserLookupStore<TProfile>` and `IPasswordVerificationTimingProtector`.
 - Define security stamp contracts such as `ISecurityStampService<TProfile>` and
   `ISecurityStampGenerator`.
