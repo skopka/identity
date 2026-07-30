@@ -21,9 +21,16 @@ public static class IdentityErrorCodes
     public const string PasswordNotSet = "identity.password.not_set";
     public const string InvalidPassword = "identity.password.invalid";
     public const string PasswordRejected = "identity.password.rejected";
+    public const string PasswordHasherUnavailable =
+        "identity.password.hasher_unavailable";
 
     public const string InvalidCredentials = "identity.authentication.invalid_credentials";
     public const string AuthenticationBlocked = "identity.authentication.blocked";
+
+    public const string ExternalLoginNotFound =
+        "identity.external_login.not_found";
+    public const string DuplicateExternalLogin =
+        "identity.external_login.duplicate";
 
     public const string InvalidActionToken = "identity.token.invalid";
     public const string ActionTokenProviderUnavailable = "identity.token.provider_unavailable";

@@ -17,6 +17,8 @@ with `Microsoft.AspNetCore.Identity`.
 
 - Generic application profile stored as PostgreSQL `jsonb`.
 - Nullable user name, email and phone for external-login-only users.
+- Atomic password and external-login registration workflows.
+- External login resolve, list, link and unlink lifecycle.
 - Optimistic concurrency through a numeric user version.
 - Soft delete, restore and permanent or temporary blocking.
 - PBKDF2-HMAC-SHA256 and peppered Argon2id password verifiers.
@@ -25,13 +27,17 @@ with `Microsoft.AspNetCore.Identity`.
 - Email, phone and password-reset action tokens based on ASP.NET Core Data Protection.
 - OTP challenge/proof orchestration with HMAC-protected generated codes.
 - Short-lived JWT access tokens and rotating opaque refresh sessions.
+- Active-session listing, device labels and user-scoped session revocation.
 - Optional online access-token/session validation.
 - Role CRUD, direct memberships and role projection into session claims.
+- Bounded cursor-based user queries for administrative interfaces.
+- Structured security-event observer hooks for host-side audit pipelines.
 - Step-up verification decisions separated from normal application authorization.
 - EF Core stores, PostgreSQL mappings and packaged migrations.
 
-External login providers, TOTP, WebAuthn/passkeys and UI/endpoints are not implemented
-yet.
+OAuth/OIDC protocol clients, TOTP, WebAuthn/passkeys and UI/endpoints are not
+implemented here. A host validates the provider response and passes only the trusted
+provider/subject pair to the identity services.
 
 ## Packages
 
@@ -101,38 +107,34 @@ await identityDb.Database.MigrateAsync();
 Do not let every application replica race to run migrations in production. Prefer a
 dedicated deployment or migrator step.
 
-Create a user and set a password through the public services:
+Register a password user atomically through the public registration service:
 
 ```csharp
-using Skopka.Identity;
-using Skopka.Identity.Credentials;
+using Skopka.Identity.Registration;
 using Skopka.Identity.Users.Commands;
 
-var users = scope.ServiceProvider.GetRequiredService<
-    IIdentityUserService<AppProfile>>();
-var credentials = scope.ServiceProvider.GetRequiredService<
-    IPasswordCredentialService<AppProfile>>();
+var registration = scope.ServiceProvider.GetRequiredService<
+    IIdentityRegistrationService<AppProfile>>();
 
-var created = await users.CreateAsync(
-    new CreateUserCommand<AppProfile>(
-        "alice",
-        "alice@example.com",
-        null,
-        new AppProfile("Alice", "en")),
+var created = await registration.RegisterPasswordAsync(
+    new RegisterPasswordUserCommand<AppProfile>(
+        new CreateUserCommand<AppProfile>(
+            "alice",
+            "alice@example.com",
+            null,
+            new AppProfile("Alice", "en")),
+        submittedPassword),
     cancellationToken);
 
 if (!created.IsSuccess)
 {
     return Results.BadRequest(created.Errors);
 }
-
-var password = await credentials.SetPasswordAsync(
-    new SetPasswordCommand(
-        created.Value.Id,
-        created.Value.Version,
-        submittedPassword),
-    cancellationToken);
 ```
+
+`RegisterPasswordAsync` persists the user and password verifier in one EF
+`SaveChangesAsync`. Use `IIdentityUserService<TProfile>.CreateAsync` only when creating
+a user without a credential is intentional.
 
 Commands return `OperationResult` instead of throwing for expected domain failures.
 Persist and submit the latest `IdentityUser.Version` for mutations that require
@@ -157,6 +159,27 @@ var authentication = await passwords.AuthenticateAsync(
 
 `clientKey` is trusted transport context created by the host, such as a protected IP
 partition key. Do not accept it directly from an untrusted request body.
+
+After successful authentication, create a session from the returned user and its current
+security stamp:
+
+```csharp
+using Skopka.Identity.Sessions;
+
+var sessions = scope.ServiceProvider.GetRequiredService<
+    IIdentitySessionService<AppProfile>>();
+
+var issued = await sessions.CreateAsync(
+    new CreateIdentitySessionCommand(
+        authentication.Value.Id,
+        authentication.Value.SecurityStamp,
+        new IdentitySessionMetadata("web", "Alice's laptop")),
+    cancellationToken);
+```
+
+The host decides how to return the access token and protect the refresh token. For a
+browser, prefer a `Secure`, `HttpOnly`, `SameSite` cookie and add CSRF protection to
+state-changing endpoints.
 
 ## Argon2id With Pepper
 
@@ -213,6 +236,30 @@ Set `ValidateSessionOnEveryRequest` to `true` when immediate refresh-session rev
 is worth a database lookup on every request. Role changes appear in newly created or
 refreshed access tokens; existing stateless JWTs retain their embedded claims.
 
+Account UIs can call `ListAsync` and `RevokeByIdAsync`. Revocation is scoped by both
+user id and session id, so knowing another user's session id is not sufficient.
+
+## External Login Boundary
+
+The host owns OAuth/OIDC redirects, state, nonce, PKCE and provider token validation.
+After validation, pass the provider name and stable provider subject:
+
+```csharp
+using Skopka.Identity.ExternalLogins;
+
+var externalLogins = scope.ServiceProvider.GetRequiredService<
+    IExternalLoginService<AppProfile>>();
+
+var resolved = await externalLogins.ResolveAsync(
+    new ExternalLoginKey("github", validatedProviderSubject),
+    cancellationToken);
+```
+
+Provider names are canonicalized; subjects are case-sensitive and preserved exactly.
+Never use an unverified client-supplied subject, email or access token as the login key.
+Use `IIdentityRegistrationService<TProfile>.RegisterExternalAsync` for a new account and
+`LinkAsync` only for an authenticated user after the host's required step-up check.
+
 ## Optional Modules
 
 All optional modules compose through `IdentityBuilder<TProfile>`:
@@ -233,6 +280,7 @@ ring in multi-instance deployments.
 ## Design and Operations
 
 - [Architecture](https://github.com/skopka/identity/blob/main/docs/architecture.md)
+- [Building API and UI hosts on Skopka.Identity](https://github.com/skopka/identity/blob/main/docs/building-web-hosts.md)
 - [Migrating from ASP.NET Core Identity](https://github.com/skopka/identity/blob/main/docs/migration-from-aspnet-core-identity.md)
 - [Security model and deployment checklist](https://github.com/skopka/identity/blob/main/docs/security.md)
 - [Build, tests and PostgreSQL integration tests](https://github.com/skopka/identity/blob/main/docs/testing.md)

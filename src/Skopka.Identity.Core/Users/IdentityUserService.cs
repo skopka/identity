@@ -1,6 +1,7 @@
 ﻿using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.Security;
+using Skopka.Identity.SecurityEvents;
 using Skopka.Identity.Tokens;
 using Skopka.Identity.Users.Commands;
 using Skopka.Identity.Users.Handles;
@@ -13,7 +14,8 @@ public sealed class IdentityUserService<TProfile>(
     IUserOperationPolicy policy,
     ISecurityStampGenerator securityStampGenerator,
     IIdentityMetrics metrics,
-    IEnumerable<IIdentityActionTokenProvider> actionTokenProviders)
+    IEnumerable<IIdentityActionTokenProvider> actionTokenProviders,
+    IIdentitySecurityEventObserver? securityEvents = null)
     : IIdentityUserService<TProfile>
 {
     private readonly IIdentityActionTokenProvider? actionTokenProvider =
@@ -38,9 +40,15 @@ public sealed class IdentityUserService<TProfile>(
             cmd.Phone,
             cmd.Profile,
             cmd.Flags,
-            securityStampGenerator.Generate());
+            securityStampGenerator.Generate(),
+            Guid.NewGuid());
 
         var res = await store.CreateAsync(user, handles, now, ct);
+        ObserveSuccess(
+            res,
+            IdentitySecurityEventTypes.UserCreated,
+            res.IsSuccess ? res.Value.Id : null,
+            now);
         return Finish(op, res);
     }
 
@@ -91,6 +99,11 @@ public sealed class IdentityUserService<TProfile>(
             user.Phone, normalizer.NormalizePhone(user.Phone), user.PhoneConfirmed);
 
         var res = await store.UpdateHandlesAsync(user.Id, user.Version, updated, now, ct);
+        ObserveSuccess(
+            res,
+            IdentitySecurityEventTypes.EmailConfirmed,
+            user.Id,
+            now);
         return Finish(op, res);
     }
 
@@ -140,6 +153,11 @@ public sealed class IdentityUserService<TProfile>(
             user.Phone, currentNormalized, true);
 
         var res = await store.UpdateHandlesAsync(user.Id, user.Version, updated, now, ct);
+        ObserveSuccess(
+            res,
+            IdentitySecurityEventTypes.PhoneConfirmed,
+            user.Id,
+            now);
         return Finish(op, res);
     }
 
@@ -251,6 +269,10 @@ public sealed class IdentityUserService<TProfile>(
         var refreshed = await store.FindByIdAsync(user.Id, ct);
         if (refreshed is null) return Fail(op, IdentityErrors.NotFound());
 
+        securityEvents.Observe(
+            IdentitySecurityEventTypes.UserBlocked,
+            now,
+            user.Id);
         op.Success();
         return OperationResultFactory.Success(refreshed);
     }
@@ -280,6 +302,10 @@ public sealed class IdentityUserService<TProfile>(
         var refreshed = await store.FindByIdAsync(user.Id, ct);
         if (refreshed is null) return Fail(op, IdentityErrors.NotFound());
 
+        securityEvents.Observe(
+            IdentitySecurityEventTypes.UserUnblocked,
+            now,
+            user.Id);
         op.Success();
         return OperationResultFactory.Success(refreshed);
     }
@@ -304,6 +330,14 @@ public sealed class IdentityUserService<TProfile>(
             securityStampGenerator.Generate(),
             now,
             ct);
+
+        if (res.IsSuccess)
+        {
+            securityEvents.Observe(
+                IdentitySecurityEventTypes.UserDeleted,
+                now,
+                user.Id);
+        }
 
         return Finish(op, res.IsSuccess ? OperationResultFactory.Success() : OperationResultFactory.Fail(res.Errors));
     }
@@ -332,6 +366,10 @@ public sealed class IdentityUserService<TProfile>(
         var refreshed = await store.FindByIdAsync(user.Id, ct);
         if (refreshed is null) return Fail(op, IdentityErrors.NotFound());
 
+        securityEvents.Observe(
+            IdentitySecurityEventTypes.UserRestored,
+            now,
+            user.Id);
         op.Success();
         return OperationResultFactory.Success(refreshed);
     }
@@ -356,7 +394,32 @@ public sealed class IdentityUserService<TProfile>(
         var updated = buildUpdated(user);
 
         var res = await store.UpdateHandlesAsync(userId, expectedVersion, updated, now, ct);
+        ObserveSuccess(
+            res,
+            metricOp switch
+            {
+                "user.change_user_name" =>
+                    IdentitySecurityEventTypes.UserNameChanged,
+                "user.change_email" => IdentitySecurityEventTypes.EmailChanged,
+                "user.change_phone" => IdentitySecurityEventTypes.PhoneChanged,
+                _ => throw new InvalidOperationException(
+                    $"Unsupported handle operation '{metricOp}'."),
+            },
+            userId,
+            now);
         return Finish(op, res);
+    }
+
+    private void ObserveSuccess<T>(
+        OperationResult<T> result,
+        string eventType,
+        Guid? userId,
+        DateTimeOffset now)
+    {
+        if (result.IsSuccess)
+        {
+            securityEvents.Observe(eventType, now, userId);
+        }
     }
 
     private static OperationResult<IdentityUser<TProfile>> Fail(IIdentityOpScope op, Error err)

@@ -2,6 +2,7 @@ using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Errors;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.Security;
+using Skopka.Identity.SecurityEvents;
 using Skopka.Identity.Tokens;
 using Skopka.Identity.Users;
 
@@ -16,7 +17,8 @@ public sealed class PasswordCredentialService<TProfile>(
     IIdentityMetrics metrics,
     PasswordPolicyOptions passwordPolicyOptions,
     IEnumerable<IPasswordValidator<TProfile>> passwordValidators,
-    IEnumerable<IIdentityActionTokenProvider> actionTokenProviders)
+    IEnumerable<IIdentityActionTokenProvider> actionTokenProviders,
+    IIdentitySecurityEventObserver? securityEvents = null)
     : IPasswordCredentialService<TProfile>
 {
     private readonly PasswordPolicyOptions passwordPolicy =
@@ -74,6 +76,11 @@ public sealed class PasswordCredentialService<TProfile>(
             now,
             ct);
 
+        ObserveSuccess(
+            result,
+            IdentitySecurityEventTypes.PasswordSet,
+            cmd.UserId,
+            now);
         return Finish(op, result);
     }
 
@@ -137,6 +144,11 @@ public sealed class PasswordCredentialService<TProfile>(
             now,
             ct);
 
+        ObserveSuccess(
+            result,
+            IdentitySecurityEventTypes.PasswordChanged,
+            cmd.UserId,
+            now);
         return Finish(op, result);
     }
 
@@ -169,6 +181,11 @@ public sealed class PasswordCredentialService<TProfile>(
             now,
             ct);
 
+        ObserveSuccess(
+            result,
+            IdentitySecurityEventTypes.PasswordRemoved,
+            cmd.UserId,
+            now);
         return Finish(op, result);
     }
 
@@ -230,6 +247,11 @@ public sealed class PasswordCredentialService<TProfile>(
             now,
             ct);
 
+        ObserveSuccess(
+            result,
+            IdentitySecurityEventTypes.PasswordReset,
+            cmd.UserId,
+            now);
         return Finish(op, result);
     }
 
@@ -357,6 +379,18 @@ public sealed class PasswordCredentialService<TProfile>(
     {
         op.Failure(error.Code);
         return OperationResultFactory.Fail(error);
+    }
+
+    private void ObserveSuccess(
+        OperationResult result,
+        string eventType,
+        Guid userId,
+        DateTimeOffset now)
+    {
+        if (result.IsSuccess)
+        {
+            securityEvents.Observe(eventType, now, userId);
+        }
     }
 
     private static OperationResult Finish(IIdentityOpScope op, OperationResult result)

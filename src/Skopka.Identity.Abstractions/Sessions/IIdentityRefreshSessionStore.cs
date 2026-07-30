@@ -32,7 +32,18 @@ public interface IIdentityRefreshSessionStore<TProfile>
         DateTimeOffset now,
         CancellationToken ct);
 
+    Task<int> RevokeUserSessionAsync(
+        Guid userId,
+        Guid sessionId,
+        DateTimeOffset now,
+        CancellationToken ct);
+
     Task<int> RevokeAllAsync(
+        Guid userId,
+        DateTimeOffset now,
+        CancellationToken ct);
+
+    Task<IReadOnlyList<IdentitySessionInfo>> ListActiveAsync(
         Guid userId,
         DateTimeOffset now,
         CancellationToken ct);

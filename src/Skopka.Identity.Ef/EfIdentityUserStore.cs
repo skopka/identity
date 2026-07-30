@@ -86,7 +86,7 @@ public sealed class EfIdentityUserStore<TProfile>
     {
         var profile = new UserProfileEntity<TProfile>
         {
-            UserId = Guid.NewGuid(),
+            UserId = user.Id ?? Guid.NewGuid(),
             UserName = user.UserName,
             Email = user.Email,
             Phone = user.Phone,
@@ -334,7 +334,7 @@ public sealed class EfIdentityUserStore<TProfile>
         user.ModifiedAt = now;
     }
 
-    private static IdentityUser<TProfile> ToModel(UserProfileEntity<TProfile> profile)
+    internal static IdentityUser<TProfile> ToModel(UserProfileEntity<TProfile> profile)
     {
         var user = profile.User;
 

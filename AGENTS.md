@@ -75,6 +75,14 @@ file first and then the module-local file:
 - `IIdentityRoleService<TProfile>` owns role CRUD and direct user-role membership.
 - `IIdentityRoleStore<TProfile>` and `IIdentityUserRoleStore<TProfile>` are the role
   persistence ports used by Core.
+- `IIdentityRegistrationService<TProfile>` atomically creates a user with its initial
+  password credential or external login.
+- `IExternalLoginService<TProfile>` resolves, lists, links and unlinks trusted
+  provider/subject identities.
+- `IIdentityUserQueryService<TProfile>` provides bounded cursor-based administrative
+  queries without exposing `IQueryable`.
+- `IIdentitySecurityEventObserver` receives non-blocking notifications after successful
+  security mutations. It is not a transactional audit store.
 - `IIdentityNormalizer` normalizes userName/email/phone before persistence and checks.
 - `IUserOperationPolicy` decides whether the current user flags allow mutation.
 - `IProfilePatch<TProfile>` applies partial profile changes.
@@ -121,8 +129,7 @@ do not bypass expected-version checks for mutating commands.
 
 `SecurityStamp` is a random opaque value used to invalidate sessions. It changes on
 password set/change/removal, soft delete and explicit rotation, but not on a technical
-password rehash. Future credential changes such as external login removal must rotate it
-as well.
+password rehash. External login link/unlink rotates it as well.
 
 ## Commands
 
@@ -152,7 +159,13 @@ The current command set is:
 - `CreateIdentitySessionCommand`
 - `RefreshIdentitySessionCommand`
 - `RevokeIdentitySessionCommand`
+- `RevokeIdentitySessionByIdCommand`
 - `RevokeAllIdentitySessionsCommand`
+- `ListIdentitySessionsCommand`
+- `RegisterPasswordUserCommand<TProfile>`
+- `RegisterExternalUserCommand<TProfile>`
+- `LinkExternalLoginCommand`
+- `UnlinkExternalLoginCommand`
 
 Mutation commands use `ExpectedVersion` except `ConfirmEmailCommand` and
 `ConfirmPhoneCommand`, which intentionally do not accept `ExpectedVersion`.
@@ -161,8 +174,8 @@ Mutation commands use `ExpectedVersion` except `ConfirmEmailCommand` and
 
 Preserve these rules:
 
-- A user may exist without `UserName`, `Email` and `Phone`. Handles are nullable because
-  external login providers are planned. Do not require at least one local handle on
+- A user may exist without `UserName`, `Email` and `Phone`. Handles are nullable for
+  external-login-only users. Do not require at least one local handle on
   create or update unless the user explicitly changes this rule.
 - Confirmation operations do not use expected version, but must validate that the
   email/phone from the confirmation command still matches the user's current value after
@@ -279,6 +292,20 @@ Preserve these rules:
   validation, or evaluate membership from storage in an authorization policy.
 - Hosts must schedule `IIdentitySessionService<TProfile>.PruneAsync()` in bounded batches.
   Revoked and rotated rows remain until expiry plus retention so replay can be detected.
+- Session metadata is bounded host-created display data, not a security signal. List only
+  active logical refresh chains and scope revoke-by-id by both user and session id.
+- External provider names are trimmed and canonicalized to uppercase. Provider subjects
+  are case-sensitive and preserved exactly. Core accepts only identities already
+  validated by the host's OAuth/OIDC adapter.
+- External login link/unlink uses normal mutation policy, expected user version and
+  security-stamp rotation. The base domain permits removal of the final sign-in method;
+  self-service host policy may be stricter.
+- Password and external registration must use `IIdentityRegistrationStore<TProfile>` so
+  the user and initial sign-in method commit atomically.
+- User queries are bounded to 100 rows and use stable `(CreatedAt, Id)` cursor ordering.
+  Query services are not endpoint authorization.
+- Security-event observers run after successful persistence and must enqueue quickly
+  without throwing. Durable compliance audit belongs in a host transactional outbox.
 - Action tokens are stateless and do not require EF entities. The default Infrastructure
   provider uses ASP.NET Core Data Protection. Multi-instance deployments must persist
   and share their Data Protection key ring.
@@ -321,13 +348,15 @@ EF Core storage is split:
   - refresh-token digest and security-stamp snapshot
   - absolute expiry, rotation/revoke timestamps and replacement link
   - optimistic concurrency version
+  - optional client/device display labels
 - `identity_roles`
   - display and unique normalized names
   - optional parent metadata, version and audit timestamps
 - `identity_user_roles`
   - direct user-role memberships and assignment timestamp
-- planned later:
-  - `user_external_logins`
+- `user_external_logins`
+  - canonical provider and exact subject composite key
+  - user reference and creation timestamp
 
 PostgreSQL requirements:
 
@@ -357,9 +386,11 @@ persistent refresh sessions now support strict rotation, replay detection, onlin
 validation and revoke. ASP.NET Core JWT bearer integration and extensible claims
 projection are implemented. Optional role CRUD, direct membership persistence and JWT
 role projection are implemented. Optional policy-driven step-up decisions exchange
-one-time verification proofs without issuing another bearer token. The next major area
-is implementing external login adapters. Keep transport token issuance out of password/OTP
-cryptographic providers and EF stores.
+one-time verification proofs without issuing another bearer token. External login
+lifecycle, atomic registration, active-session management, bounded administrative user
+queries and security-event observer hooks are implemented. OAuth/OIDC protocol clients,
+HTTP endpoints and UI belong to a host such as `Skopka.Hello`. Keep transport token
+issuance out of password/OTP cryptographic providers and EF stores.
 
 `IdentityRole.ParentId` is validated against missing parents and cycles, but does not
 imply inherited membership or inherited JWT claims.

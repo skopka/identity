@@ -21,8 +21,16 @@ public interface IIdentitySessionService<TProfile>
         RevokeIdentitySessionCommand command,
         CancellationToken ct);
 
+    Task<OperationResult> RevokeByIdAsync(
+        RevokeIdentitySessionByIdCommand command,
+        CancellationToken ct);
+
     Task<OperationResult> RevokeAllAsync(
         RevokeAllIdentitySessionsCommand command,
+        CancellationToken ct);
+
+    Task<OperationResult<IReadOnlyList<IdentitySessionInfo>>> ListAsync(
+        ListIdentitySessionsCommand command,
         CancellationToken ct);
 
     Task<int> PruneAsync(CancellationToken ct);

@@ -88,6 +88,31 @@ Refresh tokens are random opaque secrets. Persistence stores digests, rotation s
 and the security-stamp snapshot, never plaintext tokens. Reuse of a rotated token revokes
 the complete logical session.
 
+Session client/device values are untrusted display labels. Do not store raw IP addresses
+in them or use them for security decisions. Revoke-by-id filters on both user and session
+id.
+
+## External Logins
+
+Skopka.Identity stores only a canonical provider name and exact stable provider subject.
+The consuming OAuth/OIDC client owns state, nonce, PKCE, token validation and subject
+extraction. Never resolve, register or link from a provider/subject pair submitted
+directly by an untrusted client.
+
+Do not auto-link accounts based only on matching email addresses. Explicit linking
+should require an authenticated account and the host's step-up policy. Link and unlink
+rotate the security stamp.
+
+## Security Events and Audit
+
+`IIdentitySecurityEventObserver` receives successful state-change notifications without
+credentials, tokens, handles or provider subjects. Implementations must enqueue quickly
+and must not throw.
+
+The observer is not a durable audit log: its callback occurs after the identity store
+commit. Compliance-sensitive hosts should use a transactional outbox in their own unit
+of work and enrich records with authenticated actor and request correlation context.
+
 ## Rate Limiting
 
 The host creates trusted account/client partition inputs. Raw IP addresses or request
@@ -128,7 +153,7 @@ application level when legal or operational requirements require irreversible er
 
 The current pre-1.0 release does not include:
 
-- external login provider orchestration;
+- built-in OAuth/OIDC protocol clients;
 - TOTP;
 - WebAuthn/passkeys;
 - recovery codes;

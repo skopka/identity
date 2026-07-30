@@ -4,6 +4,7 @@ using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Authentication;
 using Skopka.Identity.Errors;
 using Skopka.Identity.Metrics;
+using Skopka.Identity.SecurityEvents;
 using Skopka.Identity.Users;
 
 namespace Skopka.Identity.Sessions;
@@ -15,7 +16,8 @@ public sealed class IdentitySessionService<TProfile>(
     IIdentityRefreshTokenProvider refreshTokenProvider,
     IEnumerable<IIdentitySessionClaimsProvider<TProfile>> claimsProviders,
     IdentitySessionOptions options,
-    IIdentityMetrics metrics)
+    IIdentityMetrics metrics,
+    IIdentitySecurityEventObserver? securityEvents = null)
     : IIdentitySessionService<TProfile>
 {
     internal const int CurrentAccessTokenFormatVersion = 1;
@@ -33,6 +35,12 @@ public sealed class IdentitySessionService<TProfile>(
             return Fail<IssuedIdentitySession>(
                 op,
                 AuthenticationErrors.InvalidCredentials());
+        }
+
+        var metadata = NormalizeMetadata(command.Metadata);
+        if (metadata.Error is not null)
+        {
+            return Fail<IssuedIdentitySession>(op, metadata.Error);
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -65,7 +73,8 @@ public sealed class IdentitySessionService<TProfile>(
                 user.Id,
                 refreshToken.TokenHash,
                 user.SecurityStamp,
-                refreshExpiresAt),
+                refreshExpiresAt,
+                metadata.Value),
             now,
             ct);
 
@@ -76,6 +85,11 @@ public sealed class IdentitySessionService<TProfile>(
                 createResult.Errors);
         }
 
+        securityEvents.Observe(
+            IdentitySecurityEventTypes.SessionCreated,
+            now,
+            user.Id,
+            sessionId);
         op.Success();
         return OperationResultFactory.Success(issued);
     }
@@ -149,7 +163,8 @@ public sealed class IdentitySessionService<TProfile>(
             current.UserId,
             replacementToken.TokenHash,
             current.SecurityStamp,
-            current.ExpiresAt);
+            current.ExpiresAt,
+            current.Metadata);
         var issued = await IssueTokensAsync(
             user,
             current.SessionId,
@@ -184,6 +199,11 @@ public sealed class IdentitySessionService<TProfile>(
                 rotateResult.Errors);
         }
 
+        securityEvents.Observe(
+            IdentitySecurityEventTypes.SessionRefreshed,
+            now,
+            current.UserId,
+            current.SessionId);
         op.Success();
         return OperationResultFactory.Success(issued);
     }
@@ -267,11 +287,20 @@ public sealed class IdentitySessionService<TProfile>(
                 IdentitySessionErrors.RefreshTokenInvalid());
         }
 
-        await sessionStore.RevokeSessionAsync(
+        var now = DateTimeOffset.UtcNow;
+        var revoked = await sessionStore.RevokeSessionAsync(
             session.SessionId,
-            DateTimeOffset.UtcNow,
+            now,
             ct);
 
+        if (revoked > 0)
+        {
+            securityEvents.Observe(
+                IdentitySecurityEventTypes.SessionRevoked,
+                now,
+                session.UserId,
+                session.SessionId);
+        }
         op.Success();
         return OperationResultFactory.Success();
     }
@@ -288,13 +317,92 @@ public sealed class IdentitySessionService<TProfile>(
             return Fail(op, IdentityErrors.NotFound());
         }
 
-        await sessionStore.RevokeAllAsync(
+        var now = DateTimeOffset.UtcNow;
+        var revoked = await sessionStore.RevokeAllAsync(
+            command.UserId,
+            now,
+            ct);
+
+        if (revoked > 0)
+        {
+            securityEvents.Observe(
+                IdentitySecurityEventTypes.SessionsRevoked,
+                now,
+                command.UserId);
+        }
+        op.Success();
+        return OperationResultFactory.Success();
+    }
+
+    public async Task<OperationResult> RevokeByIdAsync(
+        RevokeIdentitySessionByIdCommand command,
+        CancellationToken ct)
+    {
+        using var op = metrics.Begin("session.revoke_by_id");
+
+        if (command.UserId == Guid.Empty)
+        {
+            return Fail(
+                op,
+                IdentityErrors.Validation("userId", "UserId is required."));
+        }
+
+        if (command.SessionId == Guid.Empty)
+        {
+            return Fail(
+                op,
+                IdentityErrors.Validation(
+                    "sessionId",
+                    "SessionId is required."));
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var revoked = await sessionStore.RevokeUserSessionAsync(
+            command.UserId,
+            command.SessionId,
+            now,
+            ct);
+
+        if (revoked > 0)
+        {
+            securityEvents.Observe(
+                IdentitySecurityEventTypes.SessionRevoked,
+                now,
+                command.UserId,
+                command.SessionId);
+        }
+        op.Success();
+        return OperationResultFactory.Success();
+    }
+
+    public async Task<OperationResult<IReadOnlyList<IdentitySessionInfo>>> ListAsync(
+        ListIdentitySessionsCommand command,
+        CancellationToken ct)
+    {
+        using var op = metrics.Begin("session.list");
+
+        if (command.UserId == Guid.Empty)
+        {
+            return Fail<IReadOnlyList<IdentitySessionInfo>>(
+                op,
+                IdentityErrors.Validation("userId", "UserId is required."));
+        }
+
+        var user = await userStore.FindByIdAsync(command.UserId, ct);
+        if (user is null)
+        {
+            return Fail<IReadOnlyList<IdentitySessionInfo>>(
+                op,
+                IdentityErrors.NotFound());
+        }
+
+        var sessions = await sessionStore.ListActiveAsync(
             command.UserId,
             DateTimeOffset.UtcNow,
             ct);
 
         op.Success();
-        return OperationResultFactory.Success();
+        return OperationResultFactory.Success(sessions);
     }
 
     public async Task<int> PruneAsync(CancellationToken ct)
@@ -475,6 +583,44 @@ public sealed class IdentitySessionService<TProfile>(
         DateTimeOffset first,
         DateTimeOffset second)
         => first <= second ? first : second;
+
+    private static (IdentitySessionMetadata? Value, Error? Error)
+        NormalizeMetadata(IdentitySessionMetadata? metadata)
+    {
+        if (metadata is null)
+        {
+            return (null, null);
+        }
+
+        var clientName = NormalizeLabel(metadata.ClientName);
+        if (clientName?.Length > SessionLimits.MaximumClientNameLength)
+        {
+            return (
+                null,
+                IdentityErrors.Validation(
+                    "metadata.clientName",
+                    $"ClientName cannot exceed {SessionLimits.MaximumClientNameLength} characters."));
+        }
+
+        var deviceName = NormalizeLabel(metadata.DeviceName);
+        if (deviceName?.Length > SessionLimits.MaximumDeviceNameLength)
+        {
+            return (
+                null,
+                IdentityErrors.Validation(
+                    "metadata.deviceName",
+                    $"DeviceName cannot exceed {SessionLimits.MaximumDeviceNameLength} characters."));
+        }
+
+        return (
+            clientName is null && deviceName is null
+                ? null
+                : new IdentitySessionMetadata(clientName, deviceName),
+            null);
+    }
+
+    private static string? NormalizeLabel(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static bool FixedTimeEquals(string expected, string provided)
     {

@@ -1,6 +1,7 @@
 using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Errors;
 using Skopka.Identity.Metrics;
+using Skopka.Identity.SecurityEvents;
 using Skopka.Identity.Sessions;
 using Skopka.Identity.Users;
 using Skopka.Identity.Users.Handles;
@@ -47,6 +48,28 @@ public sealed class IdentitySessionServiceTests
 
         AssertError(result, IdentityErrorCodes.InvalidCredentials);
         Assert.Empty(fixture.SessionStore.Sessions);
+    }
+
+    [Fact]
+    public async Task CreateNormalizesAndRefreshPreservesSessionMetadata()
+    {
+        var fixture = new Fixture();
+        var created = await fixture.Service.CreateAsync(
+            new CreateIdentitySessionCommand(
+                fixture.UserStore.User.Id,
+                fixture.UserStore.User.SecurityStamp,
+                new IdentitySessionMetadata("  web  ", "  laptop  ")),
+            CancellationToken.None);
+        Assert.True(created.IsSuccess);
+
+        var refreshed = await fixture.Service.RefreshAsync(
+            new RefreshIdentitySessionCommand(created.Value.RefreshToken),
+            CancellationToken.None);
+
+        Assert.True(refreshed.IsSuccess);
+        Assert.Equal(
+            new IdentitySessionMetadata("web", "laptop"),
+            fixture.SessionStore.Active.Metadata);
     }
 
     [Fact]
@@ -189,6 +212,68 @@ public sealed class IdentitySessionServiceTests
         AssertError(invalid, IdentityErrorCodes.AccessTokenInvalid);
     }
 
+    [Fact]
+    public async Task ListAndRevokeByIdAreScopedToUser()
+    {
+        var fixture = new Fixture();
+        var created = await fixture.CreateAsync();
+
+        var listed = await fixture.Service.ListAsync(
+            new ListIdentitySessionsCommand(fixture.UserStore.User.Id),
+            CancellationToken.None);
+        Assert.True(listed.IsSuccess);
+        Assert.Equal(created.SessionId, Assert.Single(listed.Value).SessionId);
+
+        var wrongUser = await fixture.Service.RevokeByIdAsync(
+            new RevokeIdentitySessionByIdCommand(
+                Guid.NewGuid(),
+                created.SessionId),
+            CancellationToken.None);
+        Assert.True(wrongUser.IsSuccess);
+        Assert.Null(fixture.SessionStore.Active.RevokedAt);
+
+        var revoked = await fixture.Service.RevokeByIdAsync(
+            new RevokeIdentitySessionByIdCommand(
+                fixture.UserStore.User.Id,
+                created.SessionId),
+            CancellationToken.None);
+        Assert.True(revoked.IsSuccess);
+        Assert.All(
+            fixture.SessionStore.Sessions,
+            session => Assert.NotNull(session.RevokedAt));
+    }
+
+    [Fact]
+    public async Task SecurityEventsArePublishedOnlyForChangedSessions()
+    {
+        var observer = new RecordingSecurityEventObserver();
+        var fixture = new Fixture(securityEvents: observer);
+        var created = await fixture.CreateAsync();
+
+        await fixture.Service.RevokeByIdAsync(
+            new RevokeIdentitySessionByIdCommand(
+                Guid.NewGuid(),
+                created.SessionId),
+            CancellationToken.None);
+        Assert.Single(
+            observer.Events,
+            item => item.Type == IdentitySecurityEventTypes.SessionCreated);
+        Assert.DoesNotContain(
+            observer.Events,
+            item => item.Type == IdentitySecurityEventTypes.SessionRevoked);
+
+        await fixture.Service.RevokeByIdAsync(
+            new RevokeIdentitySessionByIdCommand(
+                fixture.UserStore.User.Id,
+                created.SessionId),
+            CancellationToken.None);
+        var revoked = Assert.Single(
+            observer.Events,
+            item => item.Type == IdentitySecurityEventTypes.SessionRevoked);
+        Assert.Equal(fixture.UserStore.User.Id, revoked.UserId);
+        Assert.Equal(created.SessionId, revoked.ResourceId);
+    }
+
     private static void AssertError(OperationResult result, string code)
     {
         Assert.False(result.IsSuccess);
@@ -201,7 +286,8 @@ public sealed class IdentitySessionServiceTests
             TimeSpan? accessTokenLifetime = null,
             TimeSpan? refreshSessionLifetime = null,
             IEnumerable<IIdentitySessionClaimsProvider<TestProfile>>?
-                additionalClaimsProviders = null)
+                additionalClaimsProviders = null,
+            IIdentitySecurityEventObserver? securityEvents = null)
         {
             UserStore = new FakeUserStore(CreateUser());
             SessionStore = new FakeSessionStore();
@@ -230,7 +316,8 @@ public sealed class IdentitySessionServiceTests
                     RefreshSessionLifetime = refreshSessionLifetime
                         ?? TimeSpan.FromDays(10),
                 },
-                new NoopIdentityMetrics());
+                new NoopIdentityMetrics(),
+                securityEvents);
         }
 
         public FakeUserStore UserStore { get; }
@@ -273,6 +360,15 @@ public sealed class IdentitySessionServiceTests
                 tokens.TryGetValue(token, out var payload)
                     ? payload
                     : null);
+    }
+
+    private sealed class RecordingSecurityEventObserver
+        : IIdentitySecurityEventObserver
+    {
+        public List<IdentitySecurityEvent> Events { get; } = [];
+
+        public void OnEvent(IdentitySecurityEvent securityEvent)
+            => Events.Add(securityEvent);
     }
 
     private sealed class RoleClaimsProvider
@@ -408,6 +504,18 @@ public sealed class IdentitySessionServiceTests
             CancellationToken ct)
             => Task.FromResult(Revoke(sessionId, now));
 
+        public Task<int> RevokeUserSessionAsync(
+            Guid userId,
+            Guid sessionId,
+            DateTimeOffset now,
+            CancellationToken ct)
+            => Task.FromResult(
+                Sessions.Any(session =>
+                    session.UserId == userId
+                    && session.SessionId == sessionId)
+                    ? Revoke(sessionId, now)
+                    : 0);
+
         public Task<int> RevokeAllAsync(
             Guid userId,
             DateTimeOffset now,
@@ -420,6 +528,30 @@ public sealed class IdentitySessionServiceTests
                 .ToArray();
             var count = sessionIds.Sum(sessionId => Revoke(sessionId, now));
             return Task.FromResult(count);
+        }
+
+        public Task<IReadOnlyList<IdentitySessionInfo>> ListActiveAsync(
+            Guid userId,
+            DateTimeOffset now,
+            CancellationToken ct)
+        {
+            var sessions = Sessions
+                .Where(session =>
+                    session.UserId == userId
+                    && session.RotatedAt is null
+                    && session.RevokedAt is null
+                    && session.ExpiresAt > now)
+                .Select(session => new IdentitySessionInfo(
+                    session.SessionId,
+                    session.UserId,
+                    session.Metadata ?? new IdentitySessionMetadata(),
+                    session.ExpiresAt,
+                    Sessions
+                        .Where(item => item.SessionId == session.SessionId)
+                        .Min(item => item.CreatedAt),
+                    session.CreatedAt))
+                .ToArray();
+            return Task.FromResult<IReadOnlyList<IdentitySessionInfo>>(sessions);
         }
 
         public Task<int> PruneAsync(
@@ -478,7 +610,8 @@ public sealed class IdentitySessionServiceTests
                 now,
                 null,
                 null,
-                null);
+                null,
+                session.Metadata);
 
         private static OperationResult Fail(string code)
             => OperationResultFactory.Fail(

@@ -6,4 +6,5 @@ public sealed record NewIdentityUser<TProfile>(
     string? Phone,
     TProfile Profile,
     UserFlags Flags,
-    string SecurityStamp);
+    string SecurityStamp,
+    Guid? Id = null);

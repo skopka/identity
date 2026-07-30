@@ -22,7 +22,7 @@ alongside this guide and inventory every feature the application uses.
 | Lockout | `BlockedAt` / `BlockedUntil` plus persistent rate limiting |
 | Identity cookies | Host-owned; optional Skopka JWT sessions are not cookie-compatible |
 | Identity UI | Host-owned |
-| External login tables | Not yet supported by public Skopka orchestration |
+| External login tables | `IExternalLoginService<TProfile>` and `user_external_logins` |
 | Authenticator TOTP / recovery codes | Not yet implemented |
 
 Custom Microsoft user claims do not automatically become Skopka session claims. Project
@@ -33,7 +33,7 @@ the application.
 
 Do not cut over yet if the application requires any current gap:
 
-- external login providers;
+- built-in OAuth/OIDC protocol clients when no host adapter can be added;
 - authenticator TOTP;
 - WebAuthn/passkeys;
 - recovery codes;
@@ -63,6 +63,11 @@ A typical mapping from `AspNetUsers` is:
 | `LockoutEnd` | `auth_users.blocked_until` with a matching `blocked_at` |
 | Application user fields | Serialized `user_profiles.profile` |
 | `PasswordHash` | `user_credentials.password_verifier` through a compatibility plan |
+
+Map provider names and stable provider keys from `AspNetUserLogins` to
+`user_external_logins.provider` and `user_external_logins.subject`. Provider names are
+canonicalized by Core; subjects remain case-sensitive. Validate source lengths against
+`ExternalLoginLimits` and preserve the original provider key exactly.
 
 Initialize `Version` to 1. Do not copy `ConcurrencyStamp` into `Version`; they have
 different types and semantics.
@@ -141,8 +146,8 @@ A safe cutover normally:
 
 Move HTTP concerns into the host:
 
-- registration endpoint calls `IIdentityUserService<TProfile>` and then the credential
-  service;
+- registration endpoint calls `IIdentityRegistrationService<TProfile>` so the user and
+  first sign-in method are persisted atomically;
 - login endpoint authenticates and explicitly creates the chosen host session;
 - logout revokes a refresh session or clears the host cookie;
 - email/SMS delivery sends values returned by action-token or verification services;

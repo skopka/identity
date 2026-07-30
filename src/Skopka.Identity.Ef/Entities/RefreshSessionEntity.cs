@@ -7,6 +7,8 @@ public sealed class RefreshSessionEntity
     public Guid UserId { get; set; }
     public string TokenHash { get; set; } = null!;
     public string SecurityStamp { get; set; } = null!;
+    public string? ClientName { get; set; }
+    public string? DeviceName { get; set; }
     public long Version { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

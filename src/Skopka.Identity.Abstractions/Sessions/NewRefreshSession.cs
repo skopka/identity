@@ -6,4 +6,5 @@ public sealed record NewRefreshSession(
     Guid UserId,
     string TokenHash,
     string SecurityStamp,
-    DateTimeOffset ExpiresAt);
+    DateTimeOffset ExpiresAt,
+    IdentitySessionMetadata? Metadata = null);

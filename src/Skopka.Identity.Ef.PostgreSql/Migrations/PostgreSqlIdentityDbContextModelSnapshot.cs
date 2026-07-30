@@ -17,7 +17,7 @@ namespace Skopka.Identity.Ef.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.5")
+                .HasAnnotation("ProductVersion", "10.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -149,9 +149,19 @@ namespace Skopka.Identity.Ef.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("token_id");
 
+                    b.Property<string>("ClientName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("client_name");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<string>("DeviceName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("device_name");
 
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("timestamp with time zone")
@@ -288,11 +298,13 @@ namespace Skopka.Identity.Ef.Migrations
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.UserExternalLoginEntity", b =>
                 {
                     b.Property<string>("Provider")
-                        .HasColumnType("text")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
                         .HasColumnName("provider");
 
                     b.Property<string>("Subject")
-                        .HasColumnType("text")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
                         .HasColumnName("subject");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -303,9 +315,11 @@ namespace Skopka.Identity.Ef.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
-                    b.HasKey("Provider", "Subject");
+                    b.HasKey("Provider", "Subject")
+                        .HasName("pk_user_external_logins");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_user_external_logins_user_id");
 
                     b.ToTable("user_external_logins", (string)null);
                 });
@@ -504,7 +518,8 @@ namespace Skopka.Identity.Ef.Migrations
                         .WithMany("ExternalLogins")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_user_external_logins_auth_users_user_id");
 
                     b.Navigation("User");
                 });

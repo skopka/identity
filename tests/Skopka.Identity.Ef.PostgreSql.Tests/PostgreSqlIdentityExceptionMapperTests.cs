@@ -13,6 +13,7 @@ public sealed class PostgreSqlIdentityExceptionMapperTests
     [InlineData("ux_auth_users_normalized_phone", IdentityErrorCodes.DuplicatePhone)]
     [InlineData("ux_identity_roles_normalized_name", IdentityErrorCodes.DuplicateRoleName)]
     [InlineData("pk_identity_user_roles", IdentityErrorCodes.RoleAlreadyAssigned)]
+    [InlineData("pk_user_external_logins", IdentityErrorCodes.DuplicateExternalLogin)]
     public void MapsKnownUniqueConstraints(string constraintName, string expectedCode)
     {
         var mapper = new PostgreSqlIdentityExceptionMapper();

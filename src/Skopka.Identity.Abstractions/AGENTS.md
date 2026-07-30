@@ -51,6 +51,12 @@ small value objects.
   `System.Security.Claims` or ASP.NET Core.
 - Define role CRUD and direct membership contracts under `Roles`. Role store inputs
   carry normalized names prepared by Core; membership APIs use stable role ids.
+- Define atomic registration contracts under `Registration` and external identity
+  lifecycle contracts under `ExternalLogins`.
+- Define bounded cursor-based user query contracts under `Users/Queries`; never expose
+  EF or `IQueryable`.
+- Define security-event observer contracts under `SecurityEvents`. Events contain no
+  credentials, tokens, handles or provider subjects.
 
 ## Boundaries
 
@@ -90,3 +96,9 @@ small value objects.
   claims but cannot replace issuer, audience, subject, token/session ids or timestamps.
 - `IdentityRole.ParentId` is hierarchy metadata only. The public contract does not imply
   inherited membership or authorization.
+- External provider subjects remain exact and case-sensitive. Provider protocol tokens
+  and claims are outside these contracts.
+- Session metadata is optional bounded display data. Revoke by id always carries both
+  user id and logical session id.
+- `IIdentitySecurityEventObserver` is a non-blocking post-commit hook, not a durable
+  transactional audit guarantee.

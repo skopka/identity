@@ -4,13 +4,17 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
+using Skopka.Identity.ExternalLogins;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.RateLimiting;
+using Skopka.Identity.Registration;
 using Skopka.Identity.Roles;
 using Skopka.Identity.Security;
+using Skopka.Identity.SecurityEvents;
 using Skopka.Identity.Sessions;
 using Skopka.Identity.StepUp;
 using Skopka.Identity.Users;
+using Skopka.Identity.Users.Queries;
 using Skopka.Identity.Verification;
 using Xunit;
 
@@ -41,6 +45,27 @@ public sealed class PostgreSqlIdentityRegistrationTests
             scopedProvider.GetRequiredService<IIdentityMetrics>());
         Assert.IsType<IdentityUserService<TestProfile>>(
             scopedProvider.GetRequiredService<IIdentityUserService<TestProfile>>());
+        Assert.IsType<IdentityUserQueryService<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentityUserQueryService<TestProfile>>());
+        Assert.IsType<EfIdentityUserQueryStore<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentityUserQueryStore<TestProfile>>());
+        Assert.IsType<ExternalLoginService<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IExternalLoginService<TestProfile>>());
+        Assert.IsType<EfExternalLoginStore<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IExternalLoginStore<TestProfile>>());
+        Assert.IsType<IdentityRegistrationService<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentityRegistrationService<TestProfile>>());
+        Assert.IsType<EfIdentityRegistrationStore<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentityRegistrationStore<TestProfile>>());
+        Assert.IsType<NoopIdentitySecurityEventObserver>(
+            scopedProvider.GetRequiredService<
+                IIdentitySecurityEventObserver>());
         Assert.IsType<DefaultSecurityStampGenerator>(
             scopedProvider.GetRequiredService<ISecurityStampGenerator>());
         Assert.IsType<SecurityStampService<TestProfile>>(
@@ -120,11 +145,16 @@ public sealed class PostgreSqlIdentityRegistrationTests
             name => name.EndsWith(
                 "_AddIdentityRoles",
                 StringComparison.Ordinal));
+        var externalLoginMigration = Assert.Single(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith(
+                "_AddExternalLoginLifecycleAndSessionMetadata",
+                StringComparison.Ordinal));
         Assert.False(providerContext.Database.HasPendingModelChanges());
 
         var script = providerContext.GetService<IMigrator>().GenerateScript(
             fromMigration: null,
-            toMigration: roleMigration);
+            toMigration: externalLoginMigration);
 
         Assert.Contains("CREATE TABLE auth_users", script, StringComparison.Ordinal);
         Assert.Contains("CREATE TABLE user_profiles", script, StringComparison.Ordinal);
@@ -150,6 +180,12 @@ public sealed class PostgreSqlIdentityRegistrationTests
             StringComparison.Ordinal);
         Assert.Contains(
             "CREATE TABLE identity_user_roles",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains("client_name", script, StringComparison.Ordinal);
+        Assert.Contains("device_name", script, StringComparison.Ordinal);
+        Assert.Contains(
+            "pk_user_external_logins",
             script,
             StringComparison.Ordinal);
     }

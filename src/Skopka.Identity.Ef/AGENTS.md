@@ -24,6 +24,7 @@ identity stores when it is added.
   `IIdentityRefreshSessionStore<TProfile>`.
 - Implement role CRUD and direct membership stores against
   `IIdentityRoleStore<TProfile>` and `IIdentityUserRoleStore<TProfile>`.
+- Implement external-login, aggregate registration and bounded user-query stores.
 - Map EF entities to public `IdentityUser<TProfile>` models.
 - Configure generic EF relationships, keys, concurrency tokens and timestamps.
 - Translate EF concurrency conflicts into identity concurrency errors.
@@ -79,3 +80,11 @@ identity stores when it is added.
   Deleting a role cascades memberships and sets child `ParentId` values to null.
 - Removing a missing membership is idempotent; duplicate assignment returns the stable
   role-already-assigned conflict.
+- `user_external_logins` uses `(provider, subject)` as its stable key. Link/unlink bumps
+  user version and security stamp in the same save.
+- Aggregate registration creates user/profile plus credential or external login in one
+  `SaveChangesAsync`.
+- Active session listing returns one current row per logical chain. Revoke-by-id filters
+  both user and session ids.
+- User queries apply bounded page size, status/flags/search filters and stable
+  `(CreatedAt, Id)` cursor order in the database.

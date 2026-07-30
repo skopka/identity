@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Skopka.Identity.Ef.Entities;
+using Skopka.Identity.ExternalLogins;
 using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Roles;
 using Skopka.Identity.Sessions;
@@ -97,6 +98,33 @@ public sealed class PostgreSqlIdentityModelTests
             refreshSessionType
                 .FindProperty(nameof(RefreshSessionEntity.SecurityStamp))!
                 .GetMaxLength());
+        Assert.Equal(
+            SessionLimits.MaximumClientNameLength,
+            refreshSessionType
+                .FindProperty(nameof(RefreshSessionEntity.ClientName))!
+                .GetMaxLength());
+        Assert.Equal(
+            SessionLimits.MaximumDeviceNameLength,
+            refreshSessionType
+                .FindProperty(nameof(RefreshSessionEntity.DeviceName))!
+                .GetMaxLength());
+
+        var externalLoginType = context.Model.FindEntityType(
+            typeof(UserExternalLoginEntity));
+        Assert.NotNull(externalLoginType);
+        Assert.Equal(
+            ExternalLoginLimits.MaximumProviderLength,
+            externalLoginType
+                .FindProperty(nameof(UserExternalLoginEntity.Provider))!
+                .GetMaxLength());
+        Assert.Equal(
+            ExternalLoginLimits.MaximumSubjectLength,
+            externalLoginType
+                .FindProperty(nameof(UserExternalLoginEntity.Subject))!
+                .GetMaxLength());
+        Assert.Equal(
+            "pk_user_external_logins",
+            externalLoginType.FindPrimaryKey()!.GetName());
 
         var roleType = context.Model.FindEntityType(typeof(RoleEntity));
         Assert.NotNull(roleType);

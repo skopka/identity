@@ -334,8 +334,18 @@ public sealed class JwtSessionProviderTests
             CancellationToken ct)
             => throw new NotSupportedException();
 
+        public Task<OperationResult> RevokeByIdAsync(
+            RevokeIdentitySessionByIdCommand command,
+            CancellationToken ct)
+            => throw new NotSupportedException();
+
         public Task<OperationResult> RevokeAllAsync(
             RevokeAllIdentitySessionsCommand command,
+            CancellationToken ct)
+            => throw new NotSupportedException();
+
+        public Task<OperationResult<IReadOnlyList<IdentitySessionInfo>>> ListAsync(
+            ListIdentitySessionsCommand command,
             CancellationToken ct)
             => throw new NotSupportedException();
 

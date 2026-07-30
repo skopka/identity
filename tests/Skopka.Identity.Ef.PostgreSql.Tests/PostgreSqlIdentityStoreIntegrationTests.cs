@@ -1,8 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Skopka.Identity.Errors;
+using Skopka.Identity.ExternalLogins;
+using Skopka.Identity.Registration;
+using Skopka.Identity.Sessions;
 using Skopka.Identity.Users;
 using Skopka.Identity.Users.Handles;
+using Skopka.Identity.Users.Queries;
 using Testcontainers.PostgreSql;
 using Xunit;
 
@@ -99,6 +103,107 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
             now.AddMinutes(5));
     }
 
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task AtomicExternalRegistrationAndSessionMetadataRunAgainstPostgreSql()
+    {
+        await using var scope = serviceProvider.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        var registrationStore = services.GetRequiredService<
+            IIdentityRegistrationStore<TestProfile>>();
+        var userStore = services.GetRequiredService<
+            IIdentityUserStore<TestProfile>>();
+        var sessionStore = services.GetRequiredService<
+            IIdentityRefreshSessionStore<TestProfile>>();
+        var userQueries = services.GetRequiredService<
+            IIdentityUserQueryService<TestProfile>>();
+        var now = new DateTimeOffset(
+            2026,
+            7,
+            30,
+            12,
+            0,
+            0,
+            TimeSpan.Zero);
+        var login = new ExternalLoginKey("GITHUB", "subject-1");
+        var userId = Guid.NewGuid();
+        var created = await registrationStore.CreateWithExternalLoginAsync(
+            NewUser(userId, "external-user"),
+            new NormalizedHandles("EXTERNAL-USER", null, null),
+            login,
+            now,
+            CancellationToken.None);
+        Assert.True(created.IsSuccess);
+
+        var secondUserId = Guid.NewGuid();
+        var second = await registrationStore.CreateWithExternalLoginAsync(
+            NewUser(secondUserId, "external-second"),
+            new NormalizedHandles("EXTERNAL-SECOND", null, null),
+            new ExternalLoginKey("GITHUB", "subject-2"),
+            now.AddSeconds(1),
+            CancellationToken.None);
+        Assert.True(second.IsSuccess);
+
+        var rejectedUserId = Guid.NewGuid();
+        var duplicate = await registrationStore.CreateWithExternalLoginAsync(
+            NewUser(rejectedUserId, "duplicate"),
+            new NormalizedHandles("DUPLICATE", null, null),
+            login,
+            now.AddMinutes(1),
+            CancellationToken.None);
+        Assert.False(duplicate.IsSuccess);
+        Assert.Contains(
+            duplicate.Errors,
+            error => error.Code == IdentityErrorCodes.DuplicateExternalLogin);
+        Assert.Null(
+            await userStore.FindByIdAsync(
+                rejectedUserId,
+                CancellationToken.None));
+
+        var queried = await userQueries.QueryAsync(
+            new IdentityUserQuery(
+                Search: "external",
+                Status: IdentityUserStatus.Active,
+                PageSize: 1),
+            CancellationToken.None);
+        Assert.True(queried.IsSuccess);
+        Assert.Equal(secondUserId, Assert.Single(queried.Value.Items).Id);
+        Assert.NotNull(queried.Value.NextCursor);
+
+        var nextPage = await userQueries.QueryAsync(
+            new IdentityUserQuery(
+                Search: "external",
+                Status: IdentityUserStatus.Active,
+                PageSize: 1,
+                Cursor: queried.Value.NextCursor),
+            CancellationToken.None);
+        Assert.True(nextPage.IsSuccess);
+        Assert.Equal(userId, Assert.Single(nextPage.Value.Items).Id);
+        Assert.Null(nextPage.Value.NextCursor);
+
+        var session = new NewRefreshSession(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            userId,
+            new string('A', SessionLimits.TokenHashLength),
+            created.Value.SecurityStamp,
+            now.AddDays(1),
+            new IdentitySessionMetadata("web", "integration-test"));
+        var sessionCreated = await sessionStore.CreateAsync(
+            session,
+            now,
+            CancellationToken.None);
+        Assert.True(sessionCreated.IsSuccess);
+
+        var listed = await sessionStore.ListActiveAsync(
+            userId,
+            now,
+            CancellationToken.None);
+        var active = Assert.Single(listed);
+        Assert.Equal(session.SessionId, active.SessionId);
+        Assert.Equal(session.Metadata, active.Metadata);
+    }
+
     private async Task AssertAllMigrationsAppliedAsync()
     {
         await using var scope = serviceProvider.CreateAsyncScope();
@@ -113,6 +218,18 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
         Assert.Equal(expected, applied);
         Assert.False(context.Database.HasPendingModelChanges());
     }
+
+    private static NewIdentityUser<TestProfile> NewUser(
+        Guid id,
+        string userName)
+        => new(
+            userName,
+            null,
+            null,
+            new TestProfile(userName, []),
+            UserFlags.None,
+            $"STAMP-{Guid.NewGuid():N}",
+            id);
 
     private async Task<IdentityUser<TestProfile>> CreateUserAsync(
         string userName,

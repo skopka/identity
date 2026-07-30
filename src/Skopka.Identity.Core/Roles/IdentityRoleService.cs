@@ -1,6 +1,7 @@
 using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.Roles.Commands;
+using Skopka.Identity.SecurityEvents;
 using Skopka.Identity.Users;
 
 namespace Skopka.Identity.Roles;
@@ -11,7 +12,8 @@ public sealed class IdentityRoleService<TProfile>(
     IIdentityUserStore<TProfile> userStore,
     IIdentityRoleNormalizer normalizer,
     IUserOperationPolicy userPolicy,
-    IIdentityMetrics metrics)
+    IIdentityMetrics metrics,
+    IIdentitySecurityEventObserver? securityEvents = null)
     : IIdentityRoleService<TProfile>
 {
     public async Task<IdentityRole?> FindByIdAsync(
@@ -254,13 +256,25 @@ public sealed class IdentityRoleService<TProfile>(
             return Fail(op, IdentityRoleErrors.NotFound());
         }
 
+        var now = DateTimeOffset.UtcNow;
         var result = add
             ? await userRoleStore.AddAsync(
                 userId,
                 roleId,
-                DateTimeOffset.UtcNow,
+                now,
                 ct)
             : await userRoleStore.RemoveAsync(userId, roleId, ct);
+
+        if (result.IsSuccess)
+        {
+            securityEvents.Observe(
+                add
+                    ? IdentitySecurityEventTypes.RoleAssigned
+                    : IdentitySecurityEventTypes.RoleRemoved,
+                now,
+                userId,
+                roleId);
+        }
 
         return Finish(op, result);
     }

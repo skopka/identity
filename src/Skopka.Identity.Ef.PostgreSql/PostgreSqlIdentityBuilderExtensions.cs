@@ -6,10 +6,13 @@ using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.Ef;
 using Skopka.Identity.Ef.PostgreSql;
+using Skopka.Identity.ExternalLogins;
 using Skopka.Identity.RateLimiting;
+using Skopka.Identity.Registration;
 using Skopka.Identity.Roles;
 using Skopka.Identity.Sessions;
 using Skopka.Identity.Verification;
+using Skopka.Identity.Users.Queries;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -37,8 +40,17 @@ public static class PostgreSqlIdentityBuilderExtensions
             provider => provider.GetRequiredService<PostgreSqlIdentityDbContext<TProfile>>());
         builder.Services.TryAddScoped<IIdentityUserStore<TProfile>, EfIdentityUserStore<TProfile>>();
         builder.Services.TryAddScoped<
+            IIdentityUserQueryStore<TProfile>,
+            EfIdentityUserQueryStore<TProfile>>();
+        builder.Services.TryAddScoped<
             IIdentityUserLookupStore<TProfile>,
             EfIdentityUserStore<TProfile>>();
+        builder.Services.TryAddScoped<
+            IExternalLoginStore<TProfile>,
+            EfExternalLoginStore<TProfile>>();
+        builder.Services.TryAddScoped<
+            IIdentityRegistrationStore<TProfile>,
+            EfIdentityRegistrationStore<TProfile>>();
         builder.Services.TryAddScoped<
             IPasswordCredentialStore<TProfile>,
             EfPasswordCredentialStore<TProfile>>();

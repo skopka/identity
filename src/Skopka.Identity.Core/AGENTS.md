@@ -35,6 +35,10 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   validation.
 - Project direct role memberships as repeated `role` session claims when roles are
   enabled.
+- Implement atomic password/external registration, external-login lifecycle and bounded
+  user queries through their dedicated store ports.
+- Publish successful security mutations through `IIdentitySecurityEventObserver`
+  without exposing secret values.
 - Provide default domain services such as `DefaultIdentityNormalizer`,
   `DefaultUserOperationPolicy` and default/noop metrics implementations.
 - Create domain errors through `IdentityErrors`.
@@ -128,6 +132,14 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   security stamp.
 - Validate role parent references and cycles, but do not expand parent roles into
   inherited JWT claims.
+- Canonicalize external provider names but preserve provider subjects exactly. Link and
+  unlink rotate the security stamp and enforce expected version.
+- Registration validates and hashes before one aggregate store call. Never compose
+  public registration from separate user and credential store calls.
+- Session metadata is normalized as bounded labels, survives refresh rotation and is
+  never used for authorization.
+- Security-event callbacks happen only after successful persistence. They must not be
+  presented as transactional audit delivery.
 
 ## Implementation Style
 

@@ -35,6 +35,7 @@ internal sealed class AuthUserConfiguration : IEntityTypeConfiguration<AuthUserE
         builder.HasMany(user => user.ExternalLogins)
             .WithOne(login => login.User)
             .HasForeignKey(login => login.UserId)
+            .HasConstraintName("fk_user_external_logins_auth_users_user_id")
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(user => user.Credential)

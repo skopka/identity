@@ -1,11 +1,15 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skopka.Identity;
 using Skopka.Identity.Credentials;
+using Skopka.Identity.ExternalLogins;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.RateLimiting;
+using Skopka.Identity.Registration;
 using Skopka.Identity.Security;
+using Skopka.Identity.SecurityEvents;
 using Skopka.Identity.Sessions;
 using Skopka.Identity.Users;
+using Skopka.Identity.Users.Queries;
 using Skopka.Identity.Verification;
 
 namespace Microsoft.Extensions.DependencyInjection;
@@ -21,6 +25,9 @@ public static class IdentityServiceCollectionExtensions
         services.TryAddSingleton<IUserOperationPolicy, DefaultUserOperationPolicy>();
         services.TryAddSingleton<IIdentityMetrics, IdentityMetrics>();
         services.TryAddSingleton<ISecurityStampGenerator, DefaultSecurityStampGenerator>();
+        services.TryAddSingleton<
+            IIdentitySecurityEventObserver,
+            NoopIdentitySecurityEventObserver>();
         services.TryAddSingleton(new PasswordPolicyOptions());
         services.TryAddSingleton(new IdentityRateLimitOptions());
         services.TryAddSingleton(new IdentitySessionOptions());
@@ -29,6 +36,15 @@ public static class IdentityServiceCollectionExtensions
                 IIdentitySessionClaimsProvider<TProfile>,
                 DefaultIdentitySessionClaimsProvider<TProfile>>());
         services.TryAddScoped<IIdentityUserService<TProfile>, IdentityUserService<TProfile>>();
+        services.TryAddScoped<
+            IIdentityUserQueryService<TProfile>,
+            IdentityUserQueryService<TProfile>>();
+        services.TryAddScoped<
+            IExternalLoginService<TProfile>,
+            ExternalLoginService<TProfile>>();
+        services.TryAddScoped<
+            IIdentityRegistrationService<TProfile>,
+            IdentityRegistrationService<TProfile>>();
         services.TryAddScoped<
             ISecurityStampService<TProfile>,
             SecurityStampService<TProfile>>();

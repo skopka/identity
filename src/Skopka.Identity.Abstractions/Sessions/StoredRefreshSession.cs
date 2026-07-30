@@ -12,4 +12,5 @@ public sealed record StoredRefreshSession(
     DateTimeOffset ModifiedAt,
     DateTimeOffset? RotatedAt,
     DateTimeOffset? RevokedAt,
-    Guid? ReplacedByTokenId);
+    Guid? ReplacedByTokenId,
+    IdentitySessionMetadata? Metadata = null);

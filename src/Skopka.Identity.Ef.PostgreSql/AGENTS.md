@@ -21,6 +21,8 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
 - Register `IRateLimitBucketStore<TProfile>` through `UsePostgreSql`.
 - Register `IIdentityRefreshSessionStore<TProfile>` through `UsePostgreSql`.
 - Register role and user-role stores through `UsePostgreSql`.
+- Register external-login, aggregate-registration and user-query stores through
+  `UsePostgreSql`.
 
 ## Boundaries
 
@@ -62,3 +64,5 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
   indexes, digest-only token storage and an optimistic concurrency version.
 - Role migrations create `identity_roles` and `identity_user_roles`, with a unique
   normalized role-name index and stable key/foreign-key names used by exception mapping.
+- External-login constraints use stable lowercase names for exception mapping. Session
+  metadata columns are bounded nullable display labels.

@@ -28,6 +28,12 @@ internal sealed class RefreshSessionConfiguration
             .HasColumnName("security_stamp")
             .HasMaxLength(SessionLimits.SecurityStampLength)
             .IsRequired();
+        builder.Property(session => session.ClientName)
+            .HasColumnName("client_name")
+            .HasMaxLength(SessionLimits.MaximumClientNameLength);
+        builder.Property(session => session.DeviceName)
+            .HasColumnName("device_name")
+            .HasMaxLength(SessionLimits.MaximumDeviceNameLength);
         builder.Property(session => session.Version)
             .HasColumnName("version")
             .IsConcurrencyToken();

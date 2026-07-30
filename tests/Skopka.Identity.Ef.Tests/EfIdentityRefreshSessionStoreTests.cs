@@ -132,6 +132,62 @@ public sealed class EfIdentityRefreshSessionStoreTests
         Assert.Equal(2, await database.Context.RefreshSessions.CountAsync());
     }
 
+    [Fact]
+    public async Task ListReturnsMetadataAndSessionStartAfterRotation()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var current = await database.FindAsync(database.Initial.TokenId);
+        var replacement = database.NewSession(
+            Guid.NewGuid(),
+            current.SessionId,
+            current.ExpiresAt,
+            "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
+        var refreshedAt = database.Now.AddMinutes(1);
+        var rotated = await database.Store.RotateAsync(
+            current.TokenId,
+            current.Version,
+            current.TokenHash,
+            replacement,
+            refreshedAt,
+            CancellationToken.None);
+        Assert.True(rotated.IsSuccess);
+
+        var sessions = await database.Store.ListActiveAsync(
+            current.UserId,
+            database.Now,
+            CancellationToken.None);
+
+        var listed = Assert.Single(sessions);
+        Assert.Equal(current.SessionId, listed.SessionId);
+        Assert.Equal(database.Now, listed.CreatedAt);
+        Assert.Equal(refreshedAt, listed.LastRefreshedAt);
+        Assert.Equal(database.Initial.Metadata, listed.Metadata);
+    }
+
+    [Fact]
+    public async Task RevokeUserSessionDoesNotRevokeAnotherUsersSession()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+
+        var wrongUserCount = await database.Store.RevokeUserSessionAsync(
+            Guid.NewGuid(),
+            database.Initial.SessionId,
+            database.Now,
+            CancellationToken.None);
+        Assert.Equal(0, wrongUserCount);
+        Assert.Null(
+            (await database.FindAsync(database.Initial.TokenId)).RevokedAt);
+
+        var revokedCount = await database.Store.RevokeUserSessionAsync(
+            database.Initial.UserId,
+            database.Initial.SessionId,
+            database.Now,
+            CancellationToken.None);
+        Assert.Equal(1, revokedCount);
+        Assert.NotNull(
+            (await database.FindAsync(database.Initial.TokenId)).RevokedAt);
+    }
+
     private static void AssertError(
         Skopka.Abstraction.OperationResult.OperationResult result,
         string code)
@@ -170,7 +226,8 @@ public sealed class EfIdentityRefreshSessionStoreTests
                 Guid.NewGuid(),
                 "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                 "CURRENT-STAMP",
-                now.Add(databaseNowOffset ?? TimeSpan.FromDays(10)));
+                now.Add(databaseNowOffset ?? TimeSpan.FromDays(10)),
+                new IdentitySessionMetadata("web", "test-device"));
             await store.CreateAsync(initial, now, CancellationToken.None);
             return new TestDatabase(context, store, initial, now);
         }
@@ -186,7 +243,8 @@ public sealed class EfIdentityRefreshSessionStoreTests
                 Initial.UserId,
                 tokenHash,
                 Initial.SecurityStamp,
-                expiresAt);
+                expiresAt,
+                Initial.Metadata);
 
         public async Task<StoredRefreshSession> FindAsync(Guid tokenId)
             => Assert.IsType<StoredRefreshSession>(

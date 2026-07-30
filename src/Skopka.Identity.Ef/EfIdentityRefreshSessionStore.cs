@@ -143,6 +143,18 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
             now,
             ct);
 
+    public async Task<int> RevokeUserSessionAsync(
+        Guid userId,
+        Guid sessionId,
+        DateTimeOffset now,
+        CancellationToken ct)
+        => await RevokeAsync(
+            dbContext.RefreshSessions.Where(
+                session => session.UserId == userId
+                    && session.SessionId == sessionId),
+            now,
+            ct);
+
     public async Task<int> RevokeAllAsync(
         Guid userId,
         DateTimeOffset now,
@@ -152,6 +164,31 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
                 session => session.UserId == userId),
             now,
             ct);
+
+    public async Task<IReadOnlyList<IdentitySessionInfo>> ListActiveAsync(
+        Guid userId,
+        DateTimeOffset now,
+        CancellationToken ct)
+        => await dbContext.RefreshSessions
+            .AsNoTracking()
+            .Where(session =>
+                session.UserId == userId
+                && session.RotatedAt == null
+                && session.RevokedAt == null
+                && session.ExpiresAt > now)
+            .OrderByDescending(session => session.ModifiedAt)
+            .Select(session => new IdentitySessionInfo(
+                session.SessionId,
+                session.UserId,
+                new IdentitySessionMetadata(
+                    session.ClientName,
+                    session.DeviceName),
+                session.ExpiresAt,
+                dbContext.RefreshSessions
+                    .Where(item => item.SessionId == session.SessionId)
+                    .Min(item => item.CreatedAt),
+                session.CreatedAt))
+            .ToListAsync(ct);
 
     public async Task<int> PruneAsync(
         DateTimeOffset expiredBefore,
@@ -247,6 +284,12 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
             UserId = session.UserId,
             TokenHash = session.TokenHash,
             SecurityStamp = session.SecurityStamp,
+            ClientName = session.Metadata == null
+                ? null
+                : session.Metadata.ClientName,
+            DeviceName = session.Metadata == null
+                ? null
+                : session.Metadata.DeviceName,
             Version = 1,
             ExpiresAt = session.ExpiresAt,
             CreatedAt = now,
@@ -267,7 +310,10 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
             session.ModifiedAt,
             session.RotatedAt,
             session.RevokedAt,
-            session.ReplacedByTokenId);
+            session.ReplacedByTokenId,
+            new IdentitySessionMetadata(
+                session.ClientName,
+                session.DeviceName));
 
     private static void ValidateReplacement(
         RefreshSessionEntity current,
@@ -280,6 +326,14 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
             || !string.Equals(
                 replacement.SecurityStamp,
                 current.SecurityStamp,
+                StringComparison.Ordinal)
+            || !string.Equals(
+                replacement.Metadata?.ClientName,
+                current.ClientName,
+                StringComparison.Ordinal)
+            || !string.Equals(
+                replacement.Metadata?.DeviceName,
+                current.DeviceName,
                 StringComparison.Ordinal))
         {
             throw new ArgumentException(
