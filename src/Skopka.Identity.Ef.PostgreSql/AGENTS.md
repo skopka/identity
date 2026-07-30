@@ -59,7 +59,8 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
 - Verification migrations create `verification_challenges` with a foreign key to
   `auth_users`, a user/state lookup index and a concurrency-token version column.
 - Rate-limit migrations create `identity_rate_limit_buckets` with a composite
-  `(scope, key_hash)` primary key.
+  `(scope, partition_version, key_hash)` primary key and backfill pre-rotation rows with
+  the `legacy` version.
 - Session migrations create `identity_refresh_sessions` with token/session/user lookup
   indexes, digest-only token storage and an optimistic concurrency version.
 - Role migrations create `identity_roles` and `identity_user_roles`, with a unique

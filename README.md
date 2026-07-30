@@ -269,14 +269,27 @@ All optional modules compose through `IdentityBuilder<TProfile>`:
 identity
     .UseDataProtectionActionTokens()
     .UseHmacOneTimeCodes("otp-2026-01", otpHmacKey)
-    .UseHmacRateLimiting(rateLimitPartitionKey)
+    .UseHmacRateLimiting(
+        currentVersion: "rate-limit-2026-07",
+        new Dictionary<string, byte[]>
+        {
+            ["rate-limit-2026-07"] = currentRateLimitKey,
+            ["rate-limit-2026-01"] = previousRateLimitKey,
+        })
     .AddRoles()
     .AddStepUpAuthorization<ApplicationStepUpPolicyProvider>();
 ```
 
 Use separate random keys for password peppering, JWT signing, OTP verification and
 rate-limit partition hashing. Persist and share the ASP.NET Core Data Protection key
-ring in multi-instance deployments.
+ring in multi-instance deployments. A custom non-HMAC partition strategy can be
+registered with `UseRateLimiting(customPartitionHasher)`.
+
+During rate-limit key rotation, every replica must temporarily expose the same old and
+new versions while selecting the new version as current. The limiter checks and writes
+all configured versions so old and new replicas share active counters. Remove the old
+key only after no old-only replica remains and the longest active rate-limit window has
+elapsed.
 
 ## Design and Operations
 

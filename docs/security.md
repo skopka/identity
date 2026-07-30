@@ -29,13 +29,14 @@ Use independent random keys for each purpose:
 | Password pepper | At least 32 bytes, secret manager or HSM-backed provider |
 | JWT signing key | At least 32 bytes, shared by issuers and validators |
 | OTP HMAC key | At least 32 bytes, retained through challenge expiry |
-| Rate-limit partition key | At least 32 bytes, shared by all database writers |
+| Rate-limit HMAC partition key | At least 32 bytes per version, shared by database writers during overlap |
 | Data Protection key ring | Persisted and protected outside the application database |
 
 Never reuse one key for multiple rows in this table.
 
-Pepper and OTP providers support key ids so historical keys can remain available during
-rotation. Remove an old key only after no valid verifier or challenge can reference it.
+Pepper, OTP and rate-limit HMAC providers support key ids so historical keys can remain
+available during rotation. Remove an old pepper or OTP key only after no valid verifier
+or challenge can reference it.
 
 Rotating a JWT signing key invalidates every access token signed only by the old key.
 Plan overlap or coordinated rollout at the application layer if uninterrupted
@@ -121,6 +122,25 @@ before storage but does not make low-entropy values safe to expose.
 
 Client partitions count every request. Account partitions count credential failures and
 reset only after a correct password.
+
+The persisted rate-limit bucket key is `(scope, partition_version, key_hash)`.
+`partition_version` describes the configured partition derivation and is not specific
+to HMAC, so custom `IRateLimitPartitionHasher` implementations must also expose stable
+versions. Raw account and client identifiers remain outside persistence.
+
+Rotate an HMAC partition key as follows:
+
+1. Configure the new and previous `(version, key)` pairs on every new replica and make
+   the new version current.
+2. Keep at least one previous version shared with every old-only replica. Successful
+   hits are written to all configured versions, preserving one effective counter across
+   the rolling deployment.
+3. Remove old-only replicas, wait at least the longest configured active rate-limit
+   window, and only then remove the previous key.
+
+A deployment with no overlapping version cannot preserve active counters. Do not rename
+or reuse a version for different key material. Existing pre-rotation rows are migrated
+as version `legacy`; the original single-key overload continues to use that version.
 
 ## Protected Users
 

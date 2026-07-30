@@ -78,7 +78,13 @@ public sealed class PostgreSqlIdentityModelTests
                 .FindProperty(nameof(RateLimitBucketEntity.KeyHash))!
                 .GetMaxLength());
         Assert.Equal(
-            2,
+            RateLimitLimits.MaximumPartitionVersionLength,
+            rateLimitType
+                .FindProperty(nameof(
+                    RateLimitBucketEntity.PartitionVersion))!
+                .GetMaxLength());
+        Assert.Equal(
+            3,
             rateLimitType.FindPrimaryKey()!.Properties.Count);
 
         var refreshSessionType = context.Model.FindEntityType(

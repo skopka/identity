@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Skopka.Identity.Errors;
 using Skopka.Identity.ExternalLogins;
+using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Registration;
 using Skopka.Identity.Sessions;
 using Skopka.Identity.Users;
@@ -70,6 +71,7 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
             0,
             0,
             TimeSpan.Zero);
+        await AssertRateLimitRotationAsync(now);
         var created = await CreateUserAsync(
             "alice",
             "alice@example.com",
@@ -217,6 +219,67 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
         Assert.NotEmpty(expected);
         Assert.Equal(expected, applied);
         Assert.False(context.Database.HasPendingModelChanges());
+    }
+
+    private async Task AssertRateLimitRotationAsync(
+        DateTimeOffset now)
+    {
+        await using var scope = serviceProvider.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        var store = services.GetRequiredService<
+            IRateLimitBucketStore<TestProfile>>();
+        var context = services.GetRequiredService<
+            PostgreSqlIdentityDbContext<TestProfile>>();
+        var previous = new RateLimitPartition(
+            RateLimitLimits.LegacyPartitionVersion,
+            new string('A', RateLimitLimits.KeyHashLength));
+        var current = new RateLimitPartition(
+            "rate-limit-2026-07",
+            new string('B', RateLimitLimits.KeyHashLength));
+
+        Assert.True(
+            (await store.HitAsync(
+                "integration.rotation",
+                [previous],
+                permitLimit: 2,
+                TimeSpan.FromMinutes(1),
+                minimumInterval: null,
+                now,
+                CancellationToken.None)).IsAllowed);
+        Assert.True(
+            (await store.HitAsync(
+                "integration.rotation",
+                [current, previous],
+                permitLimit: 2,
+                TimeSpan.FromMinutes(1),
+                minimumInterval: null,
+                now.AddSeconds(1),
+                CancellationToken.None)).IsAllowed);
+        Assert.False(
+            (await store.HitAsync(
+                "integration.rotation",
+                [previous],
+                permitLimit: 2,
+                TimeSpan.FromMinutes(1),
+                minimumInterval: null,
+                now.AddSeconds(2),
+                CancellationToken.None)).IsAllowed);
+
+        var buckets = await context.RateLimitBuckets
+            .Where(bucket =>
+                bucket.Scope == "integration.rotation")
+            .OrderBy(bucket => bucket.PartitionVersion)
+            .ToListAsync();
+        Assert.Equal(2, buckets.Count);
+        Assert.All(
+            buckets,
+            bucket => Assert.Equal(2, bucket.HitCount));
+        Assert.Equal(
+            [
+                RateLimitLimits.LegacyPartitionVersion,
+                "rate-limit-2026-07",
+            ],
+            buckets.Select(bucket => bucket.PartitionVersion));
     }
 
     private static NewIdentityUser<TestProfile> NewUser(

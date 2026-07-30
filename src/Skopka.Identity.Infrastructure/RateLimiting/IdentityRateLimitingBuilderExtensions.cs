@@ -12,19 +12,88 @@ public static class IdentityRateLimitingBuilderExtensions
         Action<IdentityRateLimitOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(partitionKey);
+        var hasher = new HmacRateLimitPartitionHasher(
+            partitionKey);
+        try
+        {
+            return ConfigureRateLimiting(
+                builder,
+                hasher,
+                disposeWithProvider: true,
+                configure);
+        }
+        catch
+        {
+            hasher.Dispose();
+            throw;
+        }
+    }
 
+    public static IdentityBuilder<TProfile> UseHmacRateLimiting<TProfile>(
+        this IdentityBuilder<TProfile> builder,
+        string currentVersion,
+        IReadOnlyDictionary<string, byte[]> partitionKeys,
+        Action<IdentityRateLimitOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        var hasher = new HmacRateLimitPartitionHasher(
+            currentVersion,
+            partitionKeys);
+        try
+        {
+            return ConfigureRateLimiting(
+                builder,
+                hasher,
+                disposeWithProvider: true,
+                configure);
+        }
+        catch
+        {
+            hasher.Dispose();
+            throw;
+        }
+    }
+
+    public static IdentityBuilder<TProfile> UseRateLimiting<TProfile>(
+        this IdentityBuilder<TProfile> builder,
+        IRateLimitPartitionHasher partitionHasher,
+        Action<IdentityRateLimitOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(partitionHasher);
+
+        return ConfigureRateLimiting(
+            builder,
+            partitionHasher,
+            disposeWithProvider: false,
+            configure);
+    }
+
+    private static IdentityBuilder<TProfile>
+        ConfigureRateLimiting<TProfile>(
+            IdentityBuilder<TProfile> builder,
+            IRateLimitPartitionHasher partitionHasher,
+            bool disposeWithProvider,
+            Action<IdentityRateLimitOptions>? configure)
+    {
         var options = new IdentityRateLimitOptions();
         configure?.Invoke(options);
         ValidateOptions(options);
-
-        var hasher = new HmacRateLimitPartitionHasher(partitionKey);
 
         builder.Services.RemoveAll<IdentityRateLimitOptions>();
         builder.Services.RemoveAll<IRateLimitPartitionHasher>();
         builder.Services.RemoveAll<IIdentityRateLimiter<TProfile>>();
         builder.Services.AddSingleton(options);
-        builder.Services.AddSingleton<IRateLimitPartitionHasher>(hasher);
+        if (disposeWithProvider)
+        {
+            builder.Services.AddSingleton<
+                IRateLimitPartitionHasher>(_ => partitionHasher);
+        }
+        else
+        {
+            builder.Services.AddSingleton(partitionHasher);
+        }
+
         builder.Services.AddScoped<
             IIdentityRateLimiter<TProfile>,
             IdentityRateLimiter<TProfile>>();

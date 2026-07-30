@@ -4,7 +4,7 @@ public interface IRateLimitBucketStore<TProfile>
 {
     Task<RateLimitDecision> CheckAsync(
         string scope,
-        string keyHash,
+        IReadOnlyList<RateLimitPartition> partitions,
         int permitLimit,
         TimeSpan window,
         DateTimeOffset now,
@@ -12,7 +12,7 @@ public interface IRateLimitBucketStore<TProfile>
 
     Task<RateLimitDecision> HitAsync(
         string scope,
-        string keyHash,
+        IReadOnlyList<RateLimitPartition> partitions,
         int permitLimit,
         TimeSpan window,
         TimeSpan? minimumInterval,
@@ -21,7 +21,7 @@ public interface IRateLimitBucketStore<TProfile>
 
     Task ResetAsync(
         string scope,
-        string keyHash,
+        IReadOnlyList<RateLimitPartition> partitions,
         CancellationToken ct);
 
     Task<int> PruneAsync(

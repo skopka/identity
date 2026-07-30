@@ -3,6 +3,7 @@ namespace Skopka.Identity.Ef.Entities;
 public sealed class RateLimitBucketEntity
 {
     public string Scope { get; set; } = null!;
+    public string PartitionVersion { get; set; } = null!;
     public string KeyHash { get; set; } = null!;
     public DateTimeOffset WindowStartedAt { get; set; }
     public int HitCount { get; set; }

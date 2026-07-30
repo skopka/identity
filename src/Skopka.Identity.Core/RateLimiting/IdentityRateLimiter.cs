@@ -1,11 +1,28 @@
 namespace Skopka.Identity.RateLimiting;
 
-public sealed class IdentityRateLimiter<TProfile>(
-    IRateLimitBucketStore<TProfile> store,
-    IRateLimitPartitionHasher partitionHasher,
-    IdentityRateLimitOptions options)
+public sealed class IdentityRateLimiter<TProfile>
     : IIdentityRateLimiter<TProfile>
 {
+    private readonly IRateLimitBucketStore<TProfile> store;
+    private readonly IRateLimitPartitionHasher partitionHasher;
+    private readonly IdentityRateLimitOptions options;
+    private readonly string[] partitionVersions;
+
+    public IdentityRateLimiter(
+        IRateLimitBucketStore<TProfile> store,
+        IRateLimitPartitionHasher partitionHasher,
+        IdentityRateLimitOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(partitionHasher);
+        ArgumentNullException.ThrowIfNull(options);
+
+        this.store = store;
+        this.partitionHasher = partitionHasher;
+        this.options = options;
+        partitionVersions = ValidateAndOrderVersions(partitionHasher);
+    }
+
     public Task<RateLimitDecision> CheckAsync(
         RateLimitRequest request,
         CancellationToken ct)
@@ -13,7 +30,7 @@ public sealed class IdentityRateLimiter<TProfile>(
         Validate(request);
         return store.CheckAsync(
             request.Scope,
-            partitionHasher.Hash(request.Scope, request.Key),
+            CreatePartitions(request.Scope, request.Key),
             request.PermitLimit,
             request.Window,
             DateTimeOffset.UtcNow,
@@ -27,7 +44,7 @@ public sealed class IdentityRateLimiter<TProfile>(
         Validate(request);
         return store.HitAsync(
             request.Scope,
-            partitionHasher.Hash(request.Scope, request.Key),
+            CreatePartitions(request.Scope, request.Key),
             request.PermitLimit,
             request.Window,
             request.MinimumInterval,
@@ -43,7 +60,7 @@ public sealed class IdentityRateLimiter<TProfile>(
         ValidatePartition(scope, key);
         return store.ResetAsync(
             scope,
-            partitionHasher.Hash(scope, key),
+            CreatePartitions(scope, key),
             ct);
     }
 
@@ -109,4 +126,96 @@ public sealed class IdentityRateLimiter<TProfile>(
                 nameof(key));
         }
     }
+
+    private IReadOnlyList<RateLimitPartition> CreatePartitions(
+        string scope,
+        string key)
+    {
+        var partitions = new RateLimitPartition[
+            partitionVersions.Length];
+        for (var index = 0; index < partitionVersions.Length; index++)
+        {
+            var version = partitionVersions[index];
+            var keyHash = partitionHasher.Hash(
+                version,
+                scope,
+                key);
+            if (string.IsNullOrWhiteSpace(keyHash)
+                || keyHash.Length > RateLimitLimits.KeyHashLength)
+            {
+                throw new InvalidOperationException(
+                    "The rate-limit partition hasher returned an invalid key hash.");
+            }
+
+            partitions[index] = new RateLimitPartition(
+                version,
+                keyHash);
+        }
+
+        return partitions;
+    }
+
+    private static string[] ValidateAndOrderVersions(
+        IRateLimitPartitionHasher partitionHasher)
+    {
+        var currentVersion = partitionHasher.CurrentVersion;
+        ValidateVersion(currentVersion);
+
+        var versions = partitionHasher.Versions
+            ?? throw new InvalidOperationException(
+                "The rate-limit partition hasher returned no versions.");
+        if (versions.Count is < 1
+            or > RateLimitLimits.MaximumPartitionVersions)
+        {
+            throw new InvalidOperationException(
+                $"The rate-limit partition hasher must expose between 1 and {RateLimitLimits.MaximumPartitionVersions} versions.");
+        }
+
+        var distinct = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var version in versions)
+        {
+            ValidateVersion(version);
+            if (!distinct.Add(version))
+            {
+                throw new InvalidOperationException(
+                    "The rate-limit partition hasher exposed duplicate versions.");
+            }
+        }
+
+        if (!distinct.Contains(currentVersion))
+        {
+            throw new InvalidOperationException(
+                "The current rate-limit partition version is not exposed by the hasher.");
+        }
+
+        return
+        [
+            currentVersion,
+            .. distinct
+                .Where(version => !string.Equals(
+                    version,
+                    currentVersion,
+                    StringComparison.Ordinal))
+                .Order(StringComparer.Ordinal),
+        ];
+    }
+
+    private static void ValidateVersion(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version)
+            || version.Length
+                > RateLimitLimits.MaximumPartitionVersionLength
+            || version.Any(character =>
+                !IsAsciiLetterOrDigit(character)
+                && character is not '.' and not '_' and not '-'))
+        {
+            throw new InvalidOperationException(
+                "Rate-limit partition versions must contain only ASCII letters, digits, '.', '_' or '-'.");
+        }
+    }
+
+    private static bool IsAsciiLetterOrDigit(char value)
+        => value is >= 'a' and <= 'z'
+            or >= 'A' and <= 'Z'
+            or >= '0' and <= '9';
 }

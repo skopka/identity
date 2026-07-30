@@ -67,8 +67,9 @@ identity stores when it is added.
 - `verification_challenges.version` is a concurrency token. Record-attempt and
   proof-consumption transitions must recheck state, expiry, binding, proof digest and
   expected version before saving.
-- `identity_rate_limit_buckets` uses `(scope, key_hash)` as its key. Hit/reset operations
-  retry insert/update/delete races and never persist raw account or client identifiers.
+- `identity_rate_limit_buckets` uses `(scope, partition_version, key_hash)` as its key.
+  Hit/reset operations apply every configured partition version, retry
+  insert/update/delete races and never persist raw account or client identifiers.
 - Pruning deletes only buckets older than the supplied cutoff and respects the requested
   batch size.
 - `identity_refresh_sessions` stores only refresh-token digests. Rotation atomically

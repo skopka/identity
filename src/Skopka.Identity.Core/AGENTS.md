@@ -26,8 +26,9 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
 - Implement optional `IIdentityStepUpService<TProfile>` orchestration over Verification:
   resolve current policy, enforce method/intent/age and consume proof before returning
   an authorization decision.
-- Implement `IIdentityRateLimiter<TProfile>` hashing/orchestration and apply configured
-  policies in password authentication and Verification Begin.
+- Implement `IIdentityRateLimiter<TProfile>` versioned partition orchestration and apply
+  configured policies in password authentication and Verification Begin. Pass current
+  and historical partitions to the store during rotation.
 - Implement `IIdentitySessionService<TProfile>` issuance, refresh rotation, online
   access validation, revoke and bounded pruning.
 - Provide default projection for user name/email/phone session claims and aggregate

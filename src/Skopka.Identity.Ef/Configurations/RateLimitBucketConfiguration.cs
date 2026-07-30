@@ -15,12 +15,17 @@ internal sealed class RateLimitBucketConfiguration
         builder.HasKey(bucket => new
         {
             bucket.Scope,
+            bucket.PartitionVersion,
             bucket.KeyHash,
         });
 
         builder.Property(bucket => bucket.Scope)
             .HasColumnName("scope")
             .HasMaxLength(RateLimitLimits.MaximumScopeLength);
+        builder.Property(bucket => bucket.PartitionVersion)
+            .HasColumnName("partition_version")
+            .HasMaxLength(
+                RateLimitLimits.MaximumPartitionVersionLength);
         builder.Property(bucket => bucket.KeyHash)
             .HasColumnName("key_hash")
             .HasMaxLength(RateLimitLimits.KeyHashLength);

@@ -150,11 +150,16 @@ public sealed class PostgreSqlIdentityRegistrationTests
             name => name.EndsWith(
                 "_AddExternalLoginLifecycleAndSessionMetadata",
                 StringComparison.Ordinal));
+        var rateLimitRotationMigration = Assert.Single(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith(
+                "_AddRateLimitPartitionVersions",
+                StringComparison.Ordinal));
         Assert.False(providerContext.Database.HasPendingModelChanges());
 
         var script = providerContext.GetService<IMigrator>().GenerateScript(
             fromMigration: null,
-            toMigration: externalLoginMigration);
+            toMigration: rateLimitRotationMigration);
 
         Assert.Contains("CREATE TABLE auth_users", script, StringComparison.Ordinal);
         Assert.Contains("CREATE TABLE user_profiles", script, StringComparison.Ordinal);
@@ -168,6 +173,14 @@ public sealed class PostgreSqlIdentityRegistrationTests
             StringComparison.Ordinal);
         Assert.Contains(
             "CREATE TABLE identity_rate_limit_buckets",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "partition_version",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "DEFAULT 'legacy'",
             script,
             StringComparison.Ordinal);
         Assert.Contains(

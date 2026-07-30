@@ -6,7 +6,8 @@ Read `../../AGENTS.md`, `../../src/Skopka.Identity.Ef/AGENTS.md` and
 Keep migration discovery, generated SQL and pending-model tests current when the
 verification challenge schema changes.
 
-Keep the same migration checks current for `identity_rate_limit_buckets`.
+Keep migration checks and a real PostgreSQL dual-write rotation scenario current for
+`identity_rate_limit_buckets`.
 
 Keep refresh-session entity metadata, store registration and latest migration SQL
 covered.

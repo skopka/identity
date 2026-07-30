@@ -44,7 +44,8 @@ small value objects.
 - A successful `StepUpDecision` does not grant domain permission by itself. The
   application remains responsible for its normal role/policy authorization.
 - Define transport-neutral rate-limit requests, decisions, options, bucket stores and
-  partition-hasher contracts. Do not reference ASP.NET rate-limiter or HTTP types.
+  versioned partition-hasher contracts. Version metadata is derivation-agnostic and
+  must not depend on HMAC. Do not reference ASP.NET rate-limiter or HTTP types.
 - Define transport-neutral session contracts under `Sessions`: access/refresh providers,
   session commands, issued token pairs, refresh persistence models and store ports.
 - Define bounded session-claim values and

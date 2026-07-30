@@ -12,87 +12,122 @@ public sealed class EfRateLimitBucketStore<TProfile>(
 
     public async Task<RateLimitDecision> CheckAsync(
         string scope,
-        string keyHash,
+        IReadOnlyList<RateLimitPartition> partitions,
         int permitLimit,
         TimeSpan window,
         DateTimeOffset now,
         CancellationToken ct)
     {
-        var bucket = await dbContext.RateLimitBuckets
+        ValidatePartitions(partitions);
+        var buckets = await Query(scope, partitions)
             .AsNoTracking()
-            .SingleOrDefaultAsync(
-                entity => entity.Scope == scope
-                    && entity.KeyHash == keyHash,
-                ct);
-
-        if (bucket is null || IsWindowExpired(bucket, window, now))
+            .ToListAsync(ct);
+        var denied = FilterExact(buckets, partitions)
+            .Where(bucket => !IsWindowExpired(
+                bucket,
+                window,
+                now))
+            .Where(bucket => bucket.HitCount >= permitLimit)
+            .Select(bucket => bucket.WindowStartedAt.Add(window))
+            .DefaultIfEmpty()
+            .Max();
+        if (denied == default)
         {
             return Allowed();
         }
 
-        return bucket.HitCount >= permitLimit
-            ? Denied(bucket.WindowStartedAt.Add(window))
-            : Allowed();
+        return Denied(denied);
     }
 
     public async Task<RateLimitDecision> HitAsync(
         string scope,
-        string keyHash,
+        IReadOnlyList<RateLimitPartition> partitions,
         int permitLimit,
         TimeSpan window,
         TimeSpan? minimumInterval,
         DateTimeOffset now,
         CancellationToken ct)
     {
+        ValidatePartitions(partitions);
         for (var attempt = 0; attempt < MaximumConcurrencyRetries; attempt++)
         {
-            var bucket = await dbContext.RateLimitBuckets
-                .SingleOrDefaultAsync(
-                    entity => entity.Scope == scope
-                        && entity.KeyHash == keyHash,
-                    ct);
+            var loaded = await Query(scope, partitions)
+                .ToListAsync(ct);
+            var buckets = FilterExact(
+                    loaded,
+                    partitions)
+                .ToList();
+            var active = buckets
+                .Where(bucket => !IsWindowExpired(
+                    bucket,
+                    window,
+                    now))
+                .ToList();
 
-            if (bucket is null)
+            var limitRetryAfter = active
+                .Where(bucket => bucket.HitCount >= permitLimit)
+                .Select(bucket =>
+                    bucket.WindowStartedAt.Add(window))
+                .DefaultIfEmpty()
+                .Max();
+            if (limitRetryAfter != default)
             {
-                bucket = new RateLimitBucketEntity
-                {
-                    Scope = scope,
-                    KeyHash = keyHash,
-                    WindowStartedAt = now,
-                    HitCount = 1,
-                    LastHitAt = now,
-                    Version = 1,
-                    ModifiedAt = now,
-                };
-                dbContext.RateLimitBuckets.Add(bucket);
+                Detach(loaded);
+                return Denied(limitRetryAfter);
             }
-            else
+
+            if (minimumInterval is not null
+                && active.Count > 0)
             {
-                var windowExpired = IsWindowExpired(bucket, window, now);
-                var currentHitCount = windowExpired ? 0 : bucket.HitCount;
-                var windowStartedAt = windowExpired
-                    ? now
-                    : bucket.WindowStartedAt;
-
-                if (currentHitCount >= permitLimit)
+                var cooldownRetryAfter = active.Max(
+                    bucket => bucket.LastHitAt.Add(
+                        minimumInterval.Value));
+                if (cooldownRetryAfter > now)
                 {
-                    return Denied(windowStartedAt.Add(window));
+                    Detach(loaded);
+                    return Denied(cooldownRetryAfter);
                 }
+            }
 
-                if (minimumInterval is not null)
+            var windowStartedAt = active.Count == 0
+                ? now
+                : active.Max(bucket => bucket.WindowStartedAt);
+            var nextHitCount = checked(
+                (active.Count == 0
+                    ? 0
+                    : active.Max(bucket => bucket.HitCount))
+                + 1);
+            var byPartition = buckets.ToDictionary(
+                bucket => (
+                    bucket.PartitionVersion,
+                    bucket.KeyHash));
+            var added = false;
+
+            foreach (var partition in partitions)
+            {
+                if (!byPartition.TryGetValue(
+                        (partition.Version, partition.KeyHash),
+                        out var bucket))
                 {
-                    var nextAllowedAt = bucket.LastHitAt.Add(
-                        minimumInterval.Value);
-                    if (nextAllowedAt > now)
+                    bucket = new RateLimitBucketEntity
                     {
-                        return Denied(nextAllowedAt);
-                    }
+                        Scope = scope,
+                        PartitionVersion = partition.Version,
+                        KeyHash = partition.KeyHash,
+                        Version = 1,
+                    };
+                    dbContext.RateLimitBuckets.Add(bucket);
+                    buckets.Add(bucket);
+                    added = true;
+                }
+                else
+                {
+                    bucket.Version = checked(bucket.Version + 1);
                 }
 
                 bucket.WindowStartedAt = windowStartedAt;
-                bucket.HitCount = checked(currentHitCount + 1);
+                bucket.HitCount = nextHitCount;
                 bucket.LastHitAt = now;
-                bucket.Version = checked(bucket.Version + 1);
                 bucket.ModifiedAt = now;
             }
 
@@ -104,13 +139,15 @@ public sealed class EfRateLimitBucketStore<TProfile>(
             catch (DbUpdateConcurrencyException) when (
                 attempt + 1 < MaximumConcurrencyRetries)
             {
-                Detach(bucket);
+                Detach(loaded);
+                Detach(buckets);
             }
             catch (DbUpdateException) when (
-                bucket.Version == 1
+                added
                 && attempt + 1 < MaximumConcurrencyRetries)
             {
-                Detach(bucket);
+                Detach(loaded);
+                Detach(buckets);
             }
         }
 
@@ -120,22 +157,25 @@ public sealed class EfRateLimitBucketStore<TProfile>(
 
     public async Task ResetAsync(
         string scope,
-        string keyHash,
+        IReadOnlyList<RateLimitPartition> partitions,
         CancellationToken ct)
     {
+        ValidatePartitions(partitions);
         for (var attempt = 0; attempt < MaximumConcurrencyRetries; attempt++)
         {
-            var bucket = await dbContext.RateLimitBuckets
-                .SingleOrDefaultAsync(
-                    entity => entity.Scope == scope
-                        && entity.KeyHash == keyHash,
-                    ct);
-            if (bucket is null)
+            var loaded = await Query(scope, partitions)
+                .ToListAsync(ct);
+            var buckets = FilterExact(
+                    loaded,
+                    partitions)
+                .ToList();
+            if (buckets.Count == 0)
             {
+                Detach(loaded);
                 return;
             }
 
-            dbContext.RateLimitBuckets.Remove(bucket);
+            dbContext.RateLimitBuckets.RemoveRange(buckets);
 
             try
             {
@@ -145,7 +185,7 @@ public sealed class EfRateLimitBucketStore<TProfile>(
             catch (DbUpdateConcurrencyException) when (
                 attempt + 1 < MaximumConcurrencyRetries)
             {
-                Detach(bucket);
+                Detach(loaded);
             }
         }
 
@@ -187,7 +227,8 @@ public sealed class EfRateLimitBucketStore<TProfile>(
             {
                 foreach (var bucket in buckets)
                 {
-                    Detach(bucket);
+                    dbContext.Entry(bucket).State =
+                        EntityState.Detached;
                 }
             }
         }
@@ -207,6 +248,96 @@ public sealed class EfRateLimitBucketStore<TProfile>(
     private static RateLimitDecision Denied(DateTimeOffset retryAfter)
         => new(false, retryAfter);
 
-    private void Detach(object entity)
-        => dbContext.Entry(entity).State = EntityState.Detached;
+    private IQueryable<RateLimitBucketEntity> Query(
+        string scope,
+        IReadOnlyList<RateLimitPartition> partitions)
+    {
+        var versions = partitions
+            .Select(partition => partition.Version)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var hashes = partitions
+            .Select(partition => partition.KeyHash)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return dbContext.RateLimitBuckets.Where(
+            bucket => bucket.Scope == scope
+                && versions.Contains(bucket.PartitionVersion)
+                && hashes.Contains(bucket.KeyHash));
+    }
+
+    private static IEnumerable<RateLimitBucketEntity> FilterExact(
+        IEnumerable<RateLimitBucketEntity> buckets,
+        IReadOnlyList<RateLimitPartition> partitions)
+    {
+        var keys = partitions
+            .Select(partition => (
+                partition.Version,
+                partition.KeyHash))
+            .ToHashSet();
+        return buckets.Where(bucket => keys.Contains(
+            (bucket.PartitionVersion, bucket.KeyHash)));
+    }
+
+    private static void ValidatePartitions(
+        IReadOnlyList<RateLimitPartition> partitions)
+    {
+        ArgumentNullException.ThrowIfNull(partitions);
+        if (partitions.Count == 0)
+        {
+            throw new ArgumentException(
+                "At least one rate-limit partition is required.",
+                nameof(partitions));
+        }
+
+        if (partitions.Count
+            > RateLimitLimits.MaximumPartitionVersions)
+        {
+            throw new ArgumentException(
+                $"At most {RateLimitLimits.MaximumPartitionVersions} rate-limit partitions are supported.",
+                nameof(partitions));
+        }
+
+        var unique = new HashSet<(string Version, string KeyHash)>();
+        foreach (var partition in partitions)
+        {
+            ArgumentNullException.ThrowIfNull(partition);
+            if (string.IsNullOrWhiteSpace(partition.Version)
+                || partition.Version.Length
+                    > RateLimitLimits.MaximumPartitionVersionLength)
+            {
+                throw new ArgumentException(
+                    "A rate-limit partition has an invalid version.",
+                    nameof(partitions));
+            }
+
+            if (string.IsNullOrWhiteSpace(partition.KeyHash)
+                || partition.KeyHash.Length
+                    > RateLimitLimits.KeyHashLength)
+            {
+                throw new ArgumentException(
+                    "A rate-limit partition has an invalid key hash.",
+                    nameof(partitions));
+            }
+
+            if (!unique.Add((
+                    partition.Version,
+                    partition.KeyHash)))
+            {
+                throw new ArgumentException(
+                    "Duplicate rate-limit partitions are not supported.",
+                    nameof(partitions));
+            }
+        }
+    }
+
+    private void Detach(
+        IEnumerable<RateLimitBucketEntity> buckets)
+    {
+        foreach (var bucket in buckets)
+        {
+            dbContext.Entry(bucket).State = EntityState.Detached;
+        }
+    }
 }

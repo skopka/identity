@@ -254,9 +254,10 @@ Preserve these rules:
 - `ClientKey` is optional transport context, normally derived from a normalized IP or
   trusted gateway/device signal. Transport code must create it server-side and must not
   trust a value supplied by the request body.
-- Rate-limit partition keys are HMAC-SHA256 values. The partition key is shared by all
-  application instances and remains outside the database. Rotating it resets active
-  short-lived buckets.
+- Rate-limit partition derivations expose a current version plus bounded historical
+  versions. The HMAC adapter keeps all keys outside the database. During rotation, every
+  successful hit is written to every configured version so old and new replicas share
+  active counters; remove an old version only after the longest active policy window.
 - Hosts must schedule `IIdentityRateLimiter<TProfile>.PruneAsync()` periodically.
   `BucketRetention` must cover every active policy window; cleanup runs in bounded
   batches and no hidden background service is started by the library.
@@ -345,7 +346,7 @@ EF Core storage is split:
   - failed-attempt count and challenge state
   - one-time proof digest and expiry
 - `identity_rate_limit_buckets`
-  - HMAC-obscured partition key and named scope
+  - versioned, obscured partition key and named scope
   - fixed-window hit count and last-hit timestamp
   - optimistic concurrency version
 - `identity_refresh_sessions`

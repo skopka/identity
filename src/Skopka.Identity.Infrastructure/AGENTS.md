@@ -61,12 +61,16 @@ It is not the place for core business rules.
   the caller's responsibility. Treat returned delivery codes as secrets and never log
   them.
 - `HmacRateLimitPartitionHasher` obscures account, client and intent identifiers before
-  persistence. Its key is a distinct deployment secret, copied on registration and
-  cleared on disposal.
+  persistence. Its versioned keys are distinct deployment secrets, copied on
+  registration and cleared on disposal.
 - `UseHmacRateLimiting<TProfile>()` explicitly enables the persistent limiter and
   configures password account/client, verification account/client, intent and resend
-  policies plus bucket retention/cleanup batch size. All instances sharing the database
-  must use the same partition key.
+  policies plus bucket retention/cleanup batch size. Rotation configurations expose the
+  current version and overlapping historical `(version, key)` pairs. All instances
+  sharing the database must overlap on at least one version during rolling deployment.
+- `UseRateLimiting<TProfile>()` accepts a custom non-HMAC
+  `IRateLimitPartitionHasher`; its version identifiers follow the same persistence and
+  rotation rules.
 - `HmacJwtAccessTokenProvider` uses Microsoft IdentityModel and HS256 with explicit
   issuer, audience, lifetime, signature and algorithm validation. Signing keys contain
   at least 256 bits and remain outside persistence.

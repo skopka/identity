@@ -59,7 +59,7 @@ Contains optional adapters:
 - PBKDF2 and Argon2id password hashers;
 - ASP.NET Core Data Protection action tokens;
 - HMAC-protected generated OTP codes;
-- HMAC-obscured rate-limit partitions;
+- versioned HMAC-obscured rate-limit partitions and custom partition adapters;
 - JWT access tokens, opaque refresh tokens and JwtBearer integration.
 
 ### `Skopka.Identity`

@@ -5,8 +5,9 @@ Read `../../AGENTS.md` and `../../src/Skopka.Identity.Ef/AGENTS.md` first.
 Verification store tests must cover failed-attempt state transitions, proof binding,
 single consumption and optimistic concurrency behavior.
 
-Rate-limit store tests must cover fixed-window limits, window rollover, cooldown without
-extension on denied hits, reset, bounded pruning and concurrency-token model
+Rate-limit store tests must cover versioned dual-write rotation, fixed-window limits,
+window rollover, cooldown without extension on denied hits, reset, bounded pruning and
+concurrency-token model
 configuration.
 
 Refresh-session store tests must cover atomic replacement, rotated-token replay,
