@@ -12,6 +12,7 @@ using Skopka.Identity.Roles;
 using Skopka.Identity.Security;
 using Skopka.Identity.SecurityEvents;
 using Skopka.Identity.Sessions;
+using Skopka.Identity.SignInMethods;
 using Skopka.Identity.StepUp;
 using Skopka.Identity.Users;
 using Skopka.Identity.Users.Queries;
@@ -54,6 +55,9 @@ public sealed class PostgreSqlIdentityRegistrationTests
         Assert.IsType<ExternalLoginService<TestProfile>>(
             scopedProvider.GetRequiredService<
                 IExternalLoginService<TestProfile>>());
+        Assert.IsType<IdentitySignInMethodQueryService<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentitySignInMethodQueryService<TestProfile>>());
         Assert.IsType<EfExternalLoginStore<TestProfile>>(
             scopedProvider.GetRequiredService<
                 IExternalLoginStore<TestProfile>>());

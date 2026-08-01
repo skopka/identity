@@ -81,6 +81,9 @@ file first and then the module-local file:
   password credential or external login.
 - `IExternalLoginService<TProfile>` resolves, lists, links and unlinks trusted
   provider/subject identities.
+- `IIdentitySignInMethodQueryService<TProfile>` returns password presence, trusted
+  external-login keys and the user version for host-owned sign-in policy checks. It
+  never exposes a password verifier.
 - `IIdentityUserQueryService<TProfile>` provides bounded cursor-based administrative
   queries without exposing `IQueryable`.
 - `IIdentitySecurityEventObserver` receives non-blocking notifications after successful
@@ -302,7 +305,9 @@ Preserve these rules:
   validated by the host's OAuth/OIDC adapter.
 - External login link/unlink uses normal mutation policy, expected user version and
   security-stamp rotation. The base domain permits removal of the final sign-in method;
-  self-service host policy may be stricter.
+  self-service host policy may be stricter. Such hosts read a sign-in-method snapshot
+  and pass its version unchanged to the mutation. A concurrency conflict requires a
+  fresh policy/step-up workflow, not an automatic retry of an already authorized action.
 - Password and external registration must use `IIdentityRegistrationStore<TProfile>` so
   the user and initial sign-in method commit atomically.
 - User queries are bounded to 100 rows and use stable `(CreatedAt, Id)` cursor ordering.

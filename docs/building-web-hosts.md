@@ -183,8 +183,51 @@ var linked = await externalLogins.LinkAsync(
 ```
 
 Link and unlink rotate the security stamp and bump the user version. The base domain
-allows unlinking the final sign-in method; a self-service account UI should prevent that
-unless the user is intentionally converting to another supported method.
+allows unlinking the final sign-in method. A stricter self-service host can enforce its
+policy without reading credential storage directly:
+
+```csharp
+var signInMethods = services.GetRequiredService<
+    IIdentitySignInMethodQueryService<HelloProfile>>();
+var snapshotResult = await signInMethods.GetAsync(currentUser.Id, ct);
+if (!snapshotResult.IsSuccess)
+{
+    return MapIdentityError(snapshotResult);
+}
+
+var snapshot = snapshotResult.Value;
+var target = snapshot.ExternalLogins.SingleOrDefault(x => x.Login == key);
+if (target is null)
+{
+    return ExternalLoginNotFound();
+}
+
+var enabledExternalLogins = snapshot.ExternalLogins
+    .Where(login => providerCatalog.IsEnabled(login.Login.Provider));
+var remainingEnabledExternalLogins = enabledExternalLogins.Count(
+    login => login.Login != target.Login);
+var hasEnabledPassword = passwordSignInEnabled && snapshot.HasPassword;
+
+if (!hasEnabledPassword && remainingEnabledExternalLogins == 0)
+{
+    return RejectLastSignInMethodRemoval();
+}
+
+var unlinked = await externalLogins.UnlinkAsync(
+    new UnlinkExternalLoginCommand(
+        currentUser.Id,
+        snapshot.Version,
+        target.Login),
+    ct);
+```
+
+The provider subject is trusted host data and should not be serialized to the browser.
+Identity reports persisted methods; only the host knows which password flow and OIDC
+providers are currently enabled. The last-method policy must count their intersection,
+not stale links to disabled providers. Every password and external-login mutation shares
+the same user version, so a concurrent change makes `UnlinkAsync` fail with
+`identity.concurrency.conflict`. Re-read policy and run a new step-up flow; do not
+auto-retry a mutation whose proof or decision was already consumed.
 
 ## Email Confirmation and Password Reset
 

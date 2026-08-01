@@ -55,6 +55,9 @@ small value objects.
   carry normalized names prepared by Core; membership APIs use stable role ids.
 - Define atomic registration contracts under `Registration` and external identity
   lifecycle contracts under `ExternalLogins`.
+- Define a transport-neutral sign-in-method snapshot query under `SignInMethods`. It may
+  expose password presence and trusted external-login keys, but never a password
+  verifier.
 - Define bounded cursor-based user query contracts under `Users/Queries`; never expose
   EF or `IQueryable`.
 - Define security-event observer contracts under `SecurityEvents`. Events contain no
@@ -100,6 +103,8 @@ small value objects.
   inherited membership or authorization.
 - External provider subjects remain exact and case-sensitive. Provider protocol tokens
   and claims are outside these contracts.
+- `SignInMethodSnapshot.Version` is an optimistic mutation guard for host policy. It is
+  not a transactional or reusable authorization decision.
 - Session metadata is optional bounded display data. Revoke by id always carries both
   user id and logical session id.
 - `IIdentitySecurityEventObserver` is a non-blocking post-commit hook, not a durable

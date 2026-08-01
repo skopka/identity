@@ -70,8 +70,8 @@ install and configure without moving domain or persistence logic into the facade
 - ASP.NET Core bearer setup remains in the optional Infrastructure package through
   `UseJwtBearerAuthentication<TProfile>()`; hosts own middleware ordering and
   authorization policies.
-- Core registration, external-login lifecycle, exact active-user lookup and bounded
-  user-query services are registered by `AddSkopkaIdentity<TProfile>()`; PostgreSQL
-  supplies their stores.
+- Core registration, external-login lifecycle, sign-in-method snapshots, exact
+  active-user lookup and bounded user-query services are registered by
+  `AddSkopkaIdentity<TProfile>()`; PostgreSQL supplies their stores.
 - Register a noop security-event observer by default with `TryAdd`. Hosts may register
   their observer first; callbacks are observability hooks, not a durable audit store.

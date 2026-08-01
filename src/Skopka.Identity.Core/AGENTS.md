@@ -38,8 +38,9 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   validation.
 - Project direct role memberships as repeated `role` session claims when roles are
   enabled.
-- Implement atomic password/external registration, external-login lifecycle and bounded
-  user queries through their dedicated store ports.
+- Implement atomic password/external registration, external-login lifecycle,
+  sign-in-method snapshot queries and bounded user queries through their dedicated
+  store ports.
 - Publish successful security mutations through `IIdentitySecurityEventObserver`
   without exposing secret values.
 - Provide default domain services such as `DefaultIdentityNormalizer`,
@@ -139,6 +140,10 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   inherited JWT claims.
 - Canonicalize external provider names but preserve provider subjects exactly. Link and
   unlink rotate the security stamp and enforce expected version.
+- Sign-in-method snapshots expose only password presence, external-login keys and the
+  current user version. Hosts that enforce a last-method rule must use that version for
+  the mutation; a concurrent method change may produce a safe stale view or conflict,
+  never permission to bypass optimistic concurrency.
 - Registration validates and hashes before one aggregate store call. Never compose
   public registration from separate user and credential store calls.
 - Session metadata is normalized as bounded labels, survives refresh rotation and is

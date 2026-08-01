@@ -10,8 +10,8 @@ authorization.
 
 Contains the public API:
 
-- user, credential, registration, external-login, verification, session, role and
-  step-up models;
+- user, credential, registration, external-login, sign-in-method, verification,
+  session, role and step-up models;
 - commands and `OperationResult`-based services;
 - store ports used by Core;
 - stable error codes;
@@ -25,7 +25,8 @@ Implements identity use cases:
 
 - validation, normalization and mutation policy;
 - exact active-user lookup and password lifecycle;
-- atomic password/external registration and external-login lifecycle;
+- atomic password/external registration, external-login lifecycle and sign-in-method
+  snapshots;
 - action-token binding;
 - verification challenges and one-time proofs;
 - session creation, refresh, validation and revocation;
@@ -122,6 +123,13 @@ An external identity is keyed by canonical provider name and an exact case-sensi
 provider subject. Identity owns resolve/list/link/unlink persistence and rotates the
 security stamp when links change. The host owns OAuth/OIDC protocol validation and must
 never pass an unverified client-supplied subject.
+
+`IIdentitySignInMethodQueryService<TProfile>` composes the existing user, credential and
+external-login stores into a read-only host-policy snapshot. It exposes password
+presence rather than the opaque verifier and includes the user version used by later
+CAS mutations. This adds no persistence entity or schema. A snapshot is not a
+transactional authorization grant; concurrent changes are rejected by the mutation's
+expected-version check.
 
 ## Token and Verification Boundaries
 

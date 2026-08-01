@@ -104,6 +104,14 @@ Do not auto-link accounts based only on matching email addresses. Explicit linki
 should require an authenticated account and the host's step-up policy. Link and unlink
 rotate the security stamp.
 
+Only an authorized trusted-host workflow should call the sign-in-method snapshot query.
+Use `HasPassword` and external-login keys to enforce a host-owned last-method rule, but
+count only password sign-in and providers currently enabled by the host. A persisted
+link to a disabled provider is not an available sign-in method. Pass the snapshot
+version to the mutation and never return provider subjects from an HTTP endpoint or UI
+model. Treat a concurrency conflict as a fresh operation requiring policy and step-up
+re-evaluation, not as permission to retry automatically.
+
 ## Security Events and Audit
 
 `IIdentitySecurityEventObserver` receives successful state-change notifications without

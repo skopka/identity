@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Skopka.Identity.Credentials;
 using Skopka.Identity.Errors;
 using Skopka.Identity.ExternalLogins;
 using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Registration;
 using Skopka.Identity.Sessions;
+using Skopka.Identity.SignInMethods;
 using Skopka.Identity.Users;
 using Skopka.Identity.Users.Handles;
 using Skopka.Identity.Users.Queries;
@@ -204,6 +206,110 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
         var active = Assert.Single(listed);
         Assert.Equal(session.SessionId, active.SessionId);
         Assert.Equal(session.Metadata, active.Metadata);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task ConcurrentPasswordRemovalAndExternalUnlinkLeaveOneSignInMethod()
+    {
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            1,
+            12,
+            0,
+            0,
+            TimeSpan.Zero);
+        var login = new ExternalLoginKey("CORPORATE", "employee-42");
+        IdentityUser<TestProfile> linkedUser;
+
+        await using (var setupScope = serviceProvider.CreateAsyncScope())
+        {
+            var services = setupScope.ServiceProvider;
+            var registrationStore = services.GetRequiredService<
+                IIdentityRegistrationStore<TestProfile>>();
+            var externalLoginStore = services.GetRequiredService<
+                IExternalLoginStore<TestProfile>>();
+            var registered = await registrationStore.CreateWithPasswordAsync(
+                NewUser(Guid.NewGuid(), "concurrent-methods"),
+                new NormalizedHandles("CONCURRENT-METHODS", null, null),
+                "opaque-verifier",
+                now,
+                CancellationToken.None);
+            Assert.True(registered.IsSuccess);
+
+            var linked = await externalLoginStore.LinkAsync(
+                registered.Value.Id,
+                registered.Value.Version,
+                login,
+                "LINKED-STAMP",
+                now.AddMinutes(1),
+                CancellationToken.None);
+            Assert.True(linked.IsSuccess);
+            linkedUser = linked.Value;
+        }
+
+        SignInMethodSnapshot snapshot;
+        await using (var snapshotScope = serviceProvider.CreateAsyncScope())
+        {
+            var methods = snapshotScope.ServiceProvider.GetRequiredService<
+                IIdentitySignInMethodQueryService<TestProfile>>();
+            var result = await methods.GetAsync(
+                linkedUser.Id,
+                CancellationToken.None);
+            Assert.True(result.IsSuccess);
+            snapshot = result.Value;
+        }
+
+        Assert.True(snapshot.HasPassword);
+        Assert.Equal(login, Assert.Single(snapshot.ExternalLogins).Login);
+
+        await using var passwordScope = serviceProvider.CreateAsyncScope();
+        await using var externalScope = serviceProvider.CreateAsyncScope();
+        var credentialStore = passwordScope.ServiceProvider.GetRequiredService<
+            IPasswordCredentialStore<TestProfile>>();
+        var externalLoginStoreForUnlink = externalScope.ServiceProvider
+            .GetRequiredService<IExternalLoginStore<TestProfile>>();
+
+        var removePasswordTask = credentialStore.ReplacePasswordVerifierAsync(
+            snapshot.UserId,
+            snapshot.Version,
+            expectedPasswordVerifier: "opaque-verifier",
+            passwordVerifier: null,
+            newSecurityStamp: "PASSWORD-REMOVED-STAMP",
+            now.AddMinutes(2),
+            CancellationToken.None);
+        var unlinkTask = externalLoginStoreForUnlink.UnlinkAsync(
+            snapshot.UserId,
+            snapshot.Version,
+            login,
+            "EXTERNAL-UNLINKED-STAMP",
+            now.AddMinutes(2),
+            CancellationToken.None);
+
+        await Task.WhenAll(removePasswordTask, unlinkTask);
+        var passwordResult = await removePasswordTask;
+        var unlinkResult = await unlinkTask;
+
+        Assert.NotEqual(passwordResult.IsSuccess, unlinkResult.IsSuccess);
+        var failedErrors = passwordResult.IsSuccess
+            ? unlinkResult.Errors
+            : passwordResult.Errors;
+        Assert.Contains(
+            failedErrors,
+            error => error.Code == IdentityErrorCodes.ConcurrencyConflict);
+
+        await using var finalScope = serviceProvider.CreateAsyncScope();
+        var finalMethods = finalScope.ServiceProvider.GetRequiredService<
+            IIdentitySignInMethodQueryService<TestProfile>>();
+        var finalResult = await finalMethods.GetAsync(
+            snapshot.UserId,
+            CancellationToken.None);
+
+        Assert.True(finalResult.IsSuccess);
+        var availableMethodCount = (finalResult.Value.HasPassword ? 1 : 0)
+            + finalResult.Value.ExternalLogins.Count;
+        Assert.Equal(1, availableMethodCount);
     }
 
     private async Task AssertAllMigrationsAppliedAsync()

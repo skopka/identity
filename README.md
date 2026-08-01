@@ -19,6 +19,7 @@ with `Microsoft.AspNetCore.Identity`.
 - Nullable user name, email and phone for external-login-only users.
 - Atomic password and external-login registration workflows.
 - External login resolve, list, link and unlink lifecycle.
+- Sign-in-method snapshots for stricter host-owned unlink policy.
 - Optimistic concurrency through a numeric user version.
 - Soft delete, restore and permanent or temporary blocking.
 - PBKDF2-HMAC-SHA256 and peppered Argon2id password verifiers.
@@ -260,6 +261,14 @@ Provider names are canonicalized; subjects are case-sensitive and preserved exac
 Never use an unverified client-supplied subject, email or access token as the login key.
 Use `IIdentityRegistrationService<TProfile>.RegisterExternalAsync` for a new account and
 `LinkAsync` only for an authenticated user after the host's required step-up check.
+
+Before a self-service unlink, read
+`IIdentitySignInMethodQueryService<TProfile>.GetAsync`. Reject removal when
+the host would leave no enabled password flow or enabled external provider, then pass
+the snapshot's `Version` unchanged to `UnlinkAsync`. Identity reports persisted links;
+the host must intersect them with its current provider catalog. Do not expose the
+returned provider subject in HTTP or UI. A concurrency conflict starts a fresh policy
+and step-up flow; do not automatically retry an already authorized mutation.
 
 ## Optional Modules
 

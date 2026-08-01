@@ -9,6 +9,7 @@ using Skopka.Identity.Registration;
 using Skopka.Identity.Security;
 using Skopka.Identity.SecurityEvents;
 using Skopka.Identity.Sessions;
+using Skopka.Identity.SignInMethods;
 using Skopka.Identity.Users;
 using Skopka.Identity.Users.Queries;
 using Skopka.Identity.Verification;
@@ -46,6 +47,9 @@ public static class IdentityServiceCollectionExtensions
         services.TryAddScoped<
             IExternalLoginService<TProfile>,
             ExternalLoginService<TProfile>>();
+        services.TryAddScoped<
+            IIdentitySignInMethodQueryService<TProfile>,
+            IdentitySignInMethodQueryService<TProfile>>();
         services.TryAddScoped<
             IIdentityRegistrationService<TProfile>,
             IdentityRegistrationService<TProfile>>();

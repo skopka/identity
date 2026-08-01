@@ -13,6 +13,7 @@ alongside this guide and inventory every feature the application uses.
 | --- | --- |
 | `UserManager<TUser>` user mutations | `IIdentityUserService<TProfile>` |
 | Password methods on `UserManager<TUser>` | `IPasswordCredentialService<TProfile>` |
+| `HasPasswordAsync` and `GetLoginsAsync` | `IIdentitySignInMethodQueryService<TProfile>` |
 | `SignInManager<TUser>.PasswordSignInAsync` | `IPasswordAuthenticationService<TProfile>` plus host session creation |
 | `RoleManager<TRole>` | `IIdentityRoleService<TProfile>` |
 | User-role membership | `IIdentityRoleService<TProfile>` |
