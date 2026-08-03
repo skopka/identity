@@ -105,6 +105,24 @@ jobs:
             exit 1
           fi
 
+      - name: Restore package consumer
+        env:
+          PACKAGE_VERSION: ${{ steps.package_version.outputs.value }}
+        run: >
+          dotnet restore tests/Skopka.Identity.PackageConsumer/Skopka.Identity.PackageConsumer.csproj
+          -p:RestoreAdditionalProjectSources="${{ github.workspace }}/artifacts/packages"
+          -p:IdentityPackageVersion="$PACKAGE_VERSION"
+
+      - name: Run package consumer
+        env:
+          PACKAGE_VERSION: ${{ steps.package_version.outputs.value }}
+        run: >
+          dotnet run
+          --project tests/Skopka.Identity.PackageConsumer/Skopka.Identity.PackageConsumer.csproj
+          --configuration Release
+          --no-restore
+          -p:IdentityPackageVersion="$PACKAGE_VERSION"
+
       - name: Upload NuGet packages
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:

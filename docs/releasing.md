@@ -33,8 +33,9 @@ The workflow removes the leading `v` and uses the remainder as the assembly and
 NuGet package version. The tag's base version must match `VersionPrefix` in
 `Directory.Build.props`, use valid SemVer without build metadata and point to a
 commit reachable from `origin/main`. It restores, builds, runs the complete
-test suite, audits dependencies and verifies the exact six packages and symbol
-packages before publishing.
+test suite, audits dependencies, verifies the exact six packages and symbol
+packages and restores a standalone consumer from those package files before
+publishing.
 
 Before the first immutable write, the workflow proves that this version is absent
 for every package ID. It then pushes all six packages in dependency order without

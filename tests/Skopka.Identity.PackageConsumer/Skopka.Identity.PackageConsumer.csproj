@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <IdentityPackageVersion Condition="'$(IdentityPackageVersion)' == ''">0.8.0</IdentityPackageVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Skopka.Identity"
+                      Version="$(IdentityPackageVersion)" />
+    <PackageReference Include="Skopka.Identity.Abstractions"
+                      Version="$(IdentityPackageVersion)" />
+    <PackageReference Include="Skopka.Identity.Core"
+                      Version="$(IdentityPackageVersion)" />
+    <PackageReference Include="Skopka.Identity.Ef"
+                      Version="$(IdentityPackageVersion)" />
+    <PackageReference Include="Skopka.Identity.Ef.PostgreSql"
+                      Version="$(IdentityPackageVersion)" />
+    <PackageReference Include="Skopka.Identity.Infrastructure"
+                      Version="$(IdentityPackageVersion)" />
+  </ItemGroup>
+</Project>
