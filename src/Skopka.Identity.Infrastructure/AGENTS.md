@@ -77,8 +77,10 @@ It is not the place for core business rules.
 - `OpaqueRefreshTokenProvider` creates versioned tokens with a 256-bit random secret and
   exposes only a SHA-256 digest for persistence.
 - `UseJwtSessions<TProfile>()` explicitly enables Core session orchestration and its
-  token providers. JWT signing keys must be shared by token issuers and validators;
-  changing a single configured key invalidates outstanding short-lived access tokens.
+  token providers. The versioned overload signs with the current key id and validates
+  against a bounded overlapping key set. A present `kid` resolves strictly; legacy
+  tokens without `kid` may try the configured overlap. JWT signing keys must be shared
+  by token issuers and validators and retained through access-token expiry plus rollout.
 - `UseJwtBearerAuthentication<TProfile>()` configures ASP.NET Core authentication with
   the same HMAC validation parameters, disables inbound claim remapping and maps `name`
   and repeated `role` claims for `ClaimsPrincipal`. It also registers standard

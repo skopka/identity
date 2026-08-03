@@ -39,20 +39,23 @@ Use independent random keys for each purpose:
 | Secret | Minimum / storage requirement |
 | --- | --- |
 | Password pepper | At least 32 bytes, secret manager or HSM-backed provider |
-| JWT signing key | At least 32 bytes, shared by issuers and validators |
+| JWT signing keys | At least 32 bytes each, current id plus bounded overlap shared by issuers and validators |
 | OTP HMAC key | At least 32 bytes, retained through challenge expiry |
 | Rate-limit HMAC partition key | At least 32 bytes per version, shared by database writers during overlap |
 | Data Protection key ring | Persisted and protected outside the application database |
 
 Never reuse one key for multiple rows in this table.
 
-Pepper, OTP and rate-limit HMAC providers support key ids so historical keys can remain
-available during rotation. Remove an old pepper or OTP key only after no valid verifier
-or challenge can reference it.
+Pepper, OTP, JWT and rate-limit HMAC providers support key ids so historical keys can
+remain available during rotation. Remove an old pepper or OTP key only after no valid
+verifier or challenge can reference it.
 
-Rotating a JWT signing key invalidates every access token signed only by the old key.
-Plan overlap or coordinated rollout at the application layer if uninterrupted
-validation is required.
+New JWTs carry the current key id in `kid`. Validation resolves a present id strictly;
+an unknown id is rejected instead of falling back to another key. Tokens created by the
+legacy single-key overload have no `kid`, so validators try the bounded configured set
+during migration. Retain an old key until the maximum access-token lifetime, clock skew
+and rolling-deployment interval have elapsed. Removing it earlier intentionally
+invalidates remaining access tokens signed with that key.
 
 ## Action Tokens
 
@@ -205,7 +208,6 @@ The current pre-1.0 release does not include:
 - recovery codes;
 - cookie sign-in;
 - controllers, Razor UI or delivery adapters;
-- automatic JWT signing-key overlap;
 - a built-in breached-password data source.
 
 Applications that require these capabilities must provide them outside the current

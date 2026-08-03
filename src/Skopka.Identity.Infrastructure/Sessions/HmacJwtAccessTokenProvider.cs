@@ -8,7 +8,9 @@ namespace Skopka.Identity.Sessions;
 public sealed class HmacJwtAccessTokenProvider
     : IIdentityAccessTokenProvider, IDisposable
 {
-    private readonly byte[] signingKey;
+    private const string LegacyKeyId = "legacy";
+
+    private readonly IReadOnlyDictionary<string, byte[]> signingKeys;
     private readonly JsonWebTokenHandler handler;
     private readonly SigningCredentials signingCredentials;
     private readonly TokenValidationParameters validationParameters;
@@ -19,23 +21,118 @@ public sealed class HmacJwtAccessTokenProvider
     public HmacJwtAccessTokenProvider(
         byte[] signingKey,
         JwtAccessTokenOptions options)
+        : this(
+            currentKeyId: null,
+            new Dictionary<string, byte[]>(StringComparer.Ordinal)
+            {
+                [LegacyKeyId] = signingKey,
+            },
+            options,
+            versioned: false)
     {
-        ArgumentNullException.ThrowIfNull(signingKey);
+    }
+
+    public HmacJwtAccessTokenProvider(
+        string currentKeyId,
+        IReadOnlyDictionary<string, byte[]> signingKeys,
+        JwtAccessTokenOptions options)
+        : this(
+            currentKeyId,
+            signingKeys,
+            options,
+            versioned: true)
+    {
+    }
+
+    private HmacJwtAccessTokenProvider(
+        string? currentKeyId,
+        IReadOnlyDictionary<string, byte[]> signingKeys,
+        JwtAccessTokenOptions options,
+        bool versioned)
+    {
+        ArgumentNullException.ThrowIfNull(signingKeys);
         ArgumentNullException.ThrowIfNull(options);
 
-        if (signingKey.Length < 32)
+        if (signingKeys.Count is < 1
+            or > SessionLimits.MaximumJwtSigningKeys)
         {
             throw new ArgumentException(
-                "The JWT signing key must contain at least 32 bytes.",
-                nameof(signingKey));
+                $"Between 1 and {SessionLimits.MaximumJwtSigningKeys} JWT signing keys must be configured.",
+                nameof(signingKeys));
         }
 
-        this.signingKey = signingKey.ToArray();
+        if (versioned)
+        {
+            ValidateKeyId(currentKeyId, nameof(currentKeyId));
+        }
+
+        var copiedKeys = new Dictionary<string, byte[]>(
+            signingKeys.Count,
+            StringComparer.Ordinal);
+        try
+        {
+            foreach (var (keyId, signingKey) in signingKeys)
+            {
+                if (versioned)
+                {
+                    ValidateKeyId(keyId, nameof(signingKeys));
+                }
+
+                ArgumentNullException.ThrowIfNull(signingKey);
+                if (signingKey.Length
+                    < SessionLimits.MinimumJwtSigningKeyLength)
+                {
+                    throw new ArgumentException(
+                        $"Each JWT signing key must contain at least {SessionLimits.MinimumJwtSigningKeyLength} bytes.",
+                        nameof(signingKeys));
+                }
+
+                copiedKeys.Add(keyId, signingKey.ToArray());
+            }
+
+            if (versioned && !copiedKeys.ContainsKey(currentKeyId!))
+            {
+                throw new ArgumentException(
+                    "The current JWT signing key id is not present in the key collection.",
+                    nameof(currentKeyId));
+            }
+        }
+        catch
+        {
+            foreach (var copiedKey in copiedKeys.Values)
+            {
+                CryptographicOperations.ZeroMemory(copiedKey);
+            }
+
+            throw;
+        }
+
+        this.signingKeys = copiedKeys;
         issuer = options.Issuer;
         audience = options.Audience;
-        var securityKey = new SymmetricSecurityKey(this.signingKey);
+        var securityKeys = copiedKeys
+            .Select(pair =>
+            {
+                var securityKey = new SymmetricSecurityKey(pair.Value);
+                if (versioned)
+                {
+                    securityKey.KeyId = pair.Key;
+                }
+
+                return securityKey;
+            })
+            .ToArray();
+        var securityKeysById = securityKeys
+            .Where(key => key.KeyId is not null)
+            .ToDictionary(
+                key => key.KeyId!,
+                key => (SecurityKey)key,
+                StringComparer.Ordinal);
+        var currentSecurityKey = versioned
+            ? securityKeysById[currentKeyId!]
+            : securityKeys[0];
         signingCredentials = new SigningCredentials(
-            securityKey,
+            currentSecurityKey,
             SecurityAlgorithms.HmacSha256);
         validationParameters = new TokenValidationParameters
         {
@@ -44,7 +141,16 @@ public sealed class HmacJwtAccessTokenProvider
             ValidateAudience = true,
             ValidAudience = audience,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = securityKey,
+            IssuerSigningKeys = securityKeys,
+            IssuerSigningKeyResolver = (_, _, keyId, _) =>
+                string.IsNullOrEmpty(keyId)
+                    ? securityKeys
+                    : securityKeysById.TryGetValue(
+                        keyId,
+                        out var resolvedKey)
+                        ? [resolvedKey]
+                        : [],
+            TryAllIssuerSigningKeys = false,
             RequireSignedTokens = true,
             RequireExpirationTime = true,
             ValidateLifetime = true,
@@ -150,7 +256,10 @@ public sealed class HmacJwtAccessTokenProvider
         }
 
         disposed = true;
-        CryptographicOperations.ZeroMemory(signingKey);
+        foreach (var signingKey in signingKeys.Values)
+        {
+            CryptographicOperations.ZeroMemory(signingKey);
+        }
     }
 
     internal TokenValidationParameters CreateTokenValidationParameters()
@@ -164,6 +273,22 @@ public sealed class HmacJwtAccessTokenProvider
         value = default;
         return jwt.TryGetPayloadValue<string>(claim, out var text)
             && Guid.TryParseExact(text, "N", out value);
+    }
+
+    private static void ValidateKeyId(
+        string? keyId,
+        string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(keyId)
+            || keyId.Length > SessionLimits.MaximumJwtSigningKeyIdLength
+            || keyId.Any(character =>
+                !char.IsAsciiLetterOrDigit(character)
+                && character is not '.' and not '_' and not '-'))
+        {
+            throw new ArgumentException(
+                "JWT signing key ids must contain only ASCII letters, digits, '.', '_' or '-'.",
+                parameterName);
+        }
     }
 
     private static Claim CreateClaim(IdentitySessionClaim claim)

@@ -160,6 +160,10 @@ JWT access tokens contain a security-stamp snapshot and bounded projected claims
 Refresh tokens are stored only as digests and rotate on use. Reuse of a rotated token
 revokes the logical session.
 
+JWT signing uses the configured current HMAC key id. Validation resolves `kid` against
+a bounded overlapping key set, while legacy tokens without `kid` can be checked against
+the same set during migration. Key material remains outside persistence.
+
 Session metadata contains bounded host-created display labels for client and device.
 Active logical sessions can be listed and revoked with a `(UserId, SessionId)` predicate.
 The labels are not authentication or authorization inputs.

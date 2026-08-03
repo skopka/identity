@@ -53,13 +53,20 @@ var identity = builder.Services
     .AddRoles();
 
 identity.UseJwtSessions(
-    jwtSigningKey,
+    currentJwtSigningKeyId,
+    jwtSigningKeys,
     options =>
     {
         options.Issuer = "https://hello.example.com";
         options.Audience = "hello-api";
-    });
+});
 ```
+
+The versioned overload signs with `currentJwtSigningKeyId` and validates against at
+most eight configured keys. During a rolling rotation, deploy the new key set to every
+instance first, switch the current id, then remove the retired key only after the access
+token lifetime, clock skew and rollout interval have elapsed. The single-key overload
+remains compatible with tokens that have no `kid` header.
 
 Apply the migrations from `Skopka.Identity.Ef.PostgreSql` in a deployment step. Do not
 run migrations independently on every production replica.

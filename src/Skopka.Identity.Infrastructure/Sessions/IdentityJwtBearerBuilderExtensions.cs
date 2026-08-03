@@ -18,8 +18,10 @@ public static class IdentityJwtBearerBuilderExtensions
         var accessTokenProvider = builder.Services
             .LastOrDefault(descriptor =>
                 descriptor.ServiceType
-                    == typeof(IIdentityAccessTokenProvider))
-            ?.ImplementationInstance as HmacJwtAccessTokenProvider
+                    == typeof(
+                        HmacJwtAccessTokenProviderRegistration))
+            ?.ImplementationInstance as
+                HmacJwtAccessTokenProviderRegistration
             ?? throw new InvalidOperationException(
                 "UseJwtSessions must be called before JWT bearer authentication.");
 
@@ -42,7 +44,8 @@ public static class IdentityJwtBearerBuilderExtensions
                 options.MapInboundClaims = false;
                 options.SaveToken = false;
                 options.TokenValidationParameters =
-                    accessTokenProvider.CreateTokenValidationParameters();
+                    accessTokenProvider.Provider
+                        .CreateTokenValidationParameters();
                 options.TokenValidationParameters.NameClaimType =
                     IdentitySessionClaimTypes.Name;
                 options.TokenValidationParameters.RoleClaimType =

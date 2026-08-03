@@ -18,7 +18,7 @@ public static class IdentitySessionBuilderExtensions
 
         var jwtOptions = new JwtAccessTokenOptions();
         configureJwt(jwtOptions);
-        ValidateJwtOptions(jwtOptions, signingKey);
+        ValidateJwtOptions(jwtOptions);
 
         var sessionOptions = new IdentitySessionOptions();
         configureSessions?.Invoke(sessionOptions);
@@ -28,15 +28,72 @@ public static class IdentitySessionBuilderExtensions
             signingKey,
             jwtOptions);
 
+        return RegisterJwtSessions(
+            builder,
+            jwtOptions,
+            sessionOptions,
+            accessTokenProvider);
+    }
+
+    public static IdentityBuilder<TProfile> UseJwtSessions<TProfile>(
+        this IdentityBuilder<TProfile> builder,
+        string currentKeyId,
+        IReadOnlyDictionary<string, byte[]> signingKeys,
+        Action<JwtAccessTokenOptions> configureJwt,
+        Action<IdentitySessionOptions>? configureSessions = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(currentKeyId);
+        ArgumentNullException.ThrowIfNull(signingKeys);
+        ArgumentNullException.ThrowIfNull(configureJwt);
+
+        var jwtOptions = new JwtAccessTokenOptions();
+        configureJwt(jwtOptions);
+        ValidateJwtOptions(jwtOptions);
+
+        var sessionOptions = new IdentitySessionOptions();
+        configureSessions?.Invoke(sessionOptions);
+        ValidateSessionOptions(sessionOptions);
+
+        var accessTokenProvider = new HmacJwtAccessTokenProvider(
+            currentKeyId,
+            signingKeys,
+            jwtOptions);
+
+        return RegisterJwtSessions(
+            builder,
+            jwtOptions,
+            sessionOptions,
+            accessTokenProvider);
+    }
+
+    private static IdentityBuilder<TProfile> RegisterJwtSessions<TProfile>(
+        IdentityBuilder<TProfile> builder,
+        JwtAccessTokenOptions jwtOptions,
+        IdentitySessionOptions sessionOptions,
+        HmacJwtAccessTokenProvider accessTokenProvider)
+    {
+        var previousProvider = builder.Services
+            .LastOrDefault(descriptor => descriptor.ServiceType
+                == typeof(HmacJwtAccessTokenProviderRegistration))
+            ?.ImplementationInstance as
+                HmacJwtAccessTokenProviderRegistration;
+
         builder.Services.RemoveAll<JwtAccessTokenOptions>();
         builder.Services.RemoveAll<IdentitySessionOptions>();
+        builder.Services.RemoveAll<
+            HmacJwtAccessTokenProviderRegistration>();
         builder.Services.RemoveAll<IIdentityAccessTokenProvider>();
         builder.Services.RemoveAll<IIdentityRefreshTokenProvider>();
         builder.Services.RemoveAll<IIdentitySessionService<TProfile>>();
         builder.Services.AddSingleton(jwtOptions);
         builder.Services.AddSingleton(sessionOptions);
+        builder.Services.AddSingleton(
+            new HmacJwtAccessTokenProviderRegistration(
+                accessTokenProvider));
         builder.Services.AddSingleton<IIdentityAccessTokenProvider>(
-            accessTokenProvider);
+            provider => provider.GetRequiredService<
+                HmacJwtAccessTokenProviderRegistration>().Provider);
         builder.Services.AddSingleton<
             IIdentityRefreshTokenProvider,
             OpaqueRefreshTokenProvider>();
@@ -44,12 +101,12 @@ public static class IdentitySessionBuilderExtensions
             IIdentitySessionService<TProfile>,
             IdentitySessionService<TProfile>>();
 
+        previousProvider?.Provider.Dispose();
+
         return builder;
     }
 
-    private static void ValidateJwtOptions(
-        JwtAccessTokenOptions options,
-        byte[] signingKey)
+    private static void ValidateJwtOptions(JwtAccessTokenOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.Issuer))
         {
@@ -69,12 +126,6 @@ public static class IdentitySessionBuilderExtensions
                 "JWT clock skew must be between zero and five minutes.");
         }
 
-        if (signingKey.Length < 32)
-        {
-            throw new ArgumentException(
-                "The JWT signing key must contain at least 32 bytes.",
-                nameof(signingKey));
-        }
     }
 
     private static void ValidateSessionOptions(

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Errors;
@@ -88,6 +89,122 @@ public sealed class JwtSessionProviderTests
     }
 
     [Fact]
+    public async Task VersionedJwtProviderSignsWithCurrentKeyAndValidatesOverlap()
+    {
+        var firstKey = CreateSigningKey();
+        var secondKey = CreateSigningKey(33);
+        using var firstProvider = CreateVersionedJwtProvider(
+            "v1",
+            new Dictionary<string, byte[]>(StringComparer.Ordinal)
+            {
+                ["v1"] = firstKey,
+            });
+        using var rotatedProvider = CreateVersionedJwtProvider(
+            "v2",
+            new Dictionary<string, byte[]>(StringComparer.Ordinal)
+            {
+                ["v1"] = firstKey,
+                ["v2"] = secondKey,
+            });
+        using var retiredProvider = CreateVersionedJwtProvider(
+            "v2",
+            new Dictionary<string, byte[]>(StringComparer.Ordinal)
+            {
+                ["v2"] = secondKey,
+            });
+
+        var firstToken = firstProvider.Generate(CreatePayload());
+        var rotatedToken = rotatedProvider.Generate(CreatePayload());
+
+        Assert.Equal(
+            "v1",
+            new JsonWebTokenHandler()
+                .ReadJsonWebToken(firstToken)
+                .Kid);
+        Assert.Equal(
+            "v2",
+            new JsonWebTokenHandler()
+                .ReadJsonWebToken(rotatedToken)
+                .Kid);
+        Assert.NotNull(await rotatedProvider.ValidateAsync(
+            firstToken,
+            CancellationToken.None));
+        Assert.NotNull(await rotatedProvider.ValidateAsync(
+            rotatedToken,
+            CancellationToken.None));
+        Assert.Null(await retiredProvider.ValidateAsync(
+            firstToken,
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task VersionedJwtProviderAcceptsLegacyTokenWithoutKeyId()
+    {
+        var firstKey = CreateSigningKey();
+        var secondKey = CreateSigningKey(33);
+        using var legacyProvider = new HmacJwtAccessTokenProvider(
+            firstKey,
+            CreateJwtOptions());
+        using var secondLegacyProvider = new HmacJwtAccessTokenProvider(
+            secondKey,
+            CreateJwtOptions());
+        using var rotatedProvider = CreateVersionedJwtProvider(
+            "v2",
+            new Dictionary<string, byte[]>(StringComparer.Ordinal)
+            {
+                ["v1"] = firstKey,
+                ["v2"] = secondKey,
+            });
+
+        var legacyToken = legacyProvider.Generate(CreatePayload());
+        var secondLegacyToken = secondLegacyProvider.Generate(
+            CreatePayload());
+
+        Assert.True(string.IsNullOrEmpty(
+            new JsonWebTokenHandler()
+                .ReadJsonWebToken(legacyToken)
+                .Kid));
+        Assert.NotNull(await rotatedProvider.ValidateAsync(
+            legacyToken,
+            CancellationToken.None));
+        Assert.NotNull(await rotatedProvider.ValidateAsync(
+            secondLegacyToken,
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public void VersionedJwtProviderRejectsInvalidKeySets()
+    {
+        var options = CreateJwtOptions();
+        var validKey = CreateSigningKey();
+
+        Assert.Throws<ArgumentException>(() =>
+            new HmacJwtAccessTokenProvider(
+                "missing",
+                new Dictionary<string, byte[]>(StringComparer.Ordinal)
+                {
+                    ["v1"] = validKey,
+                },
+                options));
+        Assert.Throws<ArgumentException>(() =>
+            new HmacJwtAccessTokenProvider(
+                "bad id",
+                new Dictionary<string, byte[]>(StringComparer.Ordinal)
+                {
+                    ["bad id"] = validKey,
+                },
+                options));
+        Assert.Throws<ArgumentException>(() =>
+            new HmacJwtAccessTokenProvider(
+                "v1",
+                new Dictionary<string, byte[]>(StringComparer.Ordinal)
+                {
+                    ["v1"] = new byte[31],
+                },
+                options));
+    }
+
+    [Fact]
     public void RefreshProviderGeneratesOpaqueUniqueVerifiableTokens()
     {
         var provider = new OpaqueRefreshTokenProvider();
@@ -153,6 +270,30 @@ public sealed class JwtSessionProviderTests
     }
 
     [Fact]
+    public void DependencyInjectionDisposesJwtSigningKeyProvider()
+    {
+        var services = new ServiceCollection();
+        services
+            .AddSkopkaIdentity<TestProfile>()
+            .UseJwtSessions(
+                CreateSigningKey(),
+                jwt =>
+                {
+                    jwt.Issuer = "https://issuer.example";
+                    jwt.Audience = "identity-api";
+                });
+        var serviceProvider = services.BuildServiceProvider();
+        var tokenProvider = Assert.IsType<HmacJwtAccessTokenProvider>(
+            serviceProvider.GetRequiredService<
+                IIdentityAccessTokenProvider>());
+
+        serviceProvider.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() =>
+            tokenProvider.Generate(CreatePayload()));
+    }
+
+    [Fact]
     public async Task JwtBearerIntegrationBuildsNameAndRolePrincipal()
     {
         var services = new ServiceCollection();
@@ -212,6 +353,48 @@ public sealed class JwtSessionProviderTests
     }
 
     [Fact]
+    public async Task JwtBearerIntegrationAcceptsOverlappingSigningKey()
+    {
+        var firstKey = CreateSigningKey();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services
+            .AddSkopkaIdentity<TestProfile>()
+            .UseJwtSessions(
+                "v2",
+                new Dictionary<string, byte[]>(StringComparer.Ordinal)
+                {
+                    ["v1"] = firstKey,
+                    ["v2"] = CreateSigningKey(33),
+                },
+                jwt =>
+                {
+                    jwt.Issuer = "https://issuer.example";
+                    jwt.Audience = "identity-api";
+                    jwt.ClockSkew = TimeSpan.Zero;
+                })
+            .UseJwtBearerAuthentication();
+        using var firstProvider = CreateVersionedJwtProvider(
+            "v1",
+            new Dictionary<string, byte[]>(StringComparer.Ordinal)
+            {
+                ["v1"] = firstKey,
+            });
+        using var serviceProvider = services.BuildServiceProvider();
+        var token = firstProvider.Generate(CreatePayload());
+        using var scope = serviceProvider.CreateScope();
+        var httpContext = new DefaultHttpContext
+        {
+            RequestServices = scope.ServiceProvider,
+        };
+        httpContext.Request.Headers.Authorization = $"Bearer {token}";
+
+        var result = await httpContext.AuthenticateAsync();
+
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
     public async Task JwtBearerOnlineValidationRejectsRevokedSession()
     {
         var services = new ServiceCollection();
@@ -261,12 +444,21 @@ public sealed class JwtSessionProviderTests
         string audience = "identity-api")
         => new(
             CreateSigningKey(),
-            new JwtAccessTokenOptions
-            {
-                Issuer = "https://issuer.example",
-                Audience = audience,
-                ClockSkew = TimeSpan.Zero,
-            });
+            CreateJwtOptions(audience));
+
+    private static HmacJwtAccessTokenProvider CreateVersionedJwtProvider(
+        string currentKeyId,
+        IReadOnlyDictionary<string, byte[]> signingKeys)
+        => new(currentKeyId, signingKeys, CreateJwtOptions());
+
+    private static JwtAccessTokenOptions CreateJwtOptions(
+        string audience = "identity-api")
+        => new()
+        {
+            Issuer = "https://issuer.example",
+            Audience = audience,
+            ClockSkew = TimeSpan.Zero,
+        };
 
     private static IdentityAccessTokenPayload CreatePayload(
         DateTimeOffset? issuedAt = null,
@@ -284,8 +476,8 @@ public sealed class JwtSessionProviderTests
             claims);
     }
 
-    private static byte[] CreateSigningKey()
-        => Enumerable.Range(1, 32)
+    private static byte[] CreateSigningKey(int start = 1)
+        => Enumerable.Range(start, 32)
             .Select(value => (byte)value)
             .ToArray();
 

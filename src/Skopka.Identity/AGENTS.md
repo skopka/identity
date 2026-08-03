@@ -57,7 +57,8 @@ install and configure without moving domain or persistence logic into the facade
   default policy options so existing consumers continue to work without a limiter.
 - JWT sessions remain optional and are enabled through Infrastructure with
   `UseJwtSessions<TProfile>()`. The configured persistence provider supplies the refresh
-  session store; the facade registers only default session lifetime options.
+  session store; the facade registers only default session lifetime options. Hosts may
+  configure a current JWT key id plus a bounded overlapping key set for rotation.
 - The default session claims provider projects user handles and confirmation state.
   Applications attach role/domain projections with
   `IdentityBuilder<TProfile>.AddSessionClaimsProvider<TProvider>()`.

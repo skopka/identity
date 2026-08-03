@@ -302,10 +302,14 @@ Preserve these rules:
   `ValidateAccessTokenAsync` adds an online database/stamp check when immediate session
   revoke, password-change or user-block enforcement is required.
 - `UseJwtBearerAuthentication<TProfile>()` configures ASP.NET Core JWT bearer validation
-  against the same HMAC key, issuer and audience used by `UseJwtSessions<TProfile>()`.
+  against the same current/overlapping HMAC key set, issuer and audience used by
+  `UseJwtSessions<TProfile>()`.
   It also registers standard authorization services. Stateless validation is the
   default. `ValidateSessionOnEveryRequest` composes an online session check after the
   application's `OnTokenValidated` callback.
+- Versioned JWT signing emits the current key id as `kid` and resolves a present id
+  strictly. Legacy tokens without `kid` may try only the bounded configured overlap.
+  Retire an old key after the access-token lifetime, clock skew and rollout interval.
 - Hosts still call `UseAuthentication()` and `UseAuthorization()` in their ASP.NET Core
   middleware pipeline. Claims embedded in a stateless token remain unchanged until a
   new token is issued. Role changes appear on the next create/refresh; applications

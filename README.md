@@ -28,7 +28,8 @@ with `Microsoft.AspNetCore.Identity`.
 - Exact normalized active-user lookup for trusted account-message workflows.
 - Email, phone and password-reset action tokens based on ASP.NET Core Data Protection.
 - OTP challenge/proof orchestration with HMAC-protected generated codes.
-- Short-lived JWT access tokens and rotating opaque refresh sessions.
+- Short-lived JWT access tokens with signing-key overlap and rotating opaque refresh
+  sessions.
 - Active-session listing, device labels and user-scoped session revocation.
 - Optional online access-token/session validation.
 - Role CRUD, direct memberships, bounded role queries and role projection into
@@ -228,19 +229,19 @@ The stored verifier contains only the key id and KDF parameters, never the peppe
 
 ## JWT Sessions
 
-JWT sessions are optional. Signing keys must contain at least 32 random bytes and must
-be shared by every issuing and validating instance:
+JWT sessions are optional. Each signing key must contain at least 32 random bytes. All
+issuing and validating instances must share the current key id and the overlapping key
+set during rotation:
 
 ```csharp
-var signingKey = Convert.FromBase64String(
-    builder.Configuration["Identity:JwtSigningKey"]
-    ?? throw new InvalidOperationException("JWT signing key is missing."));
+var signingKeys = LoadVersionedSigningKeys(builder.Configuration);
 
 builder.Services
     .AddSkopkaIdentity<AppProfile>()
     .UsePostgreSql(connectionString)
     .UseJwtSessions(
-        signingKey,
+        signingKeys.CurrentKeyId,
+        signingKeys.Keys,
         jwt =>
         {
             jwt.Issuer = "https://identity.example.com";
@@ -256,6 +257,13 @@ Stateless validation accepts a correctly signed access token until its short exp
 Set `ValidateSessionOnEveryRequest` to `true` when immediate refresh-session revocation
 is worth a database lookup on every request. Role changes appear in newly created or
 refreshed access tokens; existing stateless JWTs retain their embedded claims.
+
+New access tokens carry the current key id in the protected `kid` header. Validators
+accept configured historical ids, and also try the bounded overlapping set for legacy
+tokens issued before `kid` support. Retain an old key for at least the access-token
+lifetime plus clock skew and the maximum rolling-deployment interval. The single-key
+`UseJwtSessions(byte[], ...)` overload remains available for deployments that do not
+need overlap.
 
 Account UIs can call `ListAsync` and `RevokeByIdAsync`. Revocation is scoped by both
 user id and session id, so knowing another user's session id is not sufficient.
