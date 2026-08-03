@@ -20,6 +20,18 @@ first applies HMAC-SHA256 with an application-managed pepper and then runs Argon
 
 Do not log passwords, verifier strings, pepper material or password-reset tokens.
 
+Automatic login generates at most three distinct normalized candidates and queries the
+active login-identifier registry once. Inputs longer than 512 characters are rejected
+before account/client rate limiting. Zero matches and matches spanning multiple users
+use the same invalid-credentials response and one dummy password-verification workload;
+do not add follow-up probes that reveal which handle collided.
+
+The default phone login policy accepts only 8-15 ASCII digits with optional leading `+`
+and spaces, `-`, `(`, `)` or `.` separators. It is shared by persistence, confirmation,
+action-token binding, exact lookup and explicit/automatic password login. Override
+`IIdentityNormalizer.NormalizePhoneLoginIdentifier` for a different numbering plan;
+do not normalize arbitrary letter-containing input into a phone login key.
+
 ## Secret Inventory
 
 Use independent random keys for each purpose:
@@ -63,6 +75,12 @@ Action tokens are bearer secrets but are not OTP or MFA authenticators.
 Verification challenges bind the user, server-created purpose, intent binding, method
 and current security stamp. Failed-attempt limits and expiry are enforced independently
 of the verification method.
+
+A resend is latest-wins for the exact `(user, purpose, binding, method)` tuple. The
+store atomically supersedes earlier `Pending` and `Verified` challenges before creating
+the replacement; different intents coexist. PostgreSQL serializes issuance on the user
+row and enforces one active intent through a filtered unique SHA-256 intent index. This
+lock does not change the user's optimistic `Version`.
 
 Core persists only a SHA-256 digest of the high-entropy verification proof. Proofs are
 one-time and short-lived.

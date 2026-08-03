@@ -45,6 +45,14 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   without exposing secret values.
 - Provide default domain services such as `DefaultIdentityNormalizer`,
   `DefaultUserOperationPolicy` and default/noop metrics implementations.
+- Prepare the distinct union of normalized user-name, email and phone keys for every
+  create, aggregate-registration and handle-change store operation. Automatic password
+  login accepts exactly one distinct active user and otherwise follows the same dummy
+  verification path as an unknown explicit handle.
+- After client throttling, resolve the user once and key password-account throttling by
+  that stable user id. Never derive a known account bucket from the selected handle or
+  the complete automatic candidate set, because aliases and phone formatting would
+  split the attempt budget.
 - Create domain errors through `IdentityErrors`.
 - Enforce business rules that do not require database/provider-specific knowledge.
 
@@ -98,6 +106,9 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
 - Verification binds every challenge to user, purpose, intent binding and current
   security stamp. It enforces expiry and failed-attempt limits independently of the
   selected method provider.
+- Verification Begin uses the store's atomic create-and-supersede operation. Reissuing
+  the exact `(user, purpose, binding, method)` intent invalidates pending codes and
+  verified proofs; unrelated intents may remain active in parallel.
 - Core stores only a SHA-256 digest of the high-entropy verification proof. Business
   authorization and execution remain outside Verification.
 - Step-up policy owns verification requirements; the business use case owns action and

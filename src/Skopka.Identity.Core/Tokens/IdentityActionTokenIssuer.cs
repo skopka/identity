@@ -33,7 +33,7 @@ public sealed class IdentityActionTokenIssuer<TProfile>(
             userId,
             IdentityActionTokenPurpose.PhoneConfirmation,
             options.PhoneConfirmationLifetime,
-            user => normalizer.NormalizePhone(user.Phone),
+            user => normalizer.NormalizePhoneLoginIdentifier(user.Phone),
             "phone",
             ct);
 

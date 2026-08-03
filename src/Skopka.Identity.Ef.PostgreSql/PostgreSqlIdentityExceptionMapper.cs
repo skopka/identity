@@ -45,6 +45,9 @@ public sealed class PostgreSqlIdentityExceptionMapper : IEfIdentityExceptionMapp
             PostgreSqlIdentityConstraintNames.Phone => Duplicate(
                 IdentityErrorCodes.DuplicatePhone,
                 "Phone is already in use."),
+            PostgreSqlIdentityConstraintNames.LoginIdentifier => Duplicate(
+                IdentityErrorCodes.DuplicateLoginIdentifier,
+                "Login identifier is already in use."),
             PostgreSqlIdentityConstraintNames.ExternalLogin => Duplicate(
                 IdentityErrorCodes.DuplicateExternalLogin,
                 "External login is already linked to another user."),

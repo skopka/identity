@@ -100,7 +100,7 @@ Authenticate first, then bind the session to the returned security stamp:
 ```csharp
 var authentication = await passwords.AuthenticateAsync(
     new AuthenticatePasswordCommand(
-        PasswordLoginHandle.Email,
+        PasswordLoginHandle.Automatic,
         request.Email,
         request.Password,
         trustedClientKey),
@@ -123,6 +123,17 @@ var issued = await sessions.CreateAsync(
 
 `ClientName` and `DeviceName` are display labels, not security decisions. Derive them in
 the host, keep them free of raw IP addresses and do not trust them for authorization.
+
+For phone DTO validation, use the configured
+`IIdentityNormalizer.NormalizePhoneLoginIdentifier` result as the Identity policy
+decision. The default accepts 8-15 ASCII digits with common separators; do not maintain
+a separate transport-only interpretation that can diverge from stored/login keys.
+
+If the host uses a custom `IIdentityUserLookupStore<TProfile>`, implement both
+`FindActiveByNormalizedPhoneAsync` and
+`FindActiveByNormalizedLoginIdentifiersAsync`. The compatibility defaults return no
+match; the adapter is responsible for bounded one-query resolution and global active
+alias uniqueness.
 
 For browser login, keep refresh tokens in `Secure`, `HttpOnly` cookies. Choose an
 appropriate `SameSite` mode and enforce CSRF protection on refresh, logout, linking and
@@ -237,8 +248,9 @@ Enable purpose-bound action tokens explicitly:
 identity.UseDataProtectionActionTokens();
 ```
 
-Use `IIdentityUserLookupService<TProfile>.FindActiveByEmailAsync` for an exact
-normalized lookup before issuing an account message. Do not use the administrative
+Use `IIdentityUserLookupService<TProfile>.FindActiveByEmailAsync` or
+`FindActiveByPhoneAsync` for an exact normalized lookup before issuing an account
+message. Do not use automatic password-login lookup or the administrative
 `IIdentityUserQueryService<TProfile>` contains-search for this workflow:
 
 ```csharp

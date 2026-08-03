@@ -359,7 +359,7 @@ public sealed class IdentityStepUpServiceTests
             => Task.FromResult(
                 Challenge?.Id == challengeId ? Challenge : null);
 
-        public Task<OperationResult> CreateAsync(
+        public Task<OperationResult> CreateAndSupersedeAsync(
             NewVerificationChallenge challenge,
             DateTimeOffset now,
             CancellationToken ct)

@@ -12,6 +12,15 @@ namespace Skopka.Identity.Core.Tests;
 public sealed class PasswordAuthenticationServiceTests
 {
     [Fact]
+    public void LoginHandleValuesPreserveCompatibility()
+    {
+        Assert.Equal(0, (int)PasswordLoginHandle.UserName);
+        Assert.Equal(1, (int)PasswordLoginHandle.Email);
+        Assert.Equal(2, (int)PasswordLoginHandle.Phone);
+        Assert.Equal(3, (int)PasswordLoginHandle.Automatic);
+    }
+
+    [Fact]
     public async Task AuthenticatesByNormalizedUserName()
     {
         var fixture = new Fixture();
@@ -44,6 +53,125 @@ public sealed class PasswordAuthenticationServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal("ALICE@EXAMPLE.COM", fixture.LookupStore.LastNormalizedEmail);
         Assert.Null(fixture.LookupStore.LastNormalizedUserName);
+    }
+
+    [Fact]
+    public async Task AuthenticatesByNormalizedPhone()
+    {
+        var fixture = new Fixture();
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Phone,
+                "+1 (234) 567-8901",
+                "correct"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("12345678901", fixture.LookupStore.LastNormalizedPhone);
+        Assert.Null(fixture.LookupStore.LastNormalizedUserName);
+        Assert.Null(fixture.LookupStore.LastNormalizedEmail);
+    }
+
+    [Fact]
+    public async Task ExplicitPhoneRejectsNonPhoneShapedInputBeforeLookup()
+    {
+        var limiter = new FakeIdentityRateLimiter();
+        var fixture = new Fixture(rateLimiter: limiter);
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Phone,
+                "call12345678",
+                "correct"),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.Validation);
+        Assert.Null(fixture.LookupStore.LastNormalizedPhone);
+        Assert.Empty(limiter.Checks);
+        Assert.Empty(limiter.Hits);
+    }
+
+    [Fact]
+    public async Task AutomaticLoginResolvesWithOneStoreCall()
+    {
+        var fixture = new Fixture();
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Automatic,
+                " Alice@Example.com ",
+                "correct"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, fixture.LookupStore.AutomaticLookupCalls);
+        Assert.Equal(
+            ["ALICE@EXAMPLE.COM"],
+            fixture.LookupStore.LastAutomaticKeys);
+        Assert.Null(fixture.LookupStore.LastNormalizedUserName);
+        Assert.Null(fixture.LookupStore.LastNormalizedEmail);
+        Assert.Null(fixture.LookupStore.LastNormalizedPhone);
+    }
+
+    [Fact]
+    public async Task AutomaticLoginWithoutMatchUsesOneDummyVerification()
+    {
+        var fixture = new Fixture(userExists: false);
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Automatic,
+                "unknown@example.com",
+                "wrong"),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.InvalidCredentials);
+        Assert.Equal(1, fixture.LookupStore.AutomaticLookupCalls);
+        Assert.Equal(1, fixture.TimingProtector.SimulateCalls);
+        Assert.Equal([Guid.Empty], fixture.CredentialStore.FindUserIds);
+    }
+
+    [Fact]
+    public async Task AmbiguousAutomaticLoginUsesOneDummyVerification()
+    {
+        var fixture = new Fixture();
+        fixture.LookupStore.AutomaticUsers =
+        [
+            fixture.User,
+            fixture.User with { Id = Guid.NewGuid() },
+        ];
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Automatic,
+                "shared",
+                "correct"),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.InvalidCredentials);
+        Assert.Equal(1, fixture.LookupStore.AutomaticLookupCalls);
+        Assert.Equal(1, fixture.TimingProtector.SimulateCalls);
+        Assert.Equal([Guid.Empty], fixture.CredentialStore.FindUserIds);
+        Assert.Equal(0, fixture.Hasher.VerifyCalls);
+    }
+
+    [Fact]
+    public async Task AutomaticPhoneCandidatesIncludeDigitsOnlyAlias()
+    {
+        var fixture = new Fixture();
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Automatic,
+                "+1 (234) 567-8901",
+                "correct"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(
+            "12345678901",
+            fixture.LookupStore.LastAutomaticKeys!);
     }
 
     [Fact]
@@ -168,6 +296,51 @@ public sealed class PasswordAuthenticationServiceTests
     }
 
     [Fact]
+    public async Task RehashRejectsHandleReassignedToAnotherUser()
+    {
+        var fixture = new Fixture(passwordVerifier: "legacy");
+        fixture.Hasher.LegacyVerifierNeedsRehash = true;
+        fixture.LookupStore.UserAfterFirstLookup = fixture.User with
+        {
+            Id = Guid.NewGuid(),
+            Version = fixture.User.Version + 1
+        };
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.UserName,
+                "alice",
+                "correct"),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.InvalidCredentials);
+    }
+
+    [Fact]
+    public async Task AutomaticRehashReusesOriginalCustomAliasLookup()
+    {
+        var fixture = new Fixture(
+            passwordVerifier: "legacy",
+            normalizer: new AliasOnlyNormalizer());
+        fixture.Hasher.LegacyVerifierNeedsRehash = true;
+        fixture.LookupStore.AutomaticUsersAfterFirstLookup =
+        [
+            fixture.User with { Version = fixture.User.Version + 1 }
+        ];
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Automatic,
+                "custom-alias",
+                "correct"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(fixture.User.Version + 1, result.Value.Version);
+        Assert.Equal(2, fixture.LookupStore.AutomaticLookupCalls);
+    }
+
+    [Fact]
     public async Task WrongPasswordHitsClientAndAccountPartitions()
     {
         var limiter = new FakeIdentityRateLimiter();
@@ -189,6 +362,79 @@ public sealed class PasswordAuthenticationServiceTests
             limiter.Hits,
             request => request.Scope == "password.account");
         Assert.Empty(limiter.Resets);
+    }
+
+    [Fact]
+    public async Task ResolvedUserSharesAccountBucketAcrossHandlesAndFormats()
+    {
+        var limiter = new FakeIdentityRateLimiter();
+        var fixture = new Fixture(rateLimiter: limiter);
+
+        var first = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Automatic,
+                "+1 (234) 567-8901",
+                "wrong"),
+            CancellationToken.None);
+        var second = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Automatic,
+                "123.456.789.01",
+                "wrong"),
+            CancellationToken.None);
+        var third = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Email,
+                "alice@example.com",
+                "wrong"),
+            CancellationToken.None);
+
+        AssertError(first, IdentityErrorCodes.InvalidCredentials);
+        AssertError(second, IdentityErrorCodes.InvalidCredentials);
+        AssertError(third, IdentityErrorCodes.InvalidCredentials);
+
+        var accountChecks = limiter.Checks
+            .Where(request => request.Scope
+                == "password.account")
+            .ToArray();
+        var accountHits = limiter.Hits
+            .Where(request => request.Scope
+                == "password.account")
+            .ToArray();
+        Assert.Equal(3, accountChecks.Length);
+        Assert.Equal(3, accountHits.Length);
+        Assert.Single(accountChecks.Select(request => request.Key).Distinct());
+        Assert.Single(accountHits.Select(request => request.Key).Distinct());
+        Assert.Equal($"user:{fixture.User.Id:N}", accountChecks[0].Key);
+        Assert.Equal(accountChecks[0].Key, accountHits[0].Key);
+    }
+
+    [Fact]
+    public async Task UnknownPhoneFormatsShareDeterministicFallbackBucket()
+    {
+        var limiter = new FakeIdentityRateLimiter();
+        var fixture = new Fixture(userExists: false, rateLimiter: limiter);
+
+        _ = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Automatic,
+                "+1 (234) 567-8901",
+                "wrong"),
+            CancellationToken.None);
+        _ = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Automatic,
+                "123.456.789.01",
+                "wrong"),
+            CancellationToken.None);
+
+        var accountKeys = limiter.Checks
+            .Where(request => request.Scope
+                == "password.account")
+            .Select(request => request.Key)
+            .ToArray();
+        Assert.Equal(2, accountKeys.Length);
+        Assert.Single(accountKeys.Distinct());
     }
 
     [Fact]
@@ -274,6 +520,29 @@ public sealed class PasswordAuthenticationServiceTests
         Assert.Equal(0, fixture.TimingProtector.SimulateCalls);
     }
 
+    [Fact]
+    public async Task OversizedLoginIsRejectedBeforeRateLimiterOrLookup()
+    {
+        var limiter = new FakeIdentityRateLimiter();
+        var fixture = new Fixture(rateLimiter: limiter);
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Automatic,
+                new string('x', IdentityLoginLimits.MaximumLoginLength + 1),
+                "correct",
+                "client"),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.Validation);
+        Assert.Empty(limiter.Checks);
+        Assert.Empty(limiter.Hits);
+        Assert.Equal(0, fixture.LookupStore.AutomaticLookupCalls);
+        Assert.Empty(fixture.CredentialStore.FindUserIds);
+        Assert.Equal(0, fixture.Hasher.VerifyCalls);
+        Assert.Equal(0, fixture.TimingProtector.SimulateCalls);
+    }
+
     private static void AssertError(
         OperationResult<IdentityUser<TestProfile>> result,
         string errorCode)
@@ -290,7 +559,8 @@ public sealed class PasswordAuthenticationServiceTests
             DateTimeOffset? blockedAt = null,
             DateTimeOffset? blockedUntil = null,
             FakeIdentityRateLimiter? rateLimiter = null,
-            PasswordPolicyOptions? passwordPolicyOptions = null)
+            PasswordPolicyOptions? passwordPolicyOptions = null,
+            IIdentityNormalizer? normalizer = null)
         {
             User = new IdentityUser<TestProfile>(
                 Guid.NewGuid(),
@@ -316,7 +586,7 @@ public sealed class PasswordAuthenticationServiceTests
             Service = new PasswordAuthenticationService<TestProfile>(
                 LookupStore,
                 CredentialStore,
-                new DefaultIdentityNormalizer(),
+                normalizer ?? new DefaultIdentityNormalizer(),
                 Hasher,
                 TimingProtector,
                 new NoopIdentityMetrics(),
@@ -342,6 +612,13 @@ public sealed class PasswordAuthenticationServiceTests
     {
         public string? LastNormalizedUserName { get; private set; }
         public string? LastNormalizedEmail { get; private set; }
+        public string? LastNormalizedPhone { get; private set; }
+        public IReadOnlyCollection<string>? LastAutomaticKeys { get; private set; }
+        public int AutomaticLookupCalls { get; private set; }
+        public IReadOnlyList<IdentityUser<TestProfile>> AutomaticUsers { get; set; }
+            = user is null ? [] : [user];
+        public IReadOnlyList<IdentityUser<TestProfile>>?
+            AutomaticUsersAfterFirstLookup { get; set; }
         public IdentityUser<TestProfile>? UserAfterFirstLookup { get; set; }
         private int lookupCalls;
 
@@ -359,6 +636,29 @@ public sealed class PasswordAuthenticationServiceTests
         {
             LastNormalizedEmail = normalizedEmail;
             return Task.FromResult(GetUser());
+        }
+
+        public Task<IdentityUser<TestProfile>?> FindActiveByNormalizedPhoneAsync(
+            string normalizedPhone,
+            CancellationToken ct)
+        {
+            LastNormalizedPhone = normalizedPhone;
+            return Task.FromResult(GetUser());
+        }
+
+        public Task<IReadOnlyList<IdentityUser<TestProfile>>>
+            FindActiveByNormalizedLoginIdentifiersAsync(
+                IReadOnlyCollection<string> normalizedKeys,
+                CancellationToken ct)
+        {
+            AutomaticLookupCalls++;
+            LastAutomaticKeys = normalizedKeys;
+            lookupCalls++;
+            return Task.FromResult(
+                lookupCalls > 1
+                    && AutomaticUsersAfterFirstLookup is not null
+                        ? AutomaticUsersAfterFirstLookup
+                        : AutomaticUsers);
         }
 
         private IdentityUser<TestProfile>? GetUser()
@@ -447,6 +747,17 @@ public sealed class PasswordAuthenticationServiceTests
 
         public void SimulateVerification(string providedPassword)
             => SimulateCalls++;
+    }
+
+    private sealed class AliasOnlyNormalizer : IIdentityNormalizer
+    {
+        public string? NormalizeUserName(string? value) => null;
+        public string? NormalizeEmail(string? value) => null;
+        public string? NormalizePhone(string? value) => null;
+
+        public IReadOnlyCollection<string> NormalizeAutomaticLoginIdentifiers(
+            string? value)
+            => value is null ? [] : ["CUSTOM-ALIAS"];
     }
 
     private sealed class FakeIdentityRateLimiter

@@ -33,6 +33,10 @@ public sealed class EfIdentityRegistrationStoreTests
         Assert.Empty(database.Context.ExternalLogins);
         Assert.Single(database.Context.Users);
         Assert.Single(database.Context.Profiles);
+        Assert.Equal(2, database.Context.LoginIdentifiers.Count());
+        Assert.All(
+            database.Context.LoginIdentifiers,
+            identifier => Assert.True(identifier.IsActive));
     }
 
     [Fact]
@@ -59,6 +63,7 @@ public sealed class EfIdentityRegistrationStoreTests
         Assert.Empty(database.Context.Credentials);
         Assert.Single(database.Context.Users);
         Assert.Single(database.Context.Profiles);
+        Assert.Equal(2, database.Context.LoginIdentifiers.Count());
     }
 
     [Fact]
@@ -79,7 +84,8 @@ public sealed class EfIdentityRegistrationStoreTests
             new NormalizedHandles(
                 "BOB",
                 "BOB@EXAMPLE.COM",
-                null),
+                null,
+                ["BOB", "BOB@EXAMPLE.COM"]),
             login,
             Now.AddMinutes(1),
             CancellationToken.None);
@@ -105,7 +111,8 @@ public sealed class EfIdentityRegistrationStoreTests
     private static readonly NormalizedHandles Handles = new(
         "ALICE",
         "ALICE@EXAMPLE.COM",
-        null);
+        null,
+        ["ALICE", "ALICE@EXAMPLE.COM"]);
 
     private static NewIdentityUser<TestProfile> CreateUser()
         => new(

@@ -6,6 +6,7 @@ public sealed class VerificationChallengeEntity
 {
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
+    public string IntentHash { get; set; } = null!;
     public string Purpose { get; set; } = null!;
     public string Binding { get; set; } = null!;
     public string Method { get; set; } = null!;

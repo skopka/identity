@@ -142,7 +142,8 @@ Commands return `OperationResult` instead of throwing for expected domain failur
 Persist and submit the latest `IdentityUser.Version` for mutations that require
 optimistic concurrency.
 
-Authenticate with a user name or email:
+Authenticate with an explicit user name, email or phone, or let Identity resolve a
+bounded automatic candidate set:
 
 ```csharp
 using Skopka.Identity.Authentication;
@@ -152,7 +153,7 @@ var passwords = scope.ServiceProvider.GetRequiredService<
 
 var authentication = await passwords.AuthenticateAsync(
     new AuthenticatePasswordCommand(
-        PasswordLoginHandle.Email,
+        PasswordLoginHandle.Automatic,
         "alice@example.com",
         submittedPassword,
         clientKey),
@@ -161,6 +162,23 @@ var authentication = await passwords.AuthenticateAsync(
 
 `clientKey` is trusted transport context created by the host, such as a protected IP
 partition key. Do not accept it directly from an untrusted request body.
+
+Automatic lookup normalizes the input as a user name and email, and as a phone only when
+the input contains 8-15 digits plus common phone separators. It succeeds only when the
+matching registry rows identify one active user. No match and cross-handle ambiguity
+follow the same invalid-credentials and dummy-password-verification path.
+
+The same default phone shape is required when a phone handle is created, changed,
+confirmed, looked up exactly or used with `PasswordLoginHandle.Phone`. Applications
+with another numbering plan can override
+`IIdentityNormalizer.NormalizePhoneLoginIdentifier`; hosts should call that contract
+instead of duplicating phone rules in transport validation.
+
+For source/binary compatibility, the new phone and automatic members on
+`IIdentityUserLookupStore<TProfile>` have safe no-match defaults. Custom persistence
+adapters must implement both members before enabling these modes, query automatic
+candidates in one bounded operation, and enforce one active owner for every normalized
+alias across handle types.
 
 After successful authentication, create a session from the returned user and its current
 security stamp:

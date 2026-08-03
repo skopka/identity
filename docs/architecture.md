@@ -148,6 +148,12 @@ Action tokens are not MFA. OTP verification does not itself grant business permi
 A step-up decision confirms the extra verification requirement but the application must
 still enforce its normal authorization policy.
 
+Only one `Pending` or `Verified` challenge is active for an exact
+`(user, purpose, binding, method)` intent. Reissuing it atomically marks all earlier
+active rows `Superseded`, including already expired rows. This invalidates both an old
+OTP response and an unconsumed proof. Different bindings, purposes or methods are
+independent, so unrelated step-up actions can proceed in parallel.
+
 ## Sessions and Roles
 
 JWT access tokens contain a security-stamp snapshot and bounded projected claims.

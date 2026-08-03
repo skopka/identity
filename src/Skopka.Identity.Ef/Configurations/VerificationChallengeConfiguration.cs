@@ -18,6 +18,10 @@ internal sealed class VerificationChallengeConfiguration
             .HasColumnName("id");
         builder.Property(challenge => challenge.UserId)
             .HasColumnName("user_id");
+        builder.Property(challenge => challenge.IntentHash)
+            .HasColumnName("intent_hash")
+            .HasMaxLength(VerificationIntentHasher.HashLength)
+            .IsRequired();
         builder.Property(challenge => challenge.Purpose)
             .HasColumnName("purpose")
             .HasMaxLength(VerificationLimits.MaximumPurposeLength)

@@ -36,5 +36,23 @@ public sealed class PostgreSqlIdentityDbContext<TProfile>(
             .IsUnique()
             .HasDatabaseName(PostgreSqlIdentityConstraintNames.Phone)
             .HasFilter("deleted_at IS NULL AND normalized_phone IS NOT NULL");
+
+        modelBuilder.Entity<LoginIdentifierEntity>()
+            .HasIndex(identifier => identifier.NormalizedKey)
+            .IsUnique()
+            .HasDatabaseName(
+                PostgreSqlIdentityConstraintNames.LoginIdentifier)
+            .HasFilter("is_active = TRUE");
+
+        modelBuilder.Entity<VerificationChallengeEntity>()
+            .HasIndex(challenge => new
+            {
+                challenge.UserId,
+                challenge.IntentHash
+            })
+            .IsUnique()
+            .HasDatabaseName(
+                PostgreSqlIdentityConstraintNames.ActiveVerificationIntent)
+            .HasFilter("state IN (0, 1)");
     }
 }

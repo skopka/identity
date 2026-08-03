@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Skopka.Identity.Ef.PostgreSql;
@@ -11,9 +12,11 @@ using Skopka.Identity.Ef.PostgreSql;
 namespace Skopka.Identity.Ef.Migrations
 {
     [DbContext(typeof(PostgreSqlIdentityDbContext<PostgreSqlIdentityDesignTimeProfile>))]
-    partial class PostgreSqlIdentityDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260803152624_AddLoginIdentifierRegistry")]
+    partial class AddLoginIdentifierRegistry
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -410,12 +413,6 @@ namespace Skopka.Identity.Ef.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<string>("IntentHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("intent_hash");
-
                     b.Property<string>("Binding")
                         .IsRequired()
                         .HasMaxLength(512)
@@ -500,11 +497,6 @@ namespace Skopka.Identity.Ef.Migrations
 
                     b.HasIndex("UserId", "State")
                         .HasDatabaseName("ix_verification_challenges_user_state");
-
-                    b.HasIndex("UserId", "IntentHash")
-                        .IsUnique()
-                        .HasDatabaseName("ux_verification_challenges_active_intent")
-                        .HasFilter("state IN (0, 1)");
 
                     b.ToTable("verification_challenges", (string)null);
                 });

@@ -147,7 +147,10 @@ public sealed class IdentityVerificationService<TProfile>
             user.SecurityStamp,
             options.MaxAttempts,
             expiresAt);
-        var result = await challengeStore.CreateAsync(challenge, now, ct);
+        var result = await challengeStore.CreateAndSupersedeAsync(
+            challenge,
+            now,
+            ct);
         if (!result.IsSuccess)
         {
             return Finish<IssuedVerificationChallenge>(op, result);

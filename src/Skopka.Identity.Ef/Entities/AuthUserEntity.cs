@@ -25,6 +25,8 @@ public sealed class AuthUserEntity
 
     // nav
     public UserProfileEntityBase Profile { get; set; } = null!;
+    public ICollection<LoginIdentifierEntity> LoginIdentifiers { get; set; }
+        = new List<LoginIdentifierEntity>();
     public ICollection<UserExternalLoginEntity> ExternalLogins { get; set; } = new List<UserExternalLoginEntity>();
     public ICollection<UserRoleEntity> RoleMemberships { get; set; } = new List<UserRoleEntity>();
     public UserCredentialEntity? Credential { get; set; }

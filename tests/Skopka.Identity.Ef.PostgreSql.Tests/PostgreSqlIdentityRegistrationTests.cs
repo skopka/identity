@@ -159,11 +159,21 @@ public sealed class PostgreSqlIdentityRegistrationTests
             name => name.EndsWith(
                 "_AddRateLimitPartitionVersions",
                 StringComparison.Ordinal));
+        var loginIdentifierMigration = Assert.Single(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith(
+                "_AddLoginIdentifierRegistry",
+                StringComparison.Ordinal));
+        var verificationSupersedeMigration = Assert.Single(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith(
+                "_SupersedeVerificationChallenges",
+                StringComparison.Ordinal));
         Assert.False(providerContext.Database.HasPendingModelChanges());
 
         var script = providerContext.GetService<IMigrator>().GenerateScript(
             fromMigration: null,
-            toMigration: rateLimitRotationMigration);
+            toMigration: verificationSupersedeMigration);
 
         Assert.Contains("CREATE TABLE auth_users", script, StringComparison.Ordinal);
         Assert.Contains("CREATE TABLE user_profiles", script, StringComparison.Ordinal);
@@ -185,6 +195,28 @@ public sealed class PostgreSqlIdentityRegistrationTests
             StringComparison.Ordinal);
         Assert.Contains(
             "DEFAULT 'legacy'",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "CREATE TABLE identity_login_identifiers",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "INSERT INTO identity_login_identifiers",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "REGEXP_REPLACE",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "ux_identity_login_identifiers_active_normalized_key",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains("intent_hash", script, StringComparison.Ordinal);
+        Assert.Contains("ROW_NUMBER()", script, StringComparison.Ordinal);
+        Assert.Contains(
+            "ux_verification_challenges_active_intent",
             script,
             StringComparison.Ordinal);
         Assert.Contains(

@@ -41,6 +41,10 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
   - `normalized_phone`
 - PostgreSQL unique violation SQLSTATE `23505` should be translated to the appropriate
   duplicate identity error.
+- `identity_login_identifiers.normalized_key` has one active owner across all handle
+  types through the stable filtered unique index
+  `ux_identity_login_identifiers_active_normalized_key`; conflicts map to
+  `identity.login_identifier.duplicate`.
 - Keep index names stable so exception mapping can identify which handle failed.
 
 ## Migrations
@@ -57,7 +61,10 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
 - Security stamp migration backfills existing users with PostgreSQL-generated UUID values
   before making the column non-null.
 - Verification migrations create `verification_challenges` with a foreign key to
-  `auth_users`, a user/state lookup index and a concurrency-token version column.
+  `auth_users`, a user/state lookup index and a concurrency-token version column. The
+  superseding migration backfills the length-prefixed SHA-256 `intent_hash`, safely
+  supersedes duplicate active legacy rows and adds the filtered unique active-intent
+  index `ux_verification_challenges_active_intent`.
 - Rate-limit migrations create `identity_rate_limit_buckets` with a composite
   `(scope, partition_version, key_hash)` primary key and backfill pre-rotation rows with
   the `legacy` version.
@@ -67,3 +74,9 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
   normalized role-name index and stable key/foreign-key names used by exception mapping.
 - External-login constraints use stable lowercase names for exception mapping. Session
   metadata columns are bounded nullable display labels.
+- Login-identifier migrations backfill the default normalizer's direct keys,
+  formatted-phone alias and phone-shaped raw-handle aliases before creating the filtered
+  active-key uniqueness constraint. The packaged preflight rejects oversized handles
+  and legacy phone rows outside the default policy. Deployments with a custom
+  `IIdentityNormalizer` or phone-login policy must replace or extend the validation and
+  backfill after a normalizer-specific preflight.

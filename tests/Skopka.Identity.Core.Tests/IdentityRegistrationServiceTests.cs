@@ -1,4 +1,5 @@
 using Skopka.Abstraction.OperationResult;
+using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.Errors;
 using Skopka.Identity.ExternalLogins;
@@ -33,6 +34,9 @@ public sealed class IdentityRegistrationServiceTests
         Assert.NotNull(fixture.Store.User?.Id);
         Assert.Equal("ALICE", fixture.Store.Handles?.UserName);
         Assert.Equal("ALICE@EXAMPLE.COM", fixture.Store.Handles?.Email);
+        Assert.Equal(
+            ["ALICE", "ALICE@EXAMPLE.COM"],
+            fixture.Store.Handles?.LoginIdentifierKeys);
         Assert.Equal(PasswordMutation.Register, validator.Mutation);
         Assert.Equal(0, validator.UserVersion);
     }
@@ -105,6 +109,68 @@ public sealed class IdentityRegistrationServiceTests
             CancellationToken.None);
 
         AssertError(result, IdentityErrorCodes.Forbidden);
+        Assert.Null(fixture.Store.User);
+    }
+
+    [Fact]
+    public async Task RegistrationBuildsUnionOfAutomaticHandleAliases()
+    {
+        var fixture = new Fixture(passwordHasher: null);
+        var command = new CreateUserCommand<TestProfile>(
+            "+1 (234) 567-8901",
+            null,
+            "+1 234 567 8901",
+            new TestProfile("Alice"));
+
+        var result = await fixture.Service.RegisterExternalAsync(
+            new RegisterExternalUserCommand<TestProfile>(
+                command,
+                new ExternalLoginKey("github", "subject")),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+            ["+1 (234) 567-8901", "12345678901", "+1 234 567 8901"],
+            fixture.Store.Handles?.LoginIdentifierKeys);
+    }
+
+    [Fact]
+    public async Task RegistrationRejectsOversizedHandleBeforeStore()
+    {
+        var fixture = new Fixture(passwordHasher: null);
+        var command = CreateCommand() with
+        {
+            UserName = new string(
+                'x',
+                IdentityLoginLimits.MaximumLoginLength + 1),
+        };
+
+        var result = await fixture.Service.RegisterExternalAsync(
+            new RegisterExternalUserCommand<TestProfile>(
+                command,
+                new ExternalLoginKey("github", "subject")),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.Validation);
+        Assert.Null(fixture.Store.User);
+    }
+
+    [Fact]
+    public async Task RegistrationRejectsNonPhoneShapedPhoneBeforeStore()
+    {
+        var fixture = new Fixture(passwordHasher: null);
+        var command = CreateCommand() with
+        {
+            Phone = "call12345678",
+        };
+
+        var result = await fixture.Service.RegisterExternalAsync(
+            new RegisterExternalUserCommand<TestProfile>(
+                command,
+                new ExternalLoginKey("github", "subject")),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.Validation);
         Assert.Null(fixture.Store.User);
     }
 

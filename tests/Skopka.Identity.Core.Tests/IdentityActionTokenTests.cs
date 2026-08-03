@@ -14,6 +14,94 @@ namespace Skopka.Identity.Core.Tests;
 public sealed class IdentityActionTokenTests
 {
     [Fact]
+    public async Task CreatePreparesAutomaticAliasesForEveryHandle()
+    {
+        var fixture = new UserServiceFixture();
+
+        var result = await fixture.Service.CreateAsync(
+            new CreateUserCommand<TestProfile>(
+                "+1 (555) 123-4567",
+                "phone@example.com",
+                "+1 555 123 4567",
+                new TestProfile("Phone")),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(
+            "+1 (555) 123-4567",
+            fixture.Store.LastCreatedHandles!.LoginIdentifierKeys!);
+        Assert.Contains(
+            "15551234567",
+            fixture.Store.LastCreatedHandles.LoginIdentifierKeys!);
+        Assert.Contains(
+            "PHONE@EXAMPLE.COM",
+            fixture.Store.LastCreatedHandles.LoginIdentifierKeys!);
+    }
+
+    [Fact]
+    public async Task CreateRejectsNonPhoneShapedPhoneBeforeStore()
+    {
+        var fixture = new UserServiceFixture();
+
+        var result = await fixture.Service.CreateAsync(
+            new CreateUserCommand<TestProfile>(
+                "alice",
+                "alice@example.com",
+                "call12345678",
+                new TestProfile("Alice")),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains(
+            result.Errors,
+            error => error.Code == IdentityErrorCodes.Validation);
+        Assert.Null(fixture.Store.LastCreatedHandles);
+    }
+
+    [Fact]
+    public async Task ChangeHandleReplacesCompleteAutomaticAliasUnion()
+    {
+        var fixture = new UserServiceFixture();
+
+        var result = await fixture.Service.ChangePhoneAsync(
+            new ChangePhoneCommand(
+                fixture.Store.User.Id,
+                fixture.Store.User.Version,
+                "+44 20.7946-0958"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(
+            "+44 20.7946-0958",
+            fixture.Store.LastUpdatedHandles!.LoginIdentifierKeys!);
+        Assert.Contains(
+            "442079460958",
+            fixture.Store.LastUpdatedHandles.LoginIdentifierKeys!);
+        Assert.Contains(
+            "ALICE@EXAMPLE.COM",
+            fixture.Store.LastUpdatedHandles.LoginIdentifierKeys!);
+    }
+
+    [Fact]
+    public async Task ChangePhoneRejectsNonPhoneShapedValueBeforeStore()
+    {
+        var fixture = new UserServiceFixture();
+
+        var result = await fixture.Service.ChangePhoneAsync(
+            new ChangePhoneCommand(
+                fixture.Store.User.Id,
+                fixture.Store.User.Version,
+                "call12345678"),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains(
+            result.Errors,
+            error => error.Code == IdentityErrorCodes.Validation);
+        Assert.Equal(0, fixture.Store.UpdateHandlesCalls);
+    }
+
+    [Fact]
     public async Task IssuerBindsEmailTokenToUserHandleAndSecurityStamp()
     {
         var userStore = new FakeIdentityUserStore(CreateUser());
@@ -50,6 +138,34 @@ public sealed class IdentityActionTokenTests
     }
 
     [Fact]
+    public async Task PhoneTokenIssuerRejectsNonPhoneShapedStoredValue()
+    {
+        var userStore = new FakeIdentityUserStore(
+            CreateUser() with { Phone = "call12345678" });
+        var provider = new FakeActionTokenProvider();
+        var issuer = new IdentityActionTokenIssuer<TestProfile>(
+            userStore,
+            new DefaultIdentityNormalizer(),
+            new DefaultUserOperationPolicy(),
+            provider,
+            new IdentityActionTokenOptions
+            {
+                PhoneConfirmationLifetime = TimeSpan.FromMinutes(30),
+            },
+            new NoopIdentityMetrics());
+
+        var result = await issuer.IssuePhoneConfirmationAsync(
+            userStore.User.Id,
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains(
+            result.Errors,
+            error => error.Code == IdentityErrorCodes.Validation);
+        Assert.Null(provider.LastGeneratedPayload);
+    }
+
+    [Fact]
     public async Task ConfirmEmailAcceptsMatchingToken()
     {
         var fixture = new UserServiceFixture();
@@ -69,6 +185,9 @@ public sealed class IdentityActionTokenTests
         Assert.True(result.IsSuccess);
         Assert.True(result.Value.EmailConfirmed);
         Assert.Equal(1, fixture.Store.UpdateHandlesCalls);
+        Assert.Contains(
+            "15551234567",
+            fixture.Store.LastUpdatedHandles!.LoginIdentifierKeys!);
     }
 
     [Fact]
@@ -91,6 +210,31 @@ public sealed class IdentityActionTokenTests
         Assert.True(result.IsSuccess);
         Assert.True(result.Value.PhoneConfirmed);
         Assert.Equal(1, fixture.Store.UpdateHandlesCalls);
+        Assert.Contains(
+            "+1 (555) 123-4567",
+            fixture.Store.LastUpdatedHandles!.LoginIdentifierKeys!);
+        Assert.Contains(
+            "15551234567",
+            fixture.Store.LastUpdatedHandles.LoginIdentifierKeys!);
+    }
+
+    [Fact]
+    public async Task ConfirmPhoneRejectsNonPhoneShapedValueBeforeStore()
+    {
+        var fixture = new UserServiceFixture();
+
+        var result = await fixture.Service.ConfirmPhoneAsync(
+            new ConfirmPhoneCommand(
+                fixture.Store.User.Id,
+                "call12345678",
+                "unused-token"),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains(
+            result.Errors,
+            error => error.Code == IdentityErrorCodes.Validation);
+        Assert.Equal(0, fixture.Store.UpdateHandlesCalls);
     }
 
     [Theory]
@@ -231,7 +375,7 @@ public sealed class IdentityActionTokenTests
             "alice",
             "alice@example.com",
             false,
-            "+15551234567",
+            "+1 (555) 123-4567",
             false,
             new TestProfile("Alice"),
             3,
@@ -376,6 +520,8 @@ public sealed class IdentityActionTokenTests
     {
         public IdentityUser<TestProfile> User { get; set; } = user;
         public int UpdateHandlesCalls { get; private set; }
+        public NormalizedHandles? LastCreatedHandles { get; private set; }
+        public UpdatedHandles? LastUpdatedHandles { get; private set; }
 
         public Task<IdentityUser<TestProfile>?> FindByIdAsync(
             Guid id,
@@ -387,7 +533,26 @@ public sealed class IdentityActionTokenTests
             NormalizedHandles handles,
             DateTimeOffset now,
             CancellationToken ct)
-            => throw new NotSupportedException();
+        {
+            LastCreatedHandles = handles;
+            var created = new IdentityUser<TestProfile>(
+                newUser.Id!.Value,
+                newUser.Flags,
+                newUser.UserName,
+                newUser.Email,
+                false,
+                newUser.Phone,
+                false,
+                newUser.Profile,
+                1,
+                newUser.SecurityStamp,
+                null,
+                null,
+                null,
+                now,
+                now);
+            return Task.FromResult(OperationResultFactory.Success(created));
+        }
 
         public Task<OperationResult<IdentityUser<TestProfile>>> UpdateHandlesAsync(
             Guid userId,
@@ -397,6 +562,7 @@ public sealed class IdentityActionTokenTests
             CancellationToken ct)
         {
             UpdateHandlesCalls++;
+            LastUpdatedHandles = updated;
             User = User with
             {
                 UserName = updated.UserName,

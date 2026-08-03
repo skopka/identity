@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Skopka.Identity.Authentication;
 using Skopka.Identity.Ef.Entities;
 using Skopka.Identity.ExternalLogins;
 using Skopka.Identity.RateLimiting;
@@ -47,6 +48,22 @@ public sealed class PostgreSqlIdentityModelTests
             "ux_auth_users_normalized_phone",
             "deleted_at IS NULL AND normalized_phone IS NOT NULL");
 
+        var loginIdentifierType = context.Model.FindEntityType(
+            typeof(LoginIdentifierEntity));
+        Assert.NotNull(loginIdentifierType);
+        Assert.Equal(
+            2,
+            loginIdentifierType.FindPrimaryKey()!.Properties.Count);
+        Assert.Equal(
+            IdentityLoginLimits.MaximumLoginLength,
+            loginIdentifierType
+                .FindProperty(nameof(LoginIdentifierEntity.NormalizedKey))!
+                .GetMaxLength());
+        AssertUniqueFilteredIndex(
+            loginIdentifierType,
+            "ux_identity_login_identifiers_active_normalized_key",
+            "is_active = TRUE");
+
         var challengeType = context.Model.FindEntityType(
             typeof(VerificationChallengeEntity));
         Assert.NotNull(challengeType);
@@ -64,6 +81,15 @@ public sealed class PostgreSqlIdentityModelTests
             challengeType
                 .FindProperty(nameof(VerificationChallengeEntity.ProofHash))!
                 .GetMaxLength());
+        var intentHash = challengeType.FindProperty(
+            nameof(VerificationChallengeEntity.IntentHash));
+        Assert.NotNull(intentHash);
+        Assert.False(intentHash.IsNullable);
+        Assert.Equal(64, intentHash.GetMaxLength());
+        AssertUniqueFilteredIndex(
+            challengeType,
+            "ux_verification_challenges_active_intent",
+            "state IN (0, 1)");
 
         var rateLimitType = context.Model.FindEntityType(
             typeof(RateLimitBucketEntity));

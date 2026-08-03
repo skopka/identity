@@ -39,6 +39,35 @@ public sealed class IdentityUserLookupService<TProfile>(
         return OperationResultFactory.Success(user);
     }
 
+    public async Task<OperationResult<IdentityUser<TProfile>>>
+        FindActiveByPhoneAsync(
+            string phone,
+            CancellationToken ct)
+    {
+        using var op = metrics.Begin("user.lookup.phone");
+
+        var normalizedPhone = normalizer.NormalizePhoneLoginIdentifier(phone);
+        if (string.IsNullOrWhiteSpace(normalizedPhone))
+        {
+            return Fail(
+                op,
+                IdentityErrors.Validation(
+                    "phone",
+                    "Phone is required."));
+        }
+
+        var user = await store.FindActiveByNormalizedPhoneAsync(
+            normalizedPhone,
+            ct);
+        if (user is null)
+        {
+            return Fail(op, IdentityErrors.NotFound());
+        }
+
+        op.Success();
+        return OperationResultFactory.Success(user);
+    }
+
     private static OperationResult<IdentityUser<TProfile>> Fail(
         IIdentityOpScope op,
         Error error)

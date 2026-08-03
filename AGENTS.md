@@ -46,10 +46,11 @@ file first and then the module-local file:
 - `IPasswordCredentialService<TProfile>` orchestrates password credential lifecycle.
 - `IPasswordCredentialStore<TProfile>` persists opaque password verifiers and uses the
   user version for optimistic concurrency.
-- `IPasswordAuthenticationService<TProfile>` authenticates an explicit username or email
-  login without exposing whether the user or credential exists.
-- `IIdentityUserLookupService<TProfile>` provides an exact normalized active-user email
-  lookup for trusted application workflows such as account-message issuance.
+- `IPasswordAuthenticationService<TProfile>` authenticates explicit user-name, email or
+  phone handles and supports ambiguity-safe automatic lookup without exposing whether
+  the user or credential exists.
+- `IIdentityUserLookupService<TProfile>` provides exact normalized active-user email and
+  phone lookup for trusted application workflows such as account-message issuance.
 - `IIdentityUserLookupStore<TProfile>` provides active-user lookup by normalized login
   handles.
 - `ISecurityStampService<TProfile>` rotates and validates session invalidation stamps.
@@ -208,10 +209,19 @@ Preserve these rules:
   provides `Pbkdf2PasswordHasher` and `Argon2idPepperedPasswordHasher`. HMAC-SHA256 is
   used as a peppered pre-hash, not as encryption. Pepper keys remain outside persistence
   and are resolved by versioned key id.
-- Password authentication uses an explicit `PasswordLoginHandle` to avoid ambiguity
-  between usernames and emails. Unknown users, missing credentials and wrong passwords
-  return the same invalid-credentials error. Unknown/missing-credential paths must run a
-  configured dummy password verification workload.
+- Password authentication keeps the explicit `UserName`, `Email` and `Phone`
+  `PasswordLoginHandle` modes. `Automatic` resolves the bounded normalized candidate set
+  through the login-identifier registry and succeeds only when every match belongs to
+  one active user. Zero or multiple users, missing credentials and wrong passwords
+  return the same invalid-credentials error and preserve the configured dummy password
+  verification workload.
+- `IIdentityNormalizer.NormalizePhoneLoginIdentifier` is the shared, overrideable phone
+  policy for persistence, confirmation, token binding, trusted exact lookup and password
+  login. The default accepts a phone-shaped 8-15 ASCII-digit value; invalid non-null
+  phone handles fail validation before persistence.
+- Password account throttling uses the resolved active user id so explicit, automatic
+  and differently formatted aliases share one bucket. Client throttling remains before
+  lookup; unknown or ambiguous automatic input uses a deterministic candidate key.
 - Security stamp changes and credential mutations bump `Version` in the same persistence
   operation. Stamp validation rejects missing, deleted and actively blocked users.
 - Soft delete rotates the stamp so restoring a user cannot reactivate sessions issued
@@ -223,7 +233,10 @@ Preserve these rules:
 - Action tokens are not OTP authenticators. Keep future TOTP/SMS/email OTP challenge
   state, attempt limits and MFA rules in the separate Verification subsystem.
 - Verification owns challenge expiry, failed-attempt limits, purpose/binding/stamp
-  checks and the `Pending -> Verified -> Consumed` state machine. Step-up policy decides
+  checks and the `Pending -> Verified -> Consumed` state machine. Issuing a new
+  challenge atomically moves every `Pending` or `Verified` challenge with the exact
+  `(user, purpose, binding, method)` intent to `Superseded`, regardless of expiry;
+  different intents remain independent. Step-up policy decides
   which verification is required and exchanges the proof for a decision. The business
   feature creates the server-side action/resource binding and executes the action.
 - Step-up actions and bindings are server-created values, not raw client DTO fields.
@@ -342,6 +355,10 @@ EF Core storage is split:
 - `user_profiles`
   - display handles
   - `Profile` stored as `jsonb`
+- `identity_login_identifiers`
+  - distinct normalized login keys for each user
+  - active-state marker synchronized with soft delete and restore
+  - one active owner per normalized key across handle types
 - `user_credentials`
   - opaque password verifier
   - credential update timestamp

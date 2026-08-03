@@ -77,8 +77,22 @@ Skopka user ids are `Guid`. Applications using string or integer Microsoft Ident
 need an explicit stable id mapping. Preserve that mapping for foreign keys in application
 tables.
 
-Normalize every handle with the same normalizer the new application will use before
-loading data. Resolve duplicates before adding active filtered unique indexes.
+Normalize every raw handle with the same normalizer the new application will use before
+loading data. Insert the distinct union of every automatic candidate plus the exact
+normalized user name, email and phone into `identity_login_identifiers`, with
+`is_active` false only for soft-deleted users. Resolve both same-handle and cross-handle
+duplicates before adding active filtered unique indexes; for example, one user's email
+cannot remain another active user's user name when automatic login is enabled.
+
+The packaged PostgreSQL migration backfills aliases produced by
+`DefaultIdentityNormalizer`, including formatted-phone aliases and phone-shaped user
+name/email values. Its preflight rejects handles over 512 characters and legacy phone
+rows that do not match the default 8-15 digit policy or its normalized value. Clean
+those rows before upgrading. If the application replaces `IIdentityNormalizer` or
+overrides `NormalizePhoneLoginIdentifier`, run a preflight with that implementation and
+replace or extend the migration validation/backfill so every raw handle contributes its
+complete automatic candidate set. The filtered unique-index creation intentionally
+fails when existing active users still share any resulting key.
 
 Map direct role memberships to `identity_roles` and `identity_user_roles`. Role parent
 metadata does not create inherited membership or authorization.

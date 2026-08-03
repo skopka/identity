@@ -78,6 +78,51 @@ public sealed class EfIdentityUserStore<TProfile>
         return profile is null ? null : ToModel(profile);
     }
 
+    public async Task<IdentityUser<TProfile>?> FindActiveByNormalizedPhoneAsync(
+        string normalizedPhone,
+        CancellationToken ct)
+    {
+        var profile = await dbContext.Profiles
+            .AsNoTracking()
+            .Include(entity => entity.User)
+            .SingleOrDefaultAsync(
+                entity => entity.User.DeletedAt == null
+                    && entity.User.NormalizedPhone == normalizedPhone,
+                ct);
+
+        return profile is null ? null : ToModel(profile);
+    }
+
+    public async Task<IReadOnlyList<IdentityUser<TProfile>>>
+        FindActiveByNormalizedLoginIdentifiersAsync(
+            IReadOnlyCollection<string> normalizedKeys,
+            CancellationToken ct)
+    {
+        var keys = normalizedKeys
+            .Where(key => !string.IsNullOrEmpty(key)
+                && key.Length <= IdentityLoginLimits.MaximumLoginLength)
+            .Distinct(StringComparer.Ordinal)
+            .Take(IdentityLoginLimits.MaximumAutomaticLoginIdentifiers)
+            .ToArray();
+        if (keys.Length == 0)
+        {
+            return [];
+        }
+
+        var profiles = await dbContext.Profiles
+            .AsNoTracking()
+            .Include(profile => profile.User)
+            .Where(profile => profile.User.DeletedAt == null
+                && profile.User.LoginIdentifiers.Any(identifier =>
+                    identifier.IsActive
+                    && keys.Contains(identifier.NormalizedKey)))
+            .OrderBy(profile => profile.UserId)
+            .Take(IdentityLoginLimits.MaximumResolvedUsers)
+            .ToListAsync(ct);
+
+        return profiles.Select(ToModel).ToArray();
+    }
+
     public async Task<OperationResult<IdentityUser<TProfile>>> CreateAsync(
         NewIdentityUser<TProfile> user,
         NormalizedHandles handles,
@@ -108,6 +153,10 @@ public sealed class EfIdentityUserStore<TProfile>
         };
 
         profile.User = authUser;
+        AddLoginIdentifiers(
+            authUser,
+            ResolveLoginIdentifierKeys(handles),
+            isActive: true);
         dbContext.Users.Add(authUser);
 
         try
@@ -117,12 +166,12 @@ public sealed class EfIdentityUserStore<TProfile>
         }
         catch (DbUpdateConcurrencyException)
         {
-            Detach(authUser, profile);
+            DetachUserGraph(authUser, profile);
             return OperationResultFactory.Fail<IdentityUser<TProfile>>(ConcurrencyError);
         }
         catch (DbUpdateException exception)
         {
-            Detach(authUser, profile);
+            DetachUserGraph(authUser, profile);
             var error = MapException(exception);
             if (error is null)
             {
@@ -149,7 +198,7 @@ public sealed class EfIdentityUserStore<TProfile>
         var authUser = profile.User;
         if (authUser.Version != expectedVersion)
         {
-            Detach(authUser, profile);
+            DetachUserGraph(authUser, profile);
             return OperationResultFactory.Fail<IdentityUser<TProfile>>(ConcurrencyError);
         }
 
@@ -162,6 +211,10 @@ public sealed class EfIdentityUserStore<TProfile>
         authUser.NormalizedPhone = updated.NormalizedPhone;
         authUser.EmailConfirmed = updated.EmailConfirmed;
         authUser.PhoneConfirmed = updated.PhoneConfirmed;
+        ReconcileLoginIdentifiers(
+            authUser,
+            ResolveLoginIdentifierKeys(updated),
+            isActive: authUser.DeletedAt is null);
         BumpVersion(authUser, expectedVersion, now);
 
         try
@@ -171,12 +224,12 @@ public sealed class EfIdentityUserStore<TProfile>
         }
         catch (DbUpdateConcurrencyException)
         {
-            Detach(authUser, profile);
+            DetachUserGraph(authUser, profile);
             return OperationResultFactory.Fail<IdentityUser<TProfile>>(ConcurrencyError);
         }
         catch (DbUpdateException exception)
         {
-            Detach(authUser, profile);
+            DetachUserGraph(authUser, profile);
             var error = MapException(exception);
             if (error is null)
             {
@@ -203,7 +256,7 @@ public sealed class EfIdentityUserStore<TProfile>
         var authUser = profile.User;
         if (authUser.Version != expectedVersion)
         {
-            Detach(authUser, profile);
+            DetachUserGraph(authUser, profile);
             return OperationResultFactory.Fail<IdentityUser<TProfile>>(ConcurrencyError);
         }
 
@@ -217,12 +270,12 @@ public sealed class EfIdentityUserStore<TProfile>
         }
         catch (DbUpdateConcurrencyException)
         {
-            Detach(authUser, profile);
+            DetachUserGraph(authUser, profile);
             return OperationResultFactory.Fail<IdentityUser<TProfile>>(ConcurrencyError);
         }
         catch (DbUpdateException exception)
         {
-            Detach(authUser, profile);
+            DetachUserGraph(authUser, profile);
             var error = MapException(exception);
             if (error is null)
             {
@@ -249,7 +302,7 @@ public sealed class EfIdentityUserStore<TProfile>
         var authUser = profile.User;
         if (authUser.Version != expectedVersion)
         {
-            Detach(authUser, profile);
+            DetachUserGraph(authUser, profile);
             return OperationResultFactory.Fail<IdentityUser<TProfile>>(ConcurrencyError);
         }
 
@@ -263,7 +316,7 @@ public sealed class EfIdentityUserStore<TProfile>
         }
         catch (DbUpdateConcurrencyException)
         {
-            Detach(authUser, profile);
+            DetachUserGraph(authUser, profile);
             return OperationResultFactory.Fail<IdentityUser<TProfile>>(ConcurrencyError);
         }
     }
@@ -278,7 +331,9 @@ public sealed class EfIdentityUserStore<TProfile>
         DateTimeOffset now,
         CancellationToken ct)
     {
-        var authUser = await dbContext.Users.SingleOrDefaultAsync(user => user.Id == userId, ct);
+        var authUser = await dbContext.Users
+            .Include(user => user.LoginIdentifiers)
+            .SingleOrDefaultAsync(user => user.Id == userId, ct);
         if (authUser is null)
         {
             return OperationResultFactory.Fail(UserNotFoundError);
@@ -286,13 +341,17 @@ public sealed class EfIdentityUserStore<TProfile>
 
         if (authUser.Version != expectedVersion)
         {
-            Detach(authUser);
+            DetachUserGraph(authUser);
             return OperationResultFactory.Fail(ConcurrencyError);
         }
 
         authUser.DeletedAt = deletedAt;
         authUser.BlockedAt = blockedAt;
         authUser.BlockedUntil = blockedUntil;
+        foreach (var identifier in authUser.LoginIdentifiers)
+        {
+            identifier.IsActive = deletedAt is null;
+        }
         if (newSecurityStamp is not null)
         {
             authUser.SecurityStamp = newSecurityStamp;
@@ -307,12 +366,12 @@ public sealed class EfIdentityUserStore<TProfile>
         }
         catch (DbUpdateConcurrencyException)
         {
-            Detach(authUser);
+            DetachUserGraph(authUser);
             return OperationResultFactory.Fail(ConcurrencyError);
         }
         catch (DbUpdateException exception)
         {
-            Detach(authUser);
+            DetachUserGraph(authUser);
             var error = MapException(exception);
             if (error is null)
             {
@@ -326,7 +385,72 @@ public sealed class EfIdentityUserStore<TProfile>
     private Task<UserProfileEntity<TProfile>?> FindTrackedProfileAsync(Guid userId, CancellationToken ct)
         => dbContext.Profiles
             .Include(profile => profile.User)
+            .ThenInclude(user => user.LoginIdentifiers)
             .SingleOrDefaultAsync(profile => profile.UserId == userId, ct);
+
+    private static IReadOnlyCollection<string> ResolveLoginIdentifierKeys(
+        NormalizedHandles handles)
+        => handles.LoginIdentifierKeys
+            ?? DistinctKeys(handles.UserName, handles.Email, handles.Phone);
+
+    private static IReadOnlyCollection<string> ResolveLoginIdentifierKeys(
+        UpdatedHandles handles)
+        => handles.LoginIdentifierKeys
+            ?? DistinctKeys(
+                handles.NormalizedUserName,
+                handles.NormalizedEmail,
+                handles.NormalizedPhone);
+
+    private static string[] DistinctKeys(params string?[] keys)
+        => keys
+            .Where(key => !string.IsNullOrEmpty(key))
+            .Select(key => key!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+    private static void AddLoginIdentifiers(
+        AuthUserEntity user,
+        IEnumerable<string> normalizedKeys,
+        bool isActive)
+    {
+        foreach (var normalizedKey in normalizedKeys
+            .Where(key => !string.IsNullOrEmpty(key))
+            .Distinct(StringComparer.Ordinal))
+        {
+            user.LoginIdentifiers.Add(new LoginIdentifierEntity
+            {
+                UserId = user.Id,
+                NormalizedKey = normalizedKey,
+                IsActive = isActive,
+                User = user
+            });
+        }
+    }
+
+    private void ReconcileLoginIdentifiers(
+        AuthUserEntity user,
+        IReadOnlyCollection<string> normalizedKeys,
+        bool isActive)
+    {
+        var desired = normalizedKeys
+            .Where(key => !string.IsNullOrEmpty(key))
+            .ToHashSet(StringComparer.Ordinal);
+        var stale = user.LoginIdentifiers
+            .Where(identifier => !desired.Contains(identifier.NormalizedKey))
+            .ToArray();
+        if (stale.Length > 0)
+        {
+            dbContext.LoginIdentifiers.RemoveRange(stale);
+        }
+
+        foreach (var identifier in user.LoginIdentifiers.Except(stale))
+        {
+            identifier.IsActive = isActive;
+            desired.Remove(identifier.NormalizedKey);
+        }
+
+        AddLoginIdentifiers(user, desired, isActive);
+    }
 
     private static void BumpVersion(AuthUserEntity user, long expectedVersion, DateTimeOffset now)
     {
@@ -375,5 +499,17 @@ public sealed class EfIdentityUserStore<TProfile>
         {
             dbContext.Entry(entity).State = EntityState.Detached;
         }
+    }
+
+    private void DetachUserGraph(
+        AuthUserEntity user,
+        params object[] additionalEntities)
+    {
+        var identifiers = dbContext.ChangeTracker
+            .Entries<LoginIdentifierEntity>()
+            .Where(entry => entry.Entity.UserId == user.Id)
+            .Select(entry => entry.Entity)
+            .ToArray();
+        Detach([.. identifiers, user, .. additionalEntities]);
     }
 }

@@ -22,7 +22,11 @@ public sealed class EfIdentityUserStoreTests
                 new TestProfile("Alice Smith"),
                 UserFlags.None,
                 "SECURITY-STAMP"),
-            new NormalizedHandles("ALICE", "ALICE@EXAMPLE.COM", "+123456789"),
+            new NormalizedHandles(
+                "ALICE",
+                "ALICE@EXAMPLE.COM",
+                "123456789",
+                ["ALICE", "ALICE@EXAMPLE.COM", "123456789"]),
             now,
             CancellationToken.None);
 
@@ -36,6 +40,14 @@ public sealed class EfIdentityUserStoreTests
         Assert.Equal(1, found.Version);
         Assert.Equal(now, found.CreatedAt);
         Assert.Equal(now, found.ModifiedAt);
+
+        var identifiers = await database.Context.LoginIdentifiers
+            .AsNoTracking()
+            .Where(identifier => identifier.UserId == created.Id)
+            .OrderBy(identifier => identifier.NormalizedKey)
+            .ToListAsync(CancellationToken.None);
+        Assert.Equal(3, identifiers.Count);
+        Assert.All(identifiers, identifier => Assert.True(identifier.IsActive));
     }
 
     [Fact]
@@ -51,7 +63,8 @@ public sealed class EfIdentityUserStoreTests
             new UpdatedHandles(
                 "alice-2", "ALICE-2",
                 "alice2@example.com", "ALICE2@EXAMPLE.COM", false,
-                null, null, false),
+                null, null, false,
+                ["ALICE-2", "ALICE2@EXAMPLE.COM"]),
             modifiedAt,
             CancellationToken.None);
 
@@ -69,6 +82,14 @@ public sealed class EfIdentityUserStoreTests
         Assert.Equal("ALICE-2", authUser.NormalizedUserName);
         Assert.Equal("ALICE2@EXAMPLE.COM", authUser.NormalizedEmail);
         Assert.Null(authUser.NormalizedPhone);
+
+        var identifiers = await database.Context.LoginIdentifiers
+            .AsNoTracking()
+            .Where(identifier => identifier.UserId == created.Id)
+            .Select(identifier => identifier.NormalizedKey)
+            .OrderBy(key => key)
+            .ToListAsync(CancellationToken.None);
+        Assert.Equal(new[] { "ALICE-2", "ALICE2@EXAMPLE.COM" }, identifiers);
     }
 
     [Fact]
@@ -168,10 +189,26 @@ public sealed class EfIdentityUserStoreTests
     }
 
     [Fact]
-    public async Task FindsActiveUserByNormalizedUserNameAndEmail()
+    public async Task FindsActiveUserByNormalizedUserNameEmailAndPhone()
     {
         await using var database = await TestDatabase.CreateAsync();
-        var created = await database.CreateUserAsync();
+        var result = await database.Store.CreateAsync(
+            new NewIdentityUser<TestProfile>(
+                "alice",
+                "alice@example.com",
+                "+1 234 567 890",
+                new TestProfile("Alice"),
+                UserFlags.None,
+                "SECURITY-STAMP"),
+            new NormalizedHandles(
+                "ALICE",
+                "ALICE@EXAMPLE.COM",
+                "1234567890",
+                ["ALICE", "ALICE@EXAMPLE.COM", "1234567890"]),
+            DateTimeOffset.UtcNow,
+            CancellationToken.None);
+        Assert.True(result.IsSuccess);
+        var created = result.Value;
 
         var byUserName = await database.Store.FindActiveByNormalizedUserNameAsync(
             "ALICE",
@@ -179,9 +216,60 @@ public sealed class EfIdentityUserStoreTests
         var byEmail = await database.Store.FindActiveByNormalizedEmailAsync(
             "ALICE@EXAMPLE.COM",
             CancellationToken.None);
+        var byPhone = await database.Store.FindActiveByNormalizedPhoneAsync(
+            "1234567890",
+            CancellationToken.None);
 
         Assert.Equal(created, byUserName);
         Assert.Equal(created, byEmail);
+        Assert.Equal(created, byPhone);
+    }
+
+    [Fact]
+    public async Task AutomaticLookupReturnsDistinctUsersAndPreservesAmbiguity()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var alice = await database.CreateUserAsync();
+        var bobResult = await database.Store.CreateAsync(
+            new NewIdentityUser<TestProfile>(
+                "bob",
+                "bob@example.com",
+                null,
+                new TestProfile("Bob"),
+                UserFlags.None,
+                "BOB-SECURITY-STAMP"),
+            new NormalizedHandles(
+                "BOB",
+                "BOB@EXAMPLE.COM",
+                null,
+                ["BOB", "BOB@EXAMPLE.COM", "SHARED"]),
+            DateTimeOffset.UtcNow,
+            CancellationToken.None);
+        Assert.True(bobResult.IsSuccess);
+
+        var aliceByAnyKey = await database.Store
+            .FindActiveByNormalizedLoginIdentifiersAsync(
+                ["UNKNOWN", "ALICE@EXAMPLE.COM", "ALICE"],
+                CancellationToken.None);
+        Assert.Single(aliceByAnyKey);
+        Assert.Equal(alice.Id, aliceByAnyKey[0].Id);
+
+        database.Context.LoginIdentifiers.Add(new()
+        {
+            UserId = alice.Id,
+            NormalizedKey = "SHARED",
+            IsActive = true
+        });
+        await database.Context.SaveChangesAsync(CancellationToken.None);
+
+        var ambiguous = await database.Store
+            .FindActiveByNormalizedLoginIdentifiersAsync(
+                ["SHARED"],
+                CancellationToken.None);
+        Assert.Equal(2, ambiguous.Count);
+        Assert.Equal(
+            new[] { alice.Id, bobResult.Value.Id }.Order(),
+            ambiguous.Select(user => user.Id).Order());
     }
 
     [Fact]
@@ -209,6 +297,32 @@ public sealed class EfIdentityUserStoreTests
             await database.Store.FindActiveByNormalizedEmailAsync(
                 "ALICE@EXAMPLE.COM",
                 CancellationToken.None));
+
+        Assert.All(
+            await database.Context.LoginIdentifiers
+                .Where(identifier => identifier.UserId == created.Id)
+                .ToListAsync(CancellationToken.None),
+            identifier => Assert.False(identifier.IsActive));
+        Assert.Empty(
+            await database.Store.FindActiveByNormalizedLoginIdentifiersAsync(
+                ["ALICE", "ALICE@EXAMPLE.COM"],
+                CancellationToken.None));
+
+        var restoreResult = await database.Store.UpdateStateAsync(
+            created.Id,
+            created.Version + 1,
+            deletedAt: null,
+            created.BlockedAt,
+            created.BlockedUntil,
+            newSecurityStamp: "RESTORE-STAMP",
+            DateTimeOffset.UtcNow,
+            CancellationToken.None);
+        Assert.True(restoreResult.IsSuccess);
+        Assert.All(
+            await database.Context.LoginIdentifiers
+                .Where(identifier => identifier.UserId == created.Id)
+                .ToListAsync(CancellationToken.None),
+            identifier => Assert.True(identifier.IsActive));
     }
 
     public sealed record TestProfile(string DisplayName);

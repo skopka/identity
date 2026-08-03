@@ -23,8 +23,8 @@ Start from a verified commit on `main`, then create and push an annotated versio
 ```shell
 git switch main
 git pull --ff-only
-git tag -a v0.1.0 -m "Skopka.Identity 0.1.0"
-git push origin v0.1.0
+git tag -a v0.7.0 -m "Skopka.Identity 0.7.0"
+git push origin v0.7.0
 ```
 
 The workflow removes the leading `v` and uses the remainder as the assembly and NuGet

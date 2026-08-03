@@ -26,10 +26,29 @@ public sealed class IdentityUserService<TProfile>(
         using var op = metrics.Begin("user.create");
         var now = DateTimeOffset.UtcNow;
 
+        var normalizedUserName = normalizer.NormalizeUserName(cmd.UserName);
+        var normalizedEmail = normalizer.NormalizeEmail(cmd.Email);
+        var normalizedPhone = normalizer.NormalizePhoneLoginIdentifier(
+            cmd.Phone);
+        var loginIdentifierKeys = LoginIdentifierKeyBuilder.Create(
+            normalizer,
+            cmd.UserName,
+            cmd.Email,
+            cmd.Phone,
+            normalizedUserName,
+            normalizedEmail,
+            normalizedPhone,
+            out var handleError);
+        if (handleError is not null)
+        {
+            return Fail(op, handleError);
+        }
+
         var handles = new NormalizedHandles(
-            normalizer.NormalizeUserName(cmd.UserName),
-            normalizer.NormalizeEmail(cmd.Email),
-            normalizer.NormalizePhone(cmd.Phone));
+            normalizedUserName,
+            normalizedEmail,
+            normalizedPhone,
+            loginIdentifierKeys);
 
         if (!policy.CanMutate(cmd.Flags))
             return Fail(op, IdentityErrors.Forbidden(cmd.Flags));
@@ -93,10 +112,28 @@ public sealed class IdentityUserService<TProfile>(
             return OperationResultFactory.Success(user);
         }
 
+        var normalizedUserName = normalizer.NormalizeUserName(user.UserName);
+        var normalizedPhone = normalizer.NormalizePhoneLoginIdentifier(
+            user.Phone);
+        var loginIdentifierKeys = LoginIdentifierKeyBuilder.Create(
+            normalizer,
+            user.UserName,
+            user.Email,
+            user.Phone,
+            normalizedUserName,
+            currentNormalized,
+            normalizedPhone,
+            out var handleError);
+        if (handleError is not null)
+        {
+            return Fail(op, handleError);
+        }
+
         var updated = new UpdatedHandles(
-            user.UserName, normalizer.NormalizeUserName(user.UserName),
+            user.UserName, normalizedUserName,
             user.Email, currentNormalized, true,
-            user.Phone, normalizer.NormalizePhone(user.Phone), user.PhoneConfirmed);
+            user.Phone, normalizedPhone, user.PhoneConfirmed,
+            loginIdentifierKeys);
 
         var res = await store.UpdateHandlesAsync(user.Id, user.Version, updated, now, ct);
         ObserveSuccess(
@@ -112,7 +149,7 @@ public sealed class IdentityUserService<TProfile>(
         using var op = metrics.Begin("user.confirm_phone");
         var now = DateTimeOffset.UtcNow;
 
-        var normalized = normalizer.NormalizePhone(cmd.Phone);
+        var normalized = normalizer.NormalizePhoneLoginIdentifier(cmd.Phone);
         if (normalized is null)
             return Fail(op, IdentityErrors.Validation("phone", "Phone is required."));
 
@@ -126,7 +163,8 @@ public sealed class IdentityUserService<TProfile>(
         if (user.DeletedAt is not null)
             return Fail(op, IdentityErrors.Deleted());
 
-        var currentNormalized = normalizer.NormalizePhone(user.Phone);
+        var currentNormalized = normalizer.NormalizePhoneLoginIdentifier(
+            user.Phone);
         if (!string.Equals(currentNormalized, normalized, StringComparison.Ordinal))
             return Fail(op, IdentityErrors.Validation("phone", "Phone has changed or does not match."));
 
@@ -147,10 +185,27 @@ public sealed class IdentityUserService<TProfile>(
             return OperationResultFactory.Success(user);
         }
 
+        var normalizedUserName = normalizer.NormalizeUserName(user.UserName);
+        var normalizedEmail = normalizer.NormalizeEmail(user.Email);
+        var loginIdentifierKeys = LoginIdentifierKeyBuilder.Create(
+            normalizer,
+            user.UserName,
+            user.Email,
+            user.Phone,
+            normalizedUserName,
+            normalizedEmail,
+            currentNormalized,
+            out var handleError);
+        if (handleError is not null)
+        {
+            return Fail(op, handleError);
+        }
+
         var updated = new UpdatedHandles(
-            user.UserName, normalizer.NormalizeUserName(user.UserName),
-            user.Email, normalizer.NormalizeEmail(user.Email), user.EmailConfirmed,
-            user.Phone, currentNormalized, true);
+            user.UserName, normalizedUserName,
+            user.Email, normalizedEmail, user.EmailConfirmed,
+            user.Phone, currentNormalized, true,
+            loginIdentifierKeys);
 
         var res = await store.UpdateHandlesAsync(user.Id, user.Version, updated, now, ct);
         ObserveSuccess(
@@ -179,7 +234,9 @@ public sealed class IdentityUserService<TProfile>(
                 return new UpdatedHandles(
                     cmd.NewUserName, nUserName,
                     user.Email, normalizer.NormalizeEmail(user.Email), user.EmailConfirmed,
-                    user.Phone, normalizer.NormalizePhone(user.Phone), user.PhoneConfirmed);
+                    user.Phone,
+                    normalizer.NormalizePhoneLoginIdentifier(user.Phone),
+                    user.PhoneConfirmed);
             },
             ct);
 
@@ -192,7 +249,9 @@ public sealed class IdentityUserService<TProfile>(
                 return new UpdatedHandles(
                     user.UserName, normalizer.NormalizeUserName(user.UserName),
                     cmd.NewEmail, nEmail, false, // сброс
-                    user.Phone, normalizer.NormalizePhone(user.Phone), user.PhoneConfirmed);
+                    user.Phone,
+                    normalizer.NormalizePhoneLoginIdentifier(user.Phone),
+                    user.PhoneConfirmed);
             },
             ct);
 
@@ -201,7 +260,8 @@ public sealed class IdentityUserService<TProfile>(
             mutate: _ => null,
             buildUpdated: (user) =>
             {
-                var nPhone = normalizer.NormalizePhone(cmd.NewPhone);
+                var nPhone = normalizer.NormalizePhoneLoginIdentifier(
+                    cmd.NewPhone);
                 return new UpdatedHandles(
                     user.UserName, normalizer.NormalizeUserName(user.UserName),
                     user.Email, normalizer.NormalizeEmail(user.Email), user.EmailConfirmed,
@@ -392,6 +452,24 @@ public sealed class IdentityUserService<TProfile>(
         if (user.Version != expectedVersion) return Fail(op, IdentityErrors.Concurrency());
 
         var updated = buildUpdated(user);
+        var loginIdentifierKeys = LoginIdentifierKeyBuilder.Create(
+            normalizer,
+            updated.UserName,
+            updated.Email,
+            updated.Phone,
+            updated.NormalizedUserName,
+            updated.NormalizedEmail,
+            updated.NormalizedPhone,
+            out var handleError);
+        if (handleError is not null)
+        {
+            return Fail(op, handleError);
+        }
+
+        updated = updated with
+        {
+            LoginIdentifierKeys = loginIdentifierKeys,
+        };
 
         var res = await store.UpdateHandlesAsync(userId, expectedVersion, updated, now, ct);
         ObserveSuccess(

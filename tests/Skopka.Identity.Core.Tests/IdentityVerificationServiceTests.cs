@@ -233,6 +233,29 @@ public sealed class IdentityVerificationServiceTests
         Assert.Equal(1, fixture.MethodProvider.IssueCalls);
     }
 
+    [Fact]
+    public async Task BeginUsesAtomicSupersedingStoreOperation()
+    {
+        var fixture = new Fixture();
+        var first = await fixture.BeginAsync();
+        var second = await fixture.BeginAsync();
+
+        Assert.Equal(
+            VerificationChallengeState.Superseded,
+            fixture.ChallengeStore.Find(first.ChallengeId)!.State);
+        Assert.Equal(
+            VerificationChallengeState.Pending,
+            fixture.ChallengeStore.Find(second.ChallengeId)!.State);
+
+        var oldCode = await fixture.Service.VerifyAsync(
+            new VerifyVerificationChallengeCommand(
+                first.ChallengeId,
+                fixture.UserStore.User.Id,
+                "123456"),
+            CancellationToken.None);
+        AssertError(oldCode, IdentityErrorCodes.VerificationChallengeInvalid);
+    }
+
     private static void AssertError(OperationResult result, string code)
     {
         Assert.False(result.IsSuccess);
@@ -348,28 +371,56 @@ public sealed class IdentityVerificationServiceTests
     private sealed class FakeVerificationChallengeStore
         : IVerificationChallengeStore<TestProfile>
     {
+        private readonly List<StoredVerificationChallenge> challenges = [];
+
         public StoredVerificationChallenge? Challenge { get; private set; }
+
+        public StoredVerificationChallenge? Find(Guid challengeId)
+            => challenges.SingleOrDefault(
+                challenge => challenge.Id == challengeId);
 
         public void ExpireProof()
         {
             Assert.NotNull(Challenge);
+            var index = challenges.FindIndex(
+                challenge => challenge.Id == Challenge.Id);
+            Assert.True(index >= 0);
             Challenge = Challenge with
             {
                 ProofExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1),
             };
+            challenges[index] = Challenge;
         }
 
         public Task<StoredVerificationChallenge?> FindByIdAsync(
             Guid challengeId,
             CancellationToken ct)
-            => Task.FromResult(
-                Challenge?.Id == challengeId ? Challenge : null);
+            => Task.FromResult(Find(challengeId));
 
-        public Task<OperationResult> CreateAsync(
+        public Task<OperationResult> CreateAndSupersedeAsync(
             NewVerificationChallenge challenge,
             DateTimeOffset now,
             CancellationToken ct)
         {
+            for (var index = 0; index < challenges.Count; index++)
+            {
+                var existing = challenges[index];
+                if (existing.UserId == challenge.UserId
+                    && existing.Purpose == challenge.Purpose
+                    && existing.Binding == challenge.Binding
+                    && existing.Method == challenge.Method
+                    && existing.State is VerificationChallengeState.Pending
+                        or VerificationChallengeState.Verified)
+                {
+                    challenges[index] = existing with
+                    {
+                        State = VerificationChallengeState.Superseded,
+                        Version = existing.Version + 1,
+                        ModifiedAt = now,
+                    };
+                }
+            }
+
             Challenge = new StoredVerificationChallenge(
                 challenge.Id,
                 challenge.UserId,
@@ -389,6 +440,7 @@ public sealed class IdentityVerificationServiceTests
                 now,
                 null,
                 null);
+            challenges.Add(Challenge);
             return Task.FromResult(OperationResultFactory.Success());
         }
 
@@ -402,27 +454,32 @@ public sealed class IdentityVerificationServiceTests
                 DateTimeOffset now,
                 CancellationToken ct)
         {
-            Assert.NotNull(Challenge);
-            var failedAttempts = Challenge.FailedAttemptCount
+            var index = challenges.FindIndex(
+                challenge => challenge.Id == challengeId);
+            Assert.True(index >= 0);
+            var stored = challenges[index];
+            var failedAttempts = stored.FailedAttemptCount
                 + (succeeded ? 0 : 1);
             var state = succeeded
                 ? VerificationChallengeState.Verified
-                : failedAttempts >= Challenge.MaxAttempts
+                : failedAttempts >= stored.MaxAttempts
                     ? VerificationChallengeState.Locked
                     : VerificationChallengeState.Pending;
-            Challenge = Challenge with
+            stored = stored with
             {
                 FailedAttemptCount = failedAttempts,
                 State = state,
                 ProofHash = proofHash,
                 ProofExpiresAt = proofExpiresAt,
-                Version = Challenge.Version + 1,
+                Version = stored.Version + 1,
                 ModifiedAt = now,
                 VerifiedAt = succeeded ? now : null,
             };
+            challenges[index] = stored;
+            Challenge = stored;
 
             return Task.FromResult(
-                OperationResultFactory.Success(Challenge));
+                OperationResultFactory.Success(stored));
         }
 
         public Task<OperationResult> ConsumeProofAsync(
@@ -436,14 +493,18 @@ public sealed class IdentityVerificationServiceTests
             DateTimeOffset now,
             CancellationToken ct)
         {
-            Assert.NotNull(Challenge);
-            Challenge = Challenge with
+            var index = challenges.FindIndex(
+                challenge => challenge.Id == challengeId);
+            Assert.True(index >= 0);
+            var stored = challenges[index] with
             {
                 State = VerificationChallengeState.Consumed,
-                Version = Challenge.Version + 1,
+                Version = challenges[index].Version + 1,
                 ModifiedAt = now,
                 ConsumedAt = now,
             };
+            challenges[index] = stored;
+            Challenge = stored;
             return Task.FromResult(OperationResultFactory.Success());
         }
     }

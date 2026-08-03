@@ -10,6 +10,8 @@ public class IdentityDbContext<TProfile>(DbContextOptions options) : DbContext(o
     public DbSet<UserProfileEntity<TProfile>> Profiles => Set<UserProfileEntity<TProfile>>();
     public DbSet<UserCredentialEntity> Credentials => Set<UserCredentialEntity>();
     public DbSet<UserExternalLoginEntity> ExternalLogins => Set<UserExternalLoginEntity>();
+    public DbSet<LoginIdentifierEntity> LoginIdentifiers
+        => Set<LoginIdentifierEntity>();
     public DbSet<VerificationChallengeEntity> VerificationChallenges
         => Set<VerificationChallengeEntity>();
     public DbSet<RateLimitBucketEntity> RateLimitBuckets
@@ -28,6 +30,7 @@ public class IdentityDbContext<TProfile>(DbContextOptions options) : DbContext(o
         modelBuilder.ApplyConfiguration(new UserProfileConfiguration<TProfile>());
         modelBuilder.ApplyConfiguration(new UserCredentialConfiguration());
         modelBuilder.ApplyConfiguration(new UserExternalLoginConfiguration());
+        modelBuilder.ApplyConfiguration(new LoginIdentifierConfiguration());
         modelBuilder.ApplyConfiguration(new VerificationChallengeConfiguration());
         modelBuilder.ApplyConfiguration(new RateLimitBucketConfiguration());
         modelBuilder.ApplyConfiguration(new RefreshSessionConfiguration());

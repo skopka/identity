@@ -11,6 +11,9 @@ public sealed class PostgreSqlIdentityExceptionMapperTests
     [InlineData("ux_auth_users_normalized_user_name", IdentityErrorCodes.DuplicateUserName)]
     [InlineData("ux_auth_users_normalized_email", IdentityErrorCodes.DuplicateEmail)]
     [InlineData("ux_auth_users_normalized_phone", IdentityErrorCodes.DuplicatePhone)]
+    [InlineData(
+        "ux_identity_login_identifiers_active_normalized_key",
+        IdentityErrorCodes.DuplicateLoginIdentifier)]
     [InlineData("ux_identity_roles_normalized_name", IdentityErrorCodes.DuplicateRoleName)]
     [InlineData("pk_identity_user_roles", IdentityErrorCodes.RoleAlreadyAssigned)]
     [InlineData("pk_user_external_logins", IdentityErrorCodes.DuplicateExternalLogin)]

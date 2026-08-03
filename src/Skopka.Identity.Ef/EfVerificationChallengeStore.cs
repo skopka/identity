@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Ef.Entities;
@@ -25,6 +26,14 @@ public sealed class EfVerificationChallengeStore<TProfile>(
         "Concurrency conflict.",
         ErrorType.Conflict);
 
+    private static readonly Error UserNotFoundError = new(
+        IdentityErrorCodes.UserNotFound,
+        "User not found.",
+        ErrorType.NotFound);
+
+    private const int MaximumSupersedeAttempts = 3;
+    private static readonly SemaphoreSlim NonRelationalCreateLock = new(1, 1);
+
     public Task<StoredVerificationChallenge?> FindByIdAsync(
         Guid challengeId,
         CancellationToken ct)
@@ -34,15 +43,212 @@ public sealed class EfVerificationChallengeStore<TProfile>(
             .Select(challenge => Map(challenge))
             .SingleOrDefaultAsync(ct);
 
-    public async Task<OperationResult> CreateAsync(
+    public async Task<OperationResult> CreateAndSupersedeAsync(
         NewVerificationChallenge challenge,
         DateTimeOffset now,
         CancellationToken ct)
     {
-        var entity = new VerificationChallengeEntity
+        if (!dbContext.Database.IsRelational())
+        {
+            await NonRelationalCreateLock.WaitAsync(ct);
+            try
+            {
+                await SupersedeMatchingChallengesAsync(challenge, now, ct);
+                dbContext.VerificationChallenges.Add(
+                    CreateEntity(challenge, now));
+                await dbContext.SaveChangesAsync(ct);
+                return OperationResultFactory.Success();
+            }
+            finally
+            {
+                NonRelationalCreateLock.Release();
+            }
+        }
+
+        if (dbContext.Database.CurrentTransaction is not null)
+        {
+            return await CreateWithConcurrencyRetriesAsync(
+                challenge,
+                now,
+                ownsTransaction: false,
+                ct);
+        }
+
+        var strategy = dbContext.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(
+            async cancellationToken =>
+            {
+                try
+                {
+                    return await CreateWithConcurrencyRetriesAsync(
+                        challenge,
+                        now,
+                        ownsTransaction: true,
+                        cancellationToken);
+                }
+                catch
+                {
+                    DetachChallengeEntries();
+                    throw;
+                }
+            },
+            ct);
+    }
+
+    private async Task<OperationResult> CreateWithConcurrencyRetriesAsync(
+        NewVerificationChallenge challenge,
+        DateTimeOffset now,
+        bool ownsTransaction,
+        CancellationToken ct)
+    {
+        for (var attempt = 1; attempt <= MaximumSupersedeAttempts; attempt++)
+        {
+            try
+            {
+                if (!ownsTransaction)
+                {
+                    return await CreateWithinRelationalTransactionAsync(
+                        challenge,
+                        now,
+                        ct);
+                }
+
+                await using var transaction = await dbContext.Database
+                    .BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+                var result = await CreateWithinRelationalTransactionAsync(
+                    challenge,
+                    now,
+                    ct);
+                if (!result.IsSuccess)
+                {
+                    return result;
+                }
+
+                await transaction.CommitAsync(ct);
+                return result;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                DetachChallengeEntries();
+                if (attempt == MaximumSupersedeAttempts)
+                {
+                    return OperationResultFactory.Fail(ConcurrencyError);
+                }
+            }
+        }
+
+        throw new InvalidOperationException("Unreachable verification store state.");
+    }
+
+    private async Task<OperationResult> CreateWithinRelationalTransactionAsync(
+        NewVerificationChallenge challenge,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        var userExists = await dbContext.Users
+            .Where(user => user.Id == challenge.UserId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    user => user.ModifiedAt,
+                    user => user.ModifiedAt),
+                ct);
+        if (userExists == 0)
+        {
+            return OperationResultFactory.Fail(UserNotFoundError);
+        }
+
+        var existing = await dbContext.VerificationChallenges
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                entity => entity.Id == challenge.Id,
+                ct);
+        if (existing is not null)
+        {
+            return IsSamePendingChallenge(existing, challenge, now)
+                ? OperationResultFactory.Success()
+                : OperationResultFactory.Fail(ConcurrencyError);
+        }
+
+        var superseded = await SupersedeMatchingChallengesAsync(
+            challenge,
+            now,
+            ct);
+        if (superseded)
+        {
+            await dbContext.SaveChangesAsync(ct);
+        }
+
+        dbContext.VerificationChallenges.Add(CreateEntity(challenge, now));
+        await dbContext.SaveChangesAsync(ct);
+        return OperationResultFactory.Success();
+    }
+
+    private static bool IsSamePendingChallenge(
+        VerificationChallengeEntity existing,
+        NewVerificationChallenge challenge,
+        DateTimeOffset now)
+        => existing.State == VerificationChallengeState.Pending
+            && existing.ExpiresAt > now
+            && existing.UserId == challenge.UserId
+            && string.Equals(
+                existing.Purpose,
+                challenge.Purpose,
+                StringComparison.Ordinal)
+            && string.Equals(
+                existing.Binding,
+                challenge.Binding,
+                StringComparison.Ordinal)
+            && string.Equals(
+                existing.Method,
+                challenge.Method,
+                StringComparison.Ordinal)
+            && string.Equals(
+                existing.Verifier,
+                challenge.Verifier,
+                StringComparison.Ordinal)
+            && string.Equals(
+                existing.SecurityStamp,
+                challenge.SecurityStamp,
+                StringComparison.Ordinal)
+            && existing.MaxAttempts == challenge.MaxAttempts
+            && existing.ExpiresAt
+                == NormalizeStoreTimestamp(challenge.ExpiresAt);
+
+    private async Task<bool> SupersedeMatchingChallengesAsync(
+        NewVerificationChallenge challenge,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        var activeChallenges = await dbContext.VerificationChallenges
+            .Where(entity => entity.UserId == challenge.UserId
+                && entity.Purpose == challenge.Purpose
+                && entity.Binding == challenge.Binding
+                && entity.Method == challenge.Method
+                && (entity.State == VerificationChallengeState.Pending
+                    || entity.State == VerificationChallengeState.Verified))
+            .ToListAsync(ct);
+
+        foreach (var activeChallenge in activeChallenges)
+        {
+            activeChallenge.State = VerificationChallengeState.Superseded;
+            activeChallenge.Version = checked(activeChallenge.Version + 1);
+            activeChallenge.ModifiedAt = now;
+        }
+
+        return activeChallenges.Count > 0;
+    }
+
+    private static VerificationChallengeEntity CreateEntity(
+        NewVerificationChallenge challenge,
+        DateTimeOffset now)
+        => new()
         {
             Id = challenge.Id,
             UserId = challenge.UserId,
+            IntentHash = VerificationIntentHasher.Hash(
+                challenge.Purpose,
+                challenge.Binding,
+                challenge.Method),
             Purpose = challenge.Purpose,
             Binding = challenge.Binding,
             Method = challenge.Method,
@@ -52,15 +258,21 @@ public sealed class EfVerificationChallengeStore<TProfile>(
             MaxAttempts = challenge.MaxAttempts,
             State = VerificationChallengeState.Pending,
             Version = 1,
-            ExpiresAt = challenge.ExpiresAt,
+            ExpiresAt = NormalizeStoreTimestamp(challenge.ExpiresAt),
             CreatedAt = now,
             ModifiedAt = now,
         };
 
-        dbContext.VerificationChallenges.Add(entity);
-        await dbContext.SaveChangesAsync(ct);
-        return OperationResultFactory.Success();
+    private static DateTimeOffset NormalizeStoreTimestamp(
+        DateTimeOffset value)
+    {
+        const long ticksPerMicrosecond = TimeSpan.TicksPerMillisecond / 1000;
+        var utc = value.ToUniversalTime();
+        return new DateTimeOffset(
+            utc.Ticks - (utc.Ticks % ticksPerMicrosecond),
+            TimeSpan.Zero);
     }
+
 
     public async Task<OperationResult<StoredVerificationChallenge>> RecordAttemptAsync(
         Guid challengeId,
@@ -217,6 +429,16 @@ public sealed class EfVerificationChallengeStore<TProfile>(
         if (entity is not null)
         {
             dbContext.Entry(entity).State = EntityState.Detached;
+        }
+    }
+
+    private void DetachChallengeEntries()
+    {
+        foreach (var entry in dbContext.ChangeTracker
+            .Entries<VerificationChallengeEntity>()
+            .ToArray())
+        {
+            entry.State = EntityState.Detached;
         }
     }
 }

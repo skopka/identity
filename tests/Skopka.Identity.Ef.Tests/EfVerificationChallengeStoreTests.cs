@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Skopka.Identity.Errors;
 using Skopka.Identity.Users;
 using Skopka.Identity.Users.Handles;
@@ -9,6 +10,179 @@ namespace Skopka.Identity.Ef.Tests;
 
 public sealed class EfVerificationChallengeStoreTests
 {
+    [Fact]
+    public async Task NewChallengeSupersedesExpiredPendingAndVerifiedSameIntent()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var first = await database.FindChallengeAsync();
+        var secondId = Guid.NewGuid();
+
+        var secondCreated = await database.Store.CreateAndSupersedeAsync(
+            NewChallenge(
+                secondId,
+                first,
+                database.Now.AddMinutes(15)),
+            database.Now.AddMinutes(6),
+            CancellationToken.None);
+
+        Assert.True(secondCreated.IsSuccess);
+        var supersededFirst = await database.FindChallengeAsync(first.Id);
+        Assert.Equal(
+            VerificationChallengeState.Superseded,
+            supersededFirst.State);
+        Assert.Equal(first.Version + 1, supersededFirst.Version);
+        Assert.Equal(database.Now.AddMinutes(6), supersededFirst.ModifiedAt);
+
+        const string proofHash =
+            "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+        var second = await database.FindChallengeAsync(secondId);
+        var verified = await database.Store.RecordAttemptAsync(
+            second.Id,
+            second.Version,
+            succeeded: true,
+            proofHash,
+            database.Now.AddMinutes(14),
+            database.Now.AddMinutes(7),
+            CancellationToken.None);
+        Assert.True(verified.IsSuccess);
+
+        var thirdId = Guid.NewGuid();
+        var thirdCreated = await database.Store.CreateAndSupersedeAsync(
+            NewChallenge(
+                thirdId,
+                verified.Value,
+                database.Now.AddMinutes(20)),
+            database.Now.AddMinutes(8),
+            CancellationToken.None);
+
+        Assert.True(thirdCreated.IsSuccess);
+        var supersededSecond = await database.FindChallengeAsync(secondId);
+        Assert.Equal(
+            VerificationChallengeState.Superseded,
+            supersededSecond.State);
+        Assert.Equal(verified.Value.Version + 1, supersededSecond.Version);
+        Assert.Equal(database.Now.AddMinutes(8), supersededSecond.ModifiedAt);
+        Assert.Equal(
+            VerificationChallengeState.Pending,
+            (await database.FindChallengeAsync(thirdId)).State);
+    }
+
+    [Fact]
+    public async Task DifferentIntentsRemainActiveTogether()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var first = await database.FindChallengeAsync();
+        var secondId = Guid.NewGuid();
+
+        var result = await database.Store.CreateAndSupersedeAsync(
+            NewChallenge(
+                secondId,
+                first with { Binding = "different-resource" },
+                database.Now.AddMinutes(10)),
+            database.Now.AddMinutes(1),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+            VerificationChallengeState.Pending,
+            (await database.FindChallengeAsync(first.Id)).State);
+        Assert.Equal(
+            VerificationChallengeState.Pending,
+            (await database.FindChallengeAsync(secondId)).State);
+    }
+
+    [Fact]
+    public async Task ConcurrentInMemoryCreationLeavesOneActiveSameIntent()
+    {
+        var databaseName = Guid.NewGuid().ToString();
+        var databaseRoot = new InMemoryDatabaseRoot();
+        var options = new DbContextOptionsBuilder<
+                IdentityDbContext<TestProfile>>()
+            .UseInMemoryDatabase(databaseName, databaseRoot)
+            .Options;
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            3,
+            12,
+            0,
+            0,
+            TimeSpan.Zero);
+        Guid userId;
+
+        await using (var setupContext =
+            new IdentityDbContext<TestProfile>(options))
+        {
+            var userStore = new EfIdentityUserStore<TestProfile>(setupContext);
+            var created = await userStore.CreateAsync(
+                new NewIdentityUser<TestProfile>(
+                    "concurrent",
+                    null,
+                    null,
+                    new TestProfile("Concurrent"),
+                    UserFlags.None,
+                    "CONCURRENT-STAMP"),
+                new NormalizedHandles("CONCURRENT", null, null),
+                now,
+                CancellationToken.None);
+            Assert.True(created.IsSuccess);
+            userId = created.Value.Id;
+        }
+
+        await using var firstContext =
+            new IdentityDbContext<TestProfile>(options);
+        await using var secondContext =
+            new IdentityDbContext<TestProfile>(options);
+        var firstStore = new EfVerificationChallengeStore<TestProfile>(
+            firstContext);
+        var secondStore = new EfVerificationChallengeStore<TestProfile>(
+            secondContext);
+        var start = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async Task<Skopka.Abstraction.OperationResult.OperationResult> IssueAsync(
+            EfVerificationChallengeStore<TestProfile> store,
+            Guid challengeId)
+        {
+            await start.Task;
+            return await store.CreateAndSupersedeAsync(
+                new NewVerificationChallenge(
+                    challengeId,
+                    userId,
+                    "password.change",
+                    "same-binding",
+                    VerificationMethods.OneTimeCode,
+                    $"verifier-{challengeId:N}",
+                    "CONCURRENT-STAMP",
+                    5,
+                    now.AddMinutes(5)),
+                now,
+                CancellationToken.None);
+        }
+
+        var firstTask = IssueAsync(firstStore, Guid.NewGuid());
+        var secondTask = IssueAsync(secondStore, Guid.NewGuid());
+        start.SetResult();
+        var results = await Task.WhenAll(firstTask, secondTask);
+
+        Assert.All(results, result => Assert.True(result.IsSuccess));
+        await using var assertionContext =
+            new IdentityDbContext<TestProfile>(options);
+        var challenges = await assertionContext.VerificationChallenges
+            .AsNoTracking()
+            .Where(challenge => challenge.UserId == userId)
+            .ToArrayAsync();
+        Assert.Equal(2, challenges.Length);
+        Assert.Single(
+            challenges,
+            challenge => challenge.State
+                == VerificationChallengeState.Pending);
+        Assert.Single(
+            challenges,
+            challenge => challenge.State
+                == VerificationChallengeState.Superseded);
+    }
+
     [Fact]
     public async Task FailedAttemptsLockChallengeAtLimit()
     {
@@ -148,6 +322,21 @@ public sealed class EfVerificationChallengeStoreTests
         Assert.Contains(result.Errors, error => error.Code == code);
     }
 
+    private static NewVerificationChallenge NewChallenge(
+        Guid id,
+        StoredVerificationChallenge intent,
+        DateTimeOffset expiresAt)
+        => new(
+            id,
+            intent.UserId,
+            intent.Purpose,
+            intent.Binding,
+            intent.Method,
+            $"opaque-verifier-{id:N}",
+            intent.SecurityStamp,
+            intent.MaxAttempts,
+            expiresAt);
+
     public sealed record TestProfile(string DisplayName);
 
     private sealed class TestDatabase(
@@ -200,7 +389,7 @@ public sealed class EfVerificationChallengeStoreTests
 
             var store = new EfVerificationChallengeStore<TestProfile>(context);
             var challengeId = Guid.NewGuid();
-            var challengeResult = await store.CreateAsync(
+            var challengeResult = await store.CreateAndSupersedeAsync(
                 new NewVerificationChallenge(
                     challengeId,
                     created.Value.Id,
@@ -223,10 +412,14 @@ public sealed class EfVerificationChallengeStoreTests
                 now);
         }
 
-        public async Task<StoredVerificationChallenge> FindChallengeAsync()
+        public Task<StoredVerificationChallenge> FindChallengeAsync()
+            => FindChallengeAsync(ChallengeId);
+
+        public async Task<StoredVerificationChallenge> FindChallengeAsync(
+            Guid challengeId)
         {
             var challenge = await Store.FindByIdAsync(
-                ChallengeId,
+                challengeId,
                 CancellationToken.None);
             Assert.NotNull(challenge);
             return challenge;

@@ -9,5 +9,13 @@ public sealed class DefaultIdentityNormalizer : IIdentityNormalizer
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
 
     public string? NormalizePhone(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : new string(value.Where(char.IsDigit).ToArray());
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = new string(value.Where(char.IsDigit).ToArray());
+        return normalized.Length == 0 ? null : normalized;
+    }
 }

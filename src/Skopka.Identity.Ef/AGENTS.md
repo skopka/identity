@@ -42,6 +42,9 @@ identity stores when it is added.
 
 - `auth_users` stores normalized handles, confirmation flags, flags, version and
   deleted/blocked/audit timestamps.
+- `identity_login_identifiers` stores the distinct normalized-key union per user. Its
+  active marker must change atomically with create, handle update, soft delete and
+  restore.
 - `user_profiles` stores display handles and the generic `Profile`.
 - `identity_roles` stores display/normalized names, optional parent metadata, version and
   audit timestamps.
@@ -60,6 +63,8 @@ identity stores when it is added.
 - Keep password verifier data opaque if credential persistence is implemented here.
 - Login lookup filters deleted users in the database query because soft-deleted handles
   may no longer be unique.
+- Automatic login lookup queries all normalized candidates once and returns at most two
+  distinct active users so Core can reject ambiguity without additional probes.
 - Password verifier replacements compare both user `Version` and the expected previous
   verifier before updating, then bump the user version in the same save operation.
 - `auth_users.security_stamp` is required and limited to 64 characters. Explicit stamp
@@ -67,6 +72,11 @@ identity stores when it is added.
 - `verification_challenges.version` is a concurrency token. Record-attempt and
   proof-consumption transitions must recheck state, expiry, binding, proof digest and
   expected version before saving.
+- Challenge creation serializes relational writers without bumping the user version,
+  supersedes `Pending`/`Verified` rows for the exact intent and inserts the replacement
+  in one transaction. It must compose with a configured EF execution strategy and a
+  caller-owned transaction. The EF InMemory path uses only an in-process lock and is not
+  a distributed production persistence strategy.
 - `identity_rate_limit_buckets` uses `(scope, partition_version, key_hash)` as its key.
   Hit/reset operations apply every configured partition version, retry
   insert/update/delete races and never persist raw account or client identifiers.

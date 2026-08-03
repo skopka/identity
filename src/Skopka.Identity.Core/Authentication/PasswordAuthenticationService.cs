@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.Errors;
@@ -38,6 +40,16 @@ public sealed class PasswordAuthenticationService<TProfile>(
                 IdentityErrors.Validation("login", "Login is required."));
         }
 
+        if (cmd.Login.Length > IdentityLoginLimits.MaximumLoginLength)
+        {
+            return Fail(
+                op,
+                IdentityErrors.Validation(
+                    "login",
+                    $"Login cannot exceed "
+                        + $"{IdentityLoginLimits.MaximumLoginLength} characters."));
+        }
+
         var passwordError = PasswordPolicy.ValidateInput(
             cmd.Password,
             "password",
@@ -73,13 +85,6 @@ public sealed class PasswordAuthenticationService<TProfile>(
                     "ClientKey exceeds the supported length."));
         }
 
-        var accountKey = $"{(int)cmd.Handle}:{normalizedLogin}";
-        var accountRequest = new RateLimitRequest(
-            IdentityRateLimitScopes.PasswordAccount,
-            accountKey,
-            rateLimitOptions.PasswordAccountPermitLimit,
-            rateLimitOptions.PasswordAccountWindow);
-
         if (rateLimiter is not null)
         {
             var clientKey = NormalizeClientKey(cmd.ClientKey);
@@ -100,7 +105,17 @@ public sealed class PasswordAuthenticationService<TProfile>(
                             clientDecision.RetryAfter));
                 }
             }
+        }
 
+        var user = await FindUserAsync(cmd.Handle, normalizedLogin, ct);
+        var accountRequest = new RateLimitRequest(
+            IdentityRateLimitScopes.PasswordAccount,
+            CreateAccountKey(cmd.Handle, normalizedLogin, user?.Id),
+            rateLimitOptions.PasswordAccountPermitLimit,
+            rateLimitOptions.PasswordAccountWindow);
+
+        if (rateLimiter is not null)
+        {
             var accountDecision = await rateLimiter.CheckAsync(
                 accountRequest,
                 ct);
@@ -114,7 +129,6 @@ public sealed class PasswordAuthenticationService<TProfile>(
             }
         }
 
-        var user = await FindUserAsync(cmd.Handle, normalizedLogin, ct);
         if (user is null)
         {
             _ = await credentialStore.FindPasswordVerifierAsync(Guid.Empty, ct);
@@ -173,11 +187,11 @@ public sealed class PasswordAuthenticationService<TProfile>(
 
             if (rehashResult.IsSuccess)
             {
-                var refreshedUser = await FindUserAsync(
+                var refreshedUser = await FindUserAfterRehashAsync(
                     cmd.Handle,
                     normalizedLogin,
                     ct);
-                if (refreshedUser is null)
+                if (refreshedUser is null || refreshedUser.Id != user.Id)
                 {
                     return Fail(op, AuthenticationErrors.InvalidCredentials());
                 }
@@ -195,30 +209,116 @@ public sealed class PasswordAuthenticationService<TProfile>(
         return OperationResultFactory.Success(user);
     }
 
-    private string? NormalizeLogin(AuthenticatePasswordCommand cmd)
-        => cmd.Handle switch
+    private NormalizedLogin? NormalizeLogin(AuthenticatePasswordCommand cmd)
+    {
+        if (cmd.Handle == PasswordLoginHandle.Automatic)
         {
-            PasswordLoginHandle.UserName => normalizer.NormalizeUserName(cmd.Login),
+            var normalizedKeys = normalizer
+                .NormalizeAutomaticLoginIdentifiers(cmd.Login)
+                .Where(key => !string.IsNullOrEmpty(key))
+                .Where(
+                    key => key.Length
+                        <= IdentityLoginLimits.MaximumLoginLength)
+                .Distinct(StringComparer.Ordinal)
+                .Take(IdentityLoginLimits.MaximumAutomaticLoginIdentifiers)
+                .ToArray();
+
+            return normalizedKeys.Length == 0
+                ? null
+                : new NormalizedLogin(
+                    null,
+                    normalizedKeys,
+                    normalizer.NormalizePhoneLoginIdentifier(cmd.Login));
+        }
+
+        var normalizedValue = cmd.Handle switch
+        {
+            PasswordLoginHandle.UserName =>
+                normalizer.NormalizeUserName(cmd.Login),
             PasswordLoginHandle.Email => normalizer.NormalizeEmail(cmd.Login),
+            PasswordLoginHandle.Phone =>
+                normalizer.NormalizePhoneLoginIdentifier(cmd.Login),
             _ => null
         };
 
-    private Task<IdentityUser<TProfile>?> FindUserAsync(
+        return string.IsNullOrEmpty(normalizedValue)
+            || normalizedValue.Length > IdentityLoginLimits.MaximumLoginLength
+                ? null
+                : new NormalizedLogin(
+                    normalizedValue,
+                    null,
+                    cmd.Handle == PasswordLoginHandle.Phone
+                        ? normalizedValue
+                        : null);
+    }
+
+    private static string CreateAccountKey(
         PasswordLoginHandle handle,
-        string normalizedLogin,
+        NormalizedLogin login,
+        Guid? userId)
+    {
+        if (userId is not null)
+        {
+            return $"user:{userId.Value:N}";
+        }
+
+        if (login.NormalizedValue is not null)
+        {
+            return $"{(int)handle}:{login.NormalizedValue}";
+        }
+
+        var canonicalKeys = login.NormalizedPhoneIdentifier is not null
+            ? $"phone:{login.NormalizedPhoneIdentifier.Length}:"
+                + login.NormalizedPhoneIdentifier
+            : string.Concat(
+                login.NormalizedKeys!
+                    .Order(StringComparer.Ordinal)
+                    .Select(key => $"{key.Length}:{key}"));
+        var digest = SHA256.HashData(Encoding.UTF8.GetBytes(canonicalKeys));
+        return $"{(int)handle}:{Convert.ToHexString(digest)}";
+    }
+
+    private async Task<IdentityUser<TProfile>?> FindUserAsync(
+        PasswordLoginHandle handle,
+        NormalizedLogin login,
         CancellationToken ct)
-        => handle switch
+    {
+        if (handle == PasswordLoginHandle.Automatic)
+        {
+            var users = await userLookupStore
+                .FindActiveByNormalizedLoginIdentifiersAsync(
+                    login.NormalizedKeys!,
+                    ct);
+            var distinctUsers = users
+                .DistinctBy(user => user.Id)
+                .Take(IdentityLoginLimits.MaximumResolvedUsers)
+                .ToArray();
+            return distinctUsers.Length == 1 ? distinctUsers[0] : null;
+        }
+
+        return handle switch
         {
             PasswordLoginHandle.UserName =>
-                userLookupStore.FindActiveByNormalizedUserNameAsync(
-                    normalizedLogin,
+                await userLookupStore.FindActiveByNormalizedUserNameAsync(
+                    login.NormalizedValue!,
                     ct),
             PasswordLoginHandle.Email =>
-                userLookupStore.FindActiveByNormalizedEmailAsync(
-                    normalizedLogin,
+                await userLookupStore.FindActiveByNormalizedEmailAsync(
+                    login.NormalizedValue!,
                     ct),
-            _ => Task.FromResult<IdentityUser<TProfile>?>(null)
+            PasswordLoginHandle.Phone =>
+                await userLookupStore.FindActiveByNormalizedPhoneAsync(
+                    login.NormalizedValue!,
+                    ct),
+            _ => null
         };
+    }
+
+    private Task<IdentityUser<TProfile>?> FindUserAfterRehashAsync(
+        PasswordLoginHandle handle,
+        NormalizedLogin login,
+        CancellationToken ct)
+        => FindUserAsync(handle, login, ct);
 
     private async Task<OperationResult<IdentityUser<TProfile>>>
         InvalidCredentialsAsync(
@@ -260,4 +360,9 @@ public sealed class PasswordAuthenticationService<TProfile>(
         op.Failure(result.Errors.First().Code);
         return OperationResultFactory.Fail<IdentityUser<TProfile>>(result.Errors);
     }
+
+    private sealed record NormalizedLogin(
+        string? NormalizedValue,
+        IReadOnlyCollection<string>? NormalizedKeys,
+        string? NormalizedPhoneIdentifier);
 }

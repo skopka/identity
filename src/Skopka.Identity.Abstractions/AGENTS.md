@@ -29,7 +29,10 @@ small value objects.
   user and mutation kind, but must not expose verifier/hash implementation details.
 - Define authentication contracts such as `IPasswordAuthenticationService<TProfile>`,
   `IIdentityUserLookupService<TProfile>`,
-  `IIdentityUserLookupStore<TProfile>` and `IPasswordVerificationTimingProtector`.
+  `IIdentityUserLookupStore<TProfile>`, bounded automatic-login normalization and
+  `IPasswordVerificationTimingProtector`.
+- Keep the default-compatible `NormalizePhoneLoginIdentifier` contract transport-neutral
+  and overrideable; Core and hosts share it instead of duplicating phone-shape policy.
 - Define security stamp contracts such as `ISecurityStampService<TProfile>` and
   `ISecurityStampGenerator`.
 - Define action-token contracts under `Tokens`, including purposes, protected payload,
@@ -89,6 +92,11 @@ small value objects.
 - Verification methods return opaque persisted verifiers and optional delivery codes.
   The abstraction must not require generated OTP, because future TOTP or WebAuthn
   methods may not issue a deliverable code.
+- `CreateAndSupersedeAsync` is an atomic store contract. The exact intent tuple is
+  `(UserId, Purpose, Binding, Method)` with ordinal string equality. A new challenge
+  supersedes all `Pending` and `Verified` rows for that tuple, including expired rows,
+  increments their versions and leaves at most one active row under concurrent calls.
+  Different tuples must remain independent.
 - Step-up commands do not accept a verification purpose. The policy provider owns it,
   preventing transport callers from selecting a weaker or unrelated purpose.
 - Step-up `AssuranceLevel` is an application-defined ordinal for policy comparison. It

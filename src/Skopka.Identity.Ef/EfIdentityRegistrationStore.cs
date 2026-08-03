@@ -108,6 +108,23 @@ public sealed class EfIdentityRegistrationStore<TProfile>
         };
         profile.User = authUser;
 
+        var loginIdentifiers = (handles.LoginIdentifierKeys
+                ?? DistinctKeys(handles.UserName, handles.Email, handles.Phone))
+            .Where(normalizedKey => !string.IsNullOrEmpty(normalizedKey))
+            .Distinct(StringComparer.Ordinal)
+            .Select(normalizedKey => new LoginIdentifierEntity
+            {
+                UserId = userId,
+                NormalizedKey = normalizedKey,
+                IsActive = true,
+                User = authUser
+            })
+            .ToArray();
+        foreach (var identifier in loginIdentifiers)
+        {
+            authUser.LoginIdentifiers.Add(identifier);
+        }
+
         UserCredentialEntity? credential = null;
         if (passwordVerifier is not null)
         {
@@ -145,13 +162,13 @@ public sealed class EfIdentityRegistrationStore<TProfile>
         }
         catch (DbUpdateConcurrencyException)
         {
-            Detach(authUser, profile, credential, login);
+            Detach(authUser, profile, credential, login, loginIdentifiers);
             return OperationResultFactory.Fail<IdentityUser<TProfile>>(
                 ConcurrencyError);
         }
         catch (DbUpdateException exception)
         {
-            Detach(authUser, profile, credential, login);
+            Detach(authUser, profile, credential, login, loginIdentifiers);
             var error = MapException(exception);
             if (error is null)
             {
@@ -175,11 +192,25 @@ public sealed class EfIdentityRegistrationStore<TProfile>
         return null;
     }
 
+    private static string[] DistinctKeys(params string?[] keys)
+        => keys
+            .Where(key => !string.IsNullOrEmpty(key))
+            .Select(key => key!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
     private void Detach(params object?[] entities)
     {
         foreach (var entity in entities)
         {
-            if (entity is not null)
+            if (entity is IEnumerable<LoginIdentifierEntity> identifiers)
+            {
+                foreach (var identifier in identifiers)
+                {
+                    dbContext.Entry(identifier).State = EntityState.Detached;
+                }
+            }
+            else if (entity is not null)
             {
                 dbContext.Entry(entity).State = EntityState.Detached;
             }

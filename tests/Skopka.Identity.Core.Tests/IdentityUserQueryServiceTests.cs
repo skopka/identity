@@ -44,6 +44,23 @@ public sealed class IdentityUserQueryServiceTests
         Assert.Null(store.Query);
     }
 
+    [Fact]
+    public async Task QueryPreservesPartialPhoneSearch()
+    {
+        var store = new FakeStore();
+        var service = new IdentityUserQueryService<TestProfile>(
+            store,
+            new DefaultIdentityNormalizer(),
+            new NoopIdentityMetrics());
+
+        var result = await service.QueryAsync(
+            new IdentityUserQuery("555"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("555", store.Query!.NormalizedPhone);
+    }
+
     private sealed class FakeStore : IIdentityUserQueryStore<TestProfile>
     {
         public IdentityUserStoreQuery? Query { get; private set; }

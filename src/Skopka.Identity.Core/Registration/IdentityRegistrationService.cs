@@ -161,10 +161,31 @@ public sealed class IdentityRegistrationService<TProfile>(
             command.Flags,
             securityStampGenerator.Generate(),
             Guid.NewGuid());
+        var normalizedUserName = normalizer.NormalizeUserName(
+            command.UserName);
+        var normalizedEmail = normalizer.NormalizeEmail(command.Email);
+        var normalizedPhone = normalizer.NormalizePhoneLoginIdentifier(
+            command.Phone);
+        var loginIdentifierKeys = LoginIdentifierKeyBuilder.Create(
+            normalizer,
+            command.UserName,
+            command.Email,
+            command.Phone,
+            normalizedUserName,
+            normalizedEmail,
+            normalizedPhone,
+            out var handleError);
+        if (handleError is not null)
+        {
+            error = handleError;
+            return null;
+        }
+
         var handles = new NormalizedHandles(
-            normalizer.NormalizeUserName(command.UserName),
-            normalizer.NormalizeEmail(command.Email),
-            normalizer.NormalizePhone(command.Phone));
+            normalizedUserName,
+            normalizedEmail,
+            normalizedPhone,
+            loginIdentifierKeys);
 
         error = null;
         return new PreparedUser(user, handles);
