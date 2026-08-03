@@ -76,6 +76,8 @@ file first and then the module-local file:
 - `IIdentitySessionClaimsProvider<TProfile>` projects user/application claims into each
   newly issued access token. Multiple providers and repeated `role` claims are allowed.
 - `IIdentityRoleService<TProfile>` owns role CRUD and direct user-role membership.
+- `IIdentityRoleQueryService<TProfile>` provides bounded cursor-based role catalog
+  queries without exposing `IQueryable`.
 - `IIdentityRoleStore<TProfile>` and `IIdentityUserRoleStore<TProfile>` are the role
   persistence ports used by Core.
 - `IIdentityRegistrationService<TProfile>` atomically creates a user with its initial
@@ -323,7 +325,8 @@ Preserve these rules:
   fresh policy/step-up workflow, not an automatic retry of an already authorized action.
 - Password and external registration must use `IIdentityRegistrationStore<TProfile>` so
   the user and initial sign-in method commit atomically.
-- User queries are bounded to 100 rows and use stable `(CreatedAt, Id)` cursor ordering.
+- User and role queries are bounded to 100 rows and use stable `(CreatedAt, Id)` cursor
+  ordering.
   Query services are not endpoint authorization.
 - Exact account workflows use `IIdentityUserLookupService<TProfile>` rather than
   administrative contains-search. Its not-found result must be suppressed by public
@@ -412,11 +415,13 @@ implemented as a separate subsystem. Persistent account/client rate limiting,
 challenge-start throttling and resend cooldown are implemented. JWT access tokens and
 persistent refresh sessions now support strict rotation, replay detection, online
 validation and revoke. ASP.NET Core JWT bearer integration and extensible claims
-projection are implemented. Optional role CRUD, direct membership persistence and JWT
-role projection are implemented. Optional policy-driven step-up decisions exchange
+projection are implemented. Optional role CRUD, bounded role queries, direct membership
+persistence and JWT role projection are implemented. Optional policy-driven step-up
+decisions exchange
 one-time verification proofs without issuing another bearer token. External login
 lifecycle, atomic registration, active-session management, bounded administrative user
-queries and security-event observer hooks are implemented. OAuth/OIDC protocol clients,
+and role queries and security-event observer hooks are implemented. OAuth/OIDC protocol
+clients,
 HTTP endpoints and UI belong to a host such as `Skopka.Hello`. Keep transport token
 issuance out of password/OTP cryptographic providers and EF stores.
 

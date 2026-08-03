@@ -35,7 +35,8 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
   additional `IIdentitySessionClaimsProvider<TProfile>` implementations.
 - Implement optional role CRUD and direct user-role membership orchestration through
   `IdentityRoleService<TProfile>`, including role-name normalization and hierarchy
-  validation.
+  validation, plus bounded role catalog queries through
+  `IdentityRoleQueryService<TProfile>`.
 - Project direct role memberships as repeated `role` session claims when roles are
   enabled.
 - Implement atomic password/external registration, external-login lifecycle,

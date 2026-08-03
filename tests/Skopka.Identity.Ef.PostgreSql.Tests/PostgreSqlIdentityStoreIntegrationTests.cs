@@ -10,6 +10,7 @@ using Skopka.Identity.Errors;
 using Skopka.Identity.ExternalLogins;
 using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Registration;
+using Skopka.Identity.Roles.Queries;
 using Skopka.Identity.Sessions;
 using Skopka.Identity.SignInMethods;
 using Skopka.Identity.Users;
@@ -117,6 +118,7 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
         await AssertDatabaseConcurrencyTokenAsync(
             replacement.Id,
             now.AddMinutes(5));
+        await AssertRoleQueryAsync(now.AddMinutes(6));
     }
 
     [Fact]
@@ -1206,6 +1208,56 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
             () => secondContext.SaveChangesAsync());
     }
+
+    private async Task AssertRoleQueryAsync(DateTimeOffset now)
+    {
+        await using var scope = serviceProvider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<
+            PostgreSqlIdentityDbContext<TestProfile>>();
+        var store = scope.ServiceProvider.GetRequiredService<
+            IIdentityRoleQueryStore<TestProfile>>();
+
+        context.Roles.AddRange(
+            CreateRole("Administrators", now),
+            CreateRole("Auditors", now.AddMinutes(-1)),
+            CreateRole("Support", now.AddMinutes(-2)));
+        await context.SaveChangesAsync();
+
+        var searched = await store.QueryAsync(
+            new IdentityRoleStoreQuery("ADMIN", 10, null),
+            CancellationToken.None);
+        Assert.Equal(
+            "Administrators",
+            Assert.Single(searched.Items).Name);
+
+        var firstPage = await store.QueryAsync(
+            new IdentityRoleStoreQuery(null, 2, null),
+            CancellationToken.None);
+        var secondPage = await store.QueryAsync(
+            new IdentityRoleStoreQuery(
+                null,
+                2,
+                firstPage.NextCursor),
+            CancellationToken.None);
+
+        Assert.Equal(2, firstPage.Items.Count);
+        Assert.NotNull(firstPage.NextCursor);
+        Assert.Single(secondPage.Items);
+        Assert.Null(secondPage.NextCursor);
+    }
+
+    private static RoleEntity CreateRole(
+        string name,
+        DateTimeOffset createdAt)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            NormalizedName = name.ToUpperInvariant(),
+            Version = 1,
+            CreatedAt = createdAt,
+            ModifiedAt = createdAt,
+        };
 
     public sealed record TestProfile(
         string DisplayName,

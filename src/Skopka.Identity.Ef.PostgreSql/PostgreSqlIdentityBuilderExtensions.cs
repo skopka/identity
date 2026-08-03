@@ -10,6 +10,7 @@ using Skopka.Identity.ExternalLogins;
 using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Registration;
 using Skopka.Identity.Roles;
+using Skopka.Identity.Roles.Queries;
 using Skopka.Identity.Sessions;
 using Skopka.Identity.Verification;
 using Skopka.Identity.Users.Queries;
@@ -66,6 +67,9 @@ public static class PostgreSqlIdentityBuilderExtensions
         builder.Services.TryAddScoped<
             IIdentityRoleStore<TProfile>,
             EfIdentityRoleStore<TProfile>>();
+        builder.Services.TryAddScoped<
+            IIdentityRoleQueryStore<TProfile>,
+            EfIdentityRoleQueryStore<TProfile>>();
         builder.Services.TryAddScoped<
             IIdentityUserRoleStore<TProfile>,
             EfIdentityUserRoleStore<TProfile>>();

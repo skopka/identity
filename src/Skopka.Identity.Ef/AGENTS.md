@@ -22,8 +22,9 @@ identity stores when it is added.
   `IRateLimitBucketStore<TProfile>`.
 - Implement `EfIdentityRefreshSessionStore<TProfile>` against
   `IIdentityRefreshSessionStore<TProfile>`.
-- Implement role CRUD and direct membership stores against
-  `IIdentityRoleStore<TProfile>` and `IIdentityUserRoleStore<TProfile>`.
+- Implement role CRUD, bounded catalog queries and direct membership stores against
+  `IIdentityRoleStore<TProfile>`, `IIdentityRoleQueryStore<TProfile>` and
+  `IIdentityUserRoleStore<TProfile>`.
 - Implement external-login, aggregate registration and bounded user-query stores.
 - Map EF entities to public `IdentityUser<TProfile>` models.
 - Configure generic EF relationships, keys, concurrency tokens and timestamps.
@@ -97,5 +98,5 @@ identity stores when it is added.
   `SaveChangesAsync`.
 - Active session listing returns one current row per logical chain. Revoke-by-id filters
   both user and session ids.
-- User queries apply bounded page size, status/flags/search filters and stable
+- User and role queries apply bounded page sizes, supported search filters and stable
   `(CreatedAt, Id)` cursor order in the database.

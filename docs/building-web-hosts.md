@@ -18,7 +18,7 @@ CSRF protection, delivery channels and user-facing policy.
 | Action tokens, verification proofs and step-up decisions | Email/SMS delivery and templates |
 | PostgreSQL mappings and packaged migrations | Endpoint and application authorization |
 | Stable errors, metrics and security-event hooks | Error-to-HTTP mapping and anti-enumeration responses |
-| Bounded user queries | Admin UI policy and profile-specific search |
+| Bounded user and role queries | Admin UI policy and profile-specific projection |
 
 Do not put ASP.NET types into a `TProfile`, store provider access tokens as external
 login subjects, or expose EF entities from host APIs.
@@ -330,6 +330,23 @@ opaque URL-safe value rather than expose it as a second offset-based paging cont
 The query service is not authorization. Restrict admin endpoints with application
 policies and avoid returning profile fields that the current administrator is not
 allowed to inspect.
+
+When roles are enabled, `IIdentityRoleQueryService<TProfile>` provides the same bounded
+cursor contract for the role catalog:
+
+```csharp
+var roles = await roleQueries.QueryAsync(
+    new IdentityRoleQuery(
+        Search: request.Search,
+        PageSize: 50,
+        Cursor: DecodeRoleCursor(request.Cursor)),
+    ct);
+```
+
+Role search matches normalized name fragments. `PageSize` is limited to 100 and the
+stable cursor is ordered by `(CreatedAt, Id)`. Role queries do not grant permission to
+create roles or change memberships; the host must authorize those operations
+separately.
 
 ## Errors and Concurrency
 

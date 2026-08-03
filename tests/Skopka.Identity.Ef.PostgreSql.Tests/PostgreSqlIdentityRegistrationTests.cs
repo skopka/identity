@@ -9,6 +9,7 @@ using Skopka.Identity.Metrics;
 using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Registration;
 using Skopka.Identity.Roles;
+using Skopka.Identity.Roles.Queries;
 using Skopka.Identity.Security;
 using Skopka.Identity.SecurityEvents;
 using Skopka.Identity.Sessions;
@@ -100,6 +101,12 @@ public sealed class PostgreSqlIdentityRegistrationTests
         Assert.IsType<EfIdentityRoleStore<TestProfile>>(
             scopedProvider.GetRequiredService<
                 IIdentityRoleStore<TestProfile>>());
+        Assert.IsType<IdentityRoleQueryService<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentityRoleQueryService<TestProfile>>());
+        Assert.IsType<EfIdentityRoleQueryStore<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentityRoleQueryStore<TestProfile>>());
         Assert.IsType<EfIdentityUserRoleStore<TestProfile>>(
             scopedProvider.GetRequiredService<
                 IIdentityUserRoleStore<TestProfile>>());

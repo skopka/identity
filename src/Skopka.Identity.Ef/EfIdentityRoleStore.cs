@@ -183,7 +183,7 @@ public sealed class EfIdentityRoleStore<TProfile>
         }
     }
 
-    private static IdentityRole ToModel(RoleEntity role)
+    internal static IdentityRole ToModel(RoleEntity role)
         => new(
             role.Id,
             role.Name,

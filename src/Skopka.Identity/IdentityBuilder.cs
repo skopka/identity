@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.Roles;
+using Skopka.Identity.Roles.Queries;
 using Skopka.Identity.Sessions;
 using Skopka.Identity.StepUp;
 
@@ -54,6 +55,9 @@ public sealed class IdentityBuilder<TProfile>
         Services.TryAddScoped<
             IIdentityRoleService<TProfile>,
             IdentityRoleService<TProfile>>();
+        Services.TryAddScoped<
+            IIdentityRoleQueryService<TProfile>,
+            IdentityRoleQueryService<TProfile>>();
         Services.TryAddEnumerable(
             ServiceDescriptor.Scoped<
                 IIdentitySessionClaimsProvider<TProfile>,

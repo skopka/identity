@@ -20,7 +20,7 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
 - Register `IVerificationChallengeStore<TProfile>` through `UsePostgreSql`.
 - Register `IRateLimitBucketStore<TProfile>` through `UsePostgreSql`.
 - Register `IIdentityRefreshSessionStore<TProfile>` through `UsePostgreSql`.
-- Register role and user-role stores through `UsePostgreSql`.
+- Register role, bounded role-query and user-role stores through `UsePostgreSql`.
 - Register external-login, aggregate-registration and user-query stores through
   `UsePostgreSql`.
 

@@ -31,8 +31,9 @@ with `Microsoft.AspNetCore.Identity`.
 - Short-lived JWT access tokens and rotating opaque refresh sessions.
 - Active-session listing, device labels and user-scoped session revocation.
 - Optional online access-token/session validation.
-- Role CRUD, direct memberships and role projection into session claims.
-- Bounded cursor-based user queries for administrative interfaces.
+- Role CRUD, direct memberships, bounded role queries and role projection into
+  session claims.
+- Bounded cursor-based user and role queries for administrative interfaces.
 - Structured security-event observer hooks for host-side audit pipelines.
 - Step-up verification decisions separated from normal application authorization.
 - EF Core stores, PostgreSQL mappings and packaged migrations.

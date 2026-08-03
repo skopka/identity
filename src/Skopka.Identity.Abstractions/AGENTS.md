@@ -54,8 +54,9 @@ small value objects.
 - Define bounded session-claim values and
   `IIdentitySessionClaimsProvider<TProfile>` without depending on
   `System.Security.Claims` or ASP.NET Core.
-- Define role CRUD and direct membership contracts under `Roles`. Role store inputs
-  carry normalized names prepared by Core; membership APIs use stable role ids.
+- Define role CRUD, direct membership and bounded role-query contracts under `Roles`.
+  Role store inputs carry normalized names prepared by Core; membership APIs use stable
+  role ids and queries never expose `IQueryable`.
 - Define atomic registration contracts under `Registration` and external identity
   lifecycle contracts under `ExternalLogins`.
 - Define a transport-neutral sign-in-method snapshot query under `SignInMethods`. It may

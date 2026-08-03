@@ -31,8 +31,8 @@ Implements identity use cases:
 - verification challenges and one-time proofs;
 - session creation, refresh, validation and revocation;
 - rate-limit orchestration;
-- roles, memberships and step-up decisions.
-- bounded administrative user queries.
+- roles, memberships and step-up decisions;
+- bounded administrative user and role queries.
 
 Core computes operation time and passes it to stores. Expected failures are returned as
 errors; infrastructure failures that cannot be translated may still throw.
