@@ -17,7 +17,8 @@ Contains the public API:
 - stable error codes;
 - normalizer, policy, metrics and validator extension points.
 
-This package has no dependency on EF Core, PostgreSQL or ASP.NET authentication.
+This package has no dependency on EF Core, a concrete database or ASP.NET
+authentication.
 
 ### `Skopka.Identity.Core`
 
@@ -51,6 +52,17 @@ Owns PostgreSQL-specific behavior:
 - filtered unique indexes for active, non-null handles;
 - migration discovery for arbitrary closed `TProfile`;
 - translation of PostgreSQL constraint violations into stable identity errors;
+- DI registration of all EF stores.
+
+### `Skopka.Identity.Ef.Sqlite`
+
+Owns SQLite-specific behavior:
+
+- JSON text application profiles;
+- UTC-tick timestamp conversion for chronological comparisons;
+- filtered unique indexes for active, non-null handles;
+- packaged migration discovery for arbitrary closed `TProfile`;
+- translation of SQLite constraint violations into stable identity errors;
 - DI registration of all EF stores.
 
 ### `Skopka.Identity.Infrastructure`

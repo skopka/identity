@@ -24,6 +24,7 @@ Do not redesign the architecture unless the user explicitly asks for that.
   planning notes may call this layer `Skopka.Identity.EfCore`; in this repository the
   actual project name is `Skopka.Identity.Ef`.
 - `src/Skopka.Identity.Ef.PostgreSql` - PostgreSQL-specific persistence integration.
+- `src/Skopka.Identity.Ef.Sqlite` - SQLite-specific persistence integration.
 - `src/Skopka.Identity.Infrastructure` - infrastructure adapters.
 - `src/Skopka.Identity` - facade/DI package layer.
 
@@ -34,6 +35,7 @@ file first and then the module-local file:
 - `src/Skopka.Identity.Core/AGENTS.md`
 - `src/Skopka.Identity.Ef/AGENTS.md`
 - `src/Skopka.Identity.Ef.PostgreSql/AGENTS.md`
+- `src/Skopka.Identity.Ef.Sqlite/AGENTS.md`
 - `src/Skopka.Identity.Infrastructure/AGENTS.md`
 - `src/Skopka.Identity/AGENTS.md`
 
@@ -487,7 +489,7 @@ semantics aligned with the public API.
 
 Package metadata is centralized in `Directory.Build.props`; module-specific descriptions
 remain in source project files. CI must build, run the real PostgreSQL test, audit NuGet
-dependencies and pack all six source packages without publishing them. Tag pushes
-matching `v*` publish all six packages through `.github/workflows/release.yml`; keep the
+dependencies and pack all seven source packages without publishing them. Tag pushes
+matching `v*` publish all seven packages through `.github/workflows/release.yml`; keep the
 tag-derived version, package count validation, NuGet.org publication and GitHub Release
 attachments aligned. Release setup and operator steps live in `docs/releasing.md`.

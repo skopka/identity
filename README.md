@@ -15,7 +15,7 @@ with `Microsoft.AspNetCore.Identity`.
 
 ## Features
 
-- Generic application profile stored as PostgreSQL `jsonb`.
+- Generic application profile stored as PostgreSQL `jsonb` or SQLite JSON text.
 - Nullable user name, email and phone for external-login-only users.
 - Atomic password and external-login registration workflows.
 - External login resolve, list, link and unlink lifecycle.
@@ -37,7 +37,7 @@ with `Microsoft.AspNetCore.Identity`.
 - Bounded cursor-based user and role queries for administrative interfaces.
 - Structured security-event observer hooks for host-side audit pipelines.
 - Step-up verification decisions separated from normal application authorization.
-- EF Core stores, PostgreSQL mappings and packaged migrations.
+- EF Core stores with PostgreSQL and SQLite mappings and packaged migrations.
 
 OAuth/OIDC protocol clients, TOTP, WebAuthn/passkeys and UI/endpoints are not
 implemented here. A host validates the provider response and passes only the trusted
@@ -52,6 +52,7 @@ provider/subject pair to the identity services.
 | `Skopka.Identity` | Consumer-facing dependency injection and composition |
 | `Skopka.Identity.Ef` | Provider-neutral EF Core entities and stores |
 | `Skopka.Identity.Ef.PostgreSql` | PostgreSQL mappings, stores and migrations |
+| `Skopka.Identity.Ef.Sqlite` | SQLite mappings, stores and migrations |
 | `Skopka.Identity.Infrastructure` | Password hashers, tokens, OTP, rate limiting and JWT |
 
 A typical ASP.NET Core application references:
@@ -110,6 +111,13 @@ await identityDb.Database.MigrateAsync();
 
 Do not let every application replica race to run migrations in production. Prefer a
 dedicated deployment or migrator step.
+
+For SQLite, reference `Skopka.Identity.Ef.Sqlite`, register `.UseSqlite(connectionString)`
+and resolve `SqliteIdentityDbContext<AppProfile>` when applying migrations. Enable
+foreign-key enforcement in externally managed connections; for example,
+`Data Source=identity.db;Foreign Keys=True`. SQLite timestamps are stored as UTC ticks
+so session expiry, rate-limit windows and cursor ordering retain chronological query
+semantics.
 
 Register a password user atomically through the public registration service:
 

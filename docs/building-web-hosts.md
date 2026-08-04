@@ -16,7 +16,7 @@ CSRF protection, delivery channels and user-facing policy.
 | Normalization, optimistic concurrency and mutation policy | OAuth/OIDC redirects, state, nonce and PKCE |
 | Password hashing and opaque refresh-session persistence | Cookies, CSRF and browser storage |
 | Action tokens, verification proofs and step-up decisions | Email/SMS delivery and templates |
-| PostgreSQL mappings and packaged migrations | Endpoint and application authorization |
+| PostgreSQL/SQLite mappings and packaged migrations | Endpoint and application authorization |
 | Stable errors, metrics and security-event hooks | Error-to-HTTP mapping and anti-enumeration responses |
 | Bounded user and role queries | Admin UI policy and profile-specific projection |
 
@@ -70,6 +70,11 @@ remains compatible with tokens that have no `kid` header.
 
 Apply the migrations from `Skopka.Identity.Ef.PostgreSql` in a deployment step. Do not
 run migrations independently on every production replica.
+
+SQLite hosts can reference `Skopka.Identity.Ef.Sqlite`, replace `UsePostgreSql` with
+`UseSqlite` and apply migrations through `SqliteIdentityDbContext<TProfile>`. Enable
+SQLite foreign-key enforcement and account for SQLite's single-writer concurrency
+model when choosing it for a deployment.
 
 ## Password Registration
 

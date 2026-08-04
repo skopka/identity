@@ -48,6 +48,11 @@ The integration test:
 It never reads a developer connection string and does not fall back to a local database.
 If Docker or the image is unavailable, the integration test fails explicitly.
 
+`Skopka.Identity.Ef.Sqlite.Tests` uses an open in-memory SQLite database without
+Docker. It applies the packaged migration and exercises JSON profile round-trip,
+filtered uniqueness and error mapping, chronological UTC-tick queries, verification
+supersession, rate limits, refresh sessions and database concurrency.
+
 ## Package Validation
 
 Create all package and symbol artifacts:
@@ -66,6 +71,7 @@ Expected package ids:
 - `Skopka.Identity`
 - `Skopka.Identity.Ef`
 - `Skopka.Identity.Ef.PostgreSql`
+- `Skopka.Identity.Ef.Sqlite`
 - `Skopka.Identity.Infrastructure`
 
 Check dependencies for known vulnerabilities:
@@ -93,5 +99,13 @@ dotnet tool run dotnet-ef migrations add MigrationName \
   --startup-project src/Skopka.Identity.Ef.PostgreSql
 ```
 
+Generate SQLite migrations through its separate design-time context:
+
+```shell
+dotnet tool run dotnet-ef migrations add MigrationName \
+  --project src/Skopka.Identity.Ef.Sqlite \
+  --startup-project src/Skopka.Identity.Ef.Sqlite
+```
+
 After changing the persistence model, update migration discovery, generated SQL,
-pending-model and real PostgreSQL tests in the same change.
+pending-model, real SQLite and real PostgreSQL tests in the same change.

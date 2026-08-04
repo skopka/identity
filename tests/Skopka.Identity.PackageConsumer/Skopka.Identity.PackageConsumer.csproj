@@ -7,7 +7,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <IsPackable>false</IsPackable>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
-    <IdentityPackageVersion Condition="'$(IdentityPackageVersion)' == ''">0.8.0</IdentityPackageVersion>
+    <IdentityPackageVersion Condition="'$(IdentityPackageVersion)' == ''">0.9.0</IdentityPackageVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,6 +20,8 @@
     <PackageReference Include="Skopka.Identity.Ef"
                       Version="$(IdentityPackageVersion)" />
     <PackageReference Include="Skopka.Identity.Ef.PostgreSql"
+                      Version="$(IdentityPackageVersion)" />
+    <PackageReference Include="Skopka.Identity.Ef.Sqlite"
                       Version="$(IdentityPackageVersion)" />
     <PackageReference Include="Skopka.Identity.Infrastructure"
                       Version="$(IdentityPackageVersion)" />

@@ -85,6 +85,7 @@ jobs:
             "Skopka.Identity.Core"
             "Skopka.Identity.Ef"
             "Skopka.Identity.Ef.PostgreSql"
+            "Skopka.Identity.Ef.Sqlite"
             "Skopka.Identity.Infrastructure"
           )
 
@@ -100,8 +101,8 @@ jobs:
 
           NUPKG_COUNT=$(find artifacts/packages -maxdepth 1 -type f -name '*.nupkg' | wc -l)
           SNUPKG_COUNT=$(find artifacts/packages -maxdepth 1 -type f -name '*.snupkg' | wc -l)
-          if [[ "$NUPKG_COUNT" -ne 6 || "$SNUPKG_COUNT" -ne 6 ]]; then
-            echo "Expected 6 packages and 6 symbol packages, found $NUPKG_COUNT and $SNUPKG_COUNT." >&2
+          if [[ "$NUPKG_COUNT" -ne 7 || "$SNUPKG_COUNT" -ne 7 ]]; then
+            echo "Expected 7 packages and 7 symbol packages, found $NUPKG_COUNT and $SNUPKG_COUNT." >&2
             exit 1
           fi
 

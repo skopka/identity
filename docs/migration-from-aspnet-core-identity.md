@@ -17,7 +17,7 @@ alongside this guide and inventory every feature the application uses.
 | `SignInManager<TUser>.PasswordSignInAsync` | `IPasswordAuthenticationService<TProfile>` plus host session creation |
 | `RoleManager<TRole>` | `IIdentityRoleService<TProfile>` |
 | User-role membership | `IIdentityRoleService<TProfile>` |
-| `IdentityDbContext` | `PostgreSqlIdentityDbContext<TProfile>` |
+| `IdentityDbContext` | `PostgreSqlIdentityDbContext<TProfile>` or `SqliteIdentityDbContext<TProfile>` |
 | Security stamp | `IdentityUser.SecurityStamp` |
 | Concurrency stamp | Numeric `IdentityUser.Version` |
 | Lockout | `BlockedAt` / `BlockedUntil` plus persistent rate limiting |

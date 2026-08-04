@@ -12,12 +12,14 @@
         <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
         <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.10" />
         <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
+        <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
         <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
         <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
         <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.21.0" />
         <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
         <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
         <PackageVersion Include="Skopka.Abstraction.OperationResult" Version="0.2.0" />
+        <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
         <PackageVersion Include="Testcontainers.PostgreSql" Version="4.13.0" />
         <PackageVersion Include="xunit" Version="2.9.3" />
         <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />

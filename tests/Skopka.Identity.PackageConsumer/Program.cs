@@ -1,6 +1,7 @@
 using Skopka.Identity;
 using Skopka.Identity.Ef;
 using Skopka.Identity.Ef.PostgreSql;
+using Skopka.Identity.Ef.Sqlite;
 using Skopka.Identity.Verification;
 
 Type[] packageSurfaces =
@@ -9,6 +10,7 @@ Type[] packageSurfaces =
     typeof(DefaultIdentityNormalizer),
     typeof(IdentityDbContext<>),
     typeof(PostgreSqlIdentityDbContext<>),
+    typeof(SqliteIdentityDbContext<>),
     typeof(HmacOneTimeCodeOptions),
     typeof(IdentityBuilder<>),
 ];
@@ -18,7 +20,7 @@ var assemblies = packageSurfaces
     .Select(name => $"{name.Name} {name.Version}")
     .ToArray();
 
-if (assemblies.Length != 6
+if (assemblies.Length != 7
     || assemblies.Any(string.IsNullOrWhiteSpace))
 {
     throw new InvalidOperationException(

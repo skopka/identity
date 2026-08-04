@@ -182,7 +182,9 @@ application level when legal or operational requirements require irreversible er
 ## Deployment Checklist
 
 - Store every key outside source control and ordinary application settings.
-- Use TLS for PostgreSQL and all public endpoints.
+- Use TLS for PostgreSQL and all public endpoints. For SQLite, restrict database and
+  backup file permissions, enable foreign keys and provide host-level encryption at
+  rest when the deployment requires it.
 - Run packaged migrations as a controlled deployment step.
 - Back up and test restoration of the database and Data Protection key ring together.
 - Configure short JWT lifetimes appropriate to stateless revocation delay.

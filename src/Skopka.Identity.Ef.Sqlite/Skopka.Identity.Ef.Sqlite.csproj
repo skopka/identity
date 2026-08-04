@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Skopka.Identity.Ef</RootNamespace>
+        <Description>SQLite Entity Framework Core provider, stores and packaged migrations for Skopka.Identity.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+        <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Skopka.Identity.Ef\Skopka.Identity.Ef.csproj" />
+        <ProjectReference Include="..\Skopka.Identity\Skopka.Identity.csproj" />
+    </ItemGroup>
+
+</Project>
