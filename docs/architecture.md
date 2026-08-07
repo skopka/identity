@@ -172,6 +172,12 @@ JWT access tokens contain a security-stamp snapshot and bounded projected claims
 Refresh tokens are stored only as digests and rotate on use. Reuse of a rotated token
 revokes the logical session.
 
+The logical session is persisted independently from its transport credentials. JWT
+sessions attach a rotating Identity refresh-token chain; OAuth/OIDC adapters can attach
+their own protocol tokens to the same `SessionId` without creating a second revocation
+model. `IIdentitySessionRegistry<TProfile>` registers and validates these transport-neutral
+sessions. Validation checks the current user state and security stamp and fails closed.
+
 JWT signing uses the configured current HMAC key id. Validation resolves `kid` against
 a bounded overlapping key set, while legacy tokens without `kid` can be checked against
 the same set during migration. Key material remains outside persistence.

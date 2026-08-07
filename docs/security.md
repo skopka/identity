@@ -106,9 +106,15 @@ Enable `ValidateSessionOnEveryRequest` when every request must verify the persis
 session and current user state. This provides faster revocation at the cost of a database
 lookup.
 
-Refresh tokens are random opaque secrets. Persistence stores digests, rotation state
-and the security-stamp snapshot, never plaintext tokens. Reuse of a rotated token revokes
-the complete logical session.
+Refresh tokens are random opaque secrets. Persistence stores only their digests and
+rotation state, never plaintext tokens. The separate logical session owns the user,
+security-stamp snapshot, absolute expiry, metadata and revocation state. Reuse of a
+rotated token revokes the complete logical session.
+
+Protocol adapters that issue their own tokens must register a logical session through
+`IIdentitySessionRegistry<TProfile>`, carry its `SessionId` in protected token state and
+call `ValidateAsync` before renewal or other operations that require online revocation.
+They must not create an unrelated session or refresh-token persistence model.
 
 Session client/device values are untrusted display labels. Do not store raw IP addresses
 in them or use them for security decisions. Revoke-by-id filters on both user and session

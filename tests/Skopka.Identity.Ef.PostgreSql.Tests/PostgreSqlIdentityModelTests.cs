@@ -125,20 +125,28 @@ public sealed class PostgreSqlIdentityModelTests
             refreshSessionType
                 .FindProperty(nameof(RefreshSessionEntity.TokenHash))!
                 .GetMaxLength());
+
+        var sessionType = context.Model.FindEntityType(
+            typeof(IdentitySessionEntity));
+        Assert.NotNull(sessionType);
+        Assert.True(
+            sessionType
+                .FindProperty(nameof(IdentitySessionEntity.Version))!
+                .IsConcurrencyToken);
         Assert.Equal(
             SessionLimits.SecurityStampLength,
-            refreshSessionType
-                .FindProperty(nameof(RefreshSessionEntity.SecurityStamp))!
+            sessionType
+                .FindProperty(nameof(IdentitySessionEntity.SecurityStamp))!
                 .GetMaxLength());
         Assert.Equal(
             SessionLimits.MaximumClientNameLength,
-            refreshSessionType
-                .FindProperty(nameof(RefreshSessionEntity.ClientName))!
+            sessionType
+                .FindProperty(nameof(IdentitySessionEntity.ClientName))!
                 .GetMaxLength());
         Assert.Equal(
             SessionLimits.MaximumDeviceNameLength,
-            refreshSessionType
-                .FindProperty(nameof(RefreshSessionEntity.DeviceName))!
+            sessionType
+                .FindProperty(nameof(IdentitySessionEntity.DeviceName))!
                 .GetMaxLength());
 
         var externalLoginType = context.Model.FindEntityType(

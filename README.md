@@ -211,6 +211,25 @@ The host decides how to return the access token and protect the refresh token. F
 browser, prefer a `Secure`, `HttpOnly`, `SameSite` cookie and add CSRF protection to
 state-changing endpoints.
 
+OAuth/OIDC and other protocol adapters that own their token storage can create a common
+logical session without issuing an Identity refresh token:
+
+```csharp
+var registry = scope.ServiceProvider.GetRequiredService<
+    IIdentitySessionRegistry<AppProfile>>();
+
+var registered = await registry.RegisterAsync(
+    new RegisterIdentitySessionCommand(
+        authentication.Value.Id,
+        authentication.Value.SecurityStamp,
+        new IdentitySessionMetadata("native", "Alice's phone")),
+    cancellationToken);
+```
+
+Store the returned `SessionId` only in protected protocol state. Use
+`ValidateIdentitySessionCommand` for online validation and the existing user-scoped
+revoke/list commands for account management.
+
 ## Argon2id With Pepper
 
 Load pepper keys from a secret manager, not configuration committed to source:

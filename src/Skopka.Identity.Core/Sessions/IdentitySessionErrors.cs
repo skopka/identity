@@ -5,6 +5,12 @@ namespace Skopka.Identity.Sessions;
 
 internal static class IdentitySessionErrors
 {
+    public static Error SessionInvalid()
+        => new(
+            IdentityErrorCodes.SessionInvalid,
+            "The session is invalid or expired.",
+            ErrorType.Unauthorized);
+
     public static Error AccessTokenInvalid()
         => new(
             IdentityErrorCodes.AccessTokenInvalid,

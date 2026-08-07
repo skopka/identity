@@ -63,7 +63,10 @@ public static class PostgreSqlIdentityBuilderExtensions
             EfRateLimitBucketStore<TProfile>>();
         builder.Services.TryAddScoped<
             IIdentityRefreshSessionStore<TProfile>,
-            EfIdentityRefreshSessionStore<TProfile>>();
+            EfIdentitySessionStore<TProfile>>();
+        builder.Services.TryAddScoped<
+            IIdentitySessionStore<TProfile>,
+            EfIdentitySessionStore<TProfile>>();
         builder.Services.TryAddScoped<
             IIdentityRoleStore<TProfile>,
             EfIdentityRoleStore<TProfile>>();

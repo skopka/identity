@@ -136,6 +136,9 @@ action-token issuance/validation, policy checks, metrics and calls to storage po
 - Session creation reloads the user and compares the authentication security stamp in
   fixed time. Deleted, actively blocked or stale authentication results cannot create
   sessions.
+- `IIdentitySessionRegistry<TProfile>` creates and validates logical sessions without
+  issuing transport credentials. Protocol adapters share this anchor with JWT sessions
+  instead of maintaining an independent revocation model.
 - Refresh rotation preserves the original absolute expiry. A replayed rotated token
   revokes the complete logical session; a stamp mismatch also revokes that session.
 - JWT signing/validation and opaque refresh-token generation are provider

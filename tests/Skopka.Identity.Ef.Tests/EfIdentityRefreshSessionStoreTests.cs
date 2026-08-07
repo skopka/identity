@@ -8,6 +8,34 @@ namespace Skopka.Identity.Ef.Tests;
 public sealed class EfIdentityRefreshSessionStoreTests
 {
     [Fact]
+    public async Task LogicalSessionCanExistWithoutRefreshToken()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var session = new NewIdentitySession(
+            Guid.NewGuid(),
+            database.Initial.UserId,
+            database.Initial.SecurityStamp,
+            database.Now.AddDays(5),
+            new IdentitySessionMetadata("native", "phone"));
+
+        var created = await database.Store.CreateAsync(
+            session,
+            database.Now,
+            CancellationToken.None);
+
+        Assert.True(created.IsSuccess);
+        var stored = await database.Store.FindByIdAsync(
+            session.SessionId,
+            session.UserId,
+            CancellationToken.None);
+        Assert.NotNull(stored);
+        Assert.Equal(session.Metadata, stored.Metadata);
+        Assert.DoesNotContain(
+            database.Context.RefreshSessions,
+            token => token.SessionId == session.SessionId);
+    }
+
+    [Fact]
     public async Task RotateConsumesCurrentTokenAndCreatesReplacement()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -69,11 +97,11 @@ public sealed class EfIdentityRefreshSessionStoreTests
             CancellationToken.None);
 
         AssertError(replay, IdentityErrorCodes.RefreshTokenReuseDetected);
-        var sessions = await database.Context.RefreshSessions
+        var sessions = await database.Context.Sessions
             .AsNoTracking()
             .Where(session => session.SessionId == current.SessionId)
             .ToListAsync();
-        Assert.Equal(2, sessions.Count);
+        Assert.Single(sessions);
         Assert.All(sessions, session => Assert.NotNull(session.RevokedAt));
     }
 
@@ -200,13 +228,13 @@ public sealed class EfIdentityRefreshSessionStoreTests
 
     private sealed class TestDatabase(
         IdentityDbContext<TestProfile> context,
-        EfIdentityRefreshSessionStore<TestProfile> store,
+        EfIdentitySessionStore<TestProfile> store,
         NewRefreshSession initial,
         DateTimeOffset now)
         : IAsyncDisposable
     {
         public IdentityDbContext<TestProfile> Context { get; } = context;
-        public EfIdentityRefreshSessionStore<TestProfile> Store { get; } = store;
+        public EfIdentitySessionStore<TestProfile> Store { get; } = store;
         public NewRefreshSession Initial { get; } = initial;
         public DateTimeOffset Now { get; } = now;
 
@@ -218,7 +246,7 @@ public sealed class EfIdentityRefreshSessionStoreTests
                 .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
                 .Options;
             var context = new IdentityDbContext<TestProfile>(options);
-            var store = new EfIdentityRefreshSessionStore<TestProfile>(context);
+            var store = new EfIdentitySessionStore<TestProfile>(context);
             var now = DateTimeOffset.UtcNow;
             var initial = new NewRefreshSession(
                 Guid.NewGuid(),

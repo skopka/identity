@@ -68,8 +68,9 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
 - Rate-limit migrations create `identity_rate_limit_buckets` with a composite
   `(scope, partition_version, key_hash)` primary key and backfill pre-rotation rows with
   the `legacy` version.
-- Session migrations create `identity_refresh_sessions` with token/session/user lookup
-  indexes, digest-only token storage and an optimistic concurrency version.
+- Session migrations create `identity_sessions` as the common lifecycle anchor and
+  `identity_refresh_sessions` as its digest-only JWT refresh-token chain. Migration
+  upgrades must backfill existing refresh chains before removing duplicated columns.
 - Role migrations create `identity_roles` and `identity_user_roles`, with a unique
   normalized role-name index and stable key/foreign-key names used by exception mapping.
 - External-login constraints use stable lowercase names for exception mapping. Session

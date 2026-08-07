@@ -90,9 +90,15 @@ public sealed class PostgreSqlIdentityRegistrationTests
         Assert.IsType<EfRateLimitBucketStore<TestProfile>>(
             scopedProvider.GetRequiredService<
                 IRateLimitBucketStore<TestProfile>>());
-        Assert.IsType<EfIdentityRefreshSessionStore<TestProfile>>(
+        Assert.IsType<EfIdentitySessionStore<TestProfile>>(
             scopedProvider.GetRequiredService<
                 IIdentityRefreshSessionStore<TestProfile>>());
+        Assert.IsType<EfIdentitySessionStore<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentitySessionStore<TestProfile>>());
+        Assert.IsType<IdentitySessionRegistry<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IIdentitySessionRegistry<TestProfile>>());
         Assert.IsType<DefaultIdentityRoleNormalizer>(
             scopedProvider.GetRequiredService<IIdentityRoleNormalizer>());
         Assert.IsType<IdentityRoleService<TestProfile>>(
@@ -175,6 +181,11 @@ public sealed class PostgreSqlIdentityRegistrationTests
             providerContext.Database.GetMigrations(),
             name => name.EndsWith(
                 "_SupersedeVerificationChallenges",
+                StringComparison.Ordinal));
+        Assert.Single(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith(
+                "_AddLogicalIdentitySessions",
                 StringComparison.Ordinal));
         Assert.False(providerContext.Database.HasPendingModelChanges());
 

@@ -317,8 +317,9 @@ Preserve these rules:
   new token is issued. Role changes appear on the next create/refresh; applications
   needing immediate effect should revoke the user's sessions and enable online session
   validation, or evaluate membership from storage in an authorization policy.
-- Hosts must schedule `IIdentitySessionService<TProfile>.PruneAsync()` in bounded batches.
-  Revoked and rotated rows remain until expiry plus retention so replay can be detected.
+- Hosts must schedule either `IIdentitySessionService<TProfile>.PruneAsync()` or
+  `IIdentitySessionRegistry<TProfile>.PruneAsync()` in bounded batches. Logical sessions
+  and their rotated token rows remain until expiry plus retention so replay can be detected.
 - Session metadata is bounded host-created display data, not a security signal. List only
   active logical refresh chains and scope revoke-by-id by both user and session id.
 - External provider names are trimmed and canonicalized to uppercase. Provider subjects
@@ -380,12 +381,14 @@ EF Core storage is split:
   - versioned, obscured partition key and named scope
   - fixed-window hit count and last-hit timestamp
   - optimistic concurrency version
-- `identity_refresh_sessions`
-  - logical session id and per-rotation token id
-  - refresh-token digest and security-stamp snapshot
-  - absolute expiry, rotation/revoke timestamps and replacement link
-  - optimistic concurrency version
+- `identity_sessions`
+  - logical session id, user and security-stamp snapshot
+  - absolute expiry, revoke timestamp and optimistic concurrency version
   - optional client/device display labels
+- `identity_refresh_sessions`
+  - per-rotation token id and parent logical session id
+  - refresh-token digest, rotation timestamp and replacement link
+  - optimistic concurrency version
 - `identity_roles`
   - display and unique normalized names
   - optional parent metadata, version and audit timestamps

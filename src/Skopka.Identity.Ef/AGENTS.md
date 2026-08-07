@@ -20,8 +20,8 @@ identity stores when it is added.
   `IVerificationChallengeStore<TProfile>`.
 - Implement `EfRateLimitBucketStore<TProfile>` against
   `IRateLimitBucketStore<TProfile>`.
-- Implement `EfIdentityRefreshSessionStore<TProfile>` against
-  `IIdentityRefreshSessionStore<TProfile>`.
+- Implement `EfIdentitySessionStore<TProfile>` against both
+  `IIdentitySessionStore<TProfile>` and `IIdentityRefreshSessionStore<TProfile>`.
 - Implement role CRUD, bounded catalog queries and direct membership stores against
   `IIdentityRoleStore<TProfile>`, `IIdentityRoleQueryStore<TProfile>` and
   `IIdentityUserRoleStore<TProfile>`.
@@ -83,9 +83,12 @@ identity stores when it is added.
   insert/update/delete races and never persist raw account or client identifiers.
 - Pruning deletes only buckets older than the supplied cutoff and respects the requested
   batch size.
-- `identity_refresh_sessions` stores only refresh-token digests. Rotation atomically
-  consumes one token and creates its replacement while preserving logical session,
-  user, stamp and absolute expiry bindings.
+- `identity_sessions` owns the logical session's user, stamp, absolute expiry, metadata
+  and revocation state. It may exist without an Identity refresh token for protocol
+  adapters using `IIdentitySessionRegistry<TProfile>`.
+- `identity_refresh_sessions` stores only refresh-token digests and rotation state.
+  Rotation atomically consumes one token, creates its replacement and updates its
+  parent logical session.
 - Rotated rows remain available for replay detection. Reuse revokes the entire logical
   session; revoke and pruning operations retry optimistic concurrency races.
 - Role names are unique by normalized name. Role version is a concurrency token.

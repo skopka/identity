@@ -46,8 +46,12 @@ public sealed class SqliteIdentityRegistrationTests
             scopedProvider.GetRequiredService<IVerificationChallengeStore<TestProfile>>());
         Assert.IsType<EfRateLimitBucketStore<TestProfile>>(
             scopedProvider.GetRequiredService<IRateLimitBucketStore<TestProfile>>());
-        Assert.IsType<EfIdentityRefreshSessionStore<TestProfile>>(
+        Assert.IsType<EfIdentitySessionStore<TestProfile>>(
             scopedProvider.GetRequiredService<IIdentityRefreshSessionStore<TestProfile>>());
+        Assert.IsType<EfIdentitySessionStore<TestProfile>>(
+            scopedProvider.GetRequiredService<IIdentitySessionStore<TestProfile>>());
+        Assert.IsType<IdentitySessionRegistry<TestProfile>>(
+            scopedProvider.GetRequiredService<IIdentitySessionRegistry<TestProfile>>());
         Assert.IsType<EfIdentityRoleStore<TestProfile>>(
             scopedProvider.GetRequiredService<IIdentityRoleStore<TestProfile>>());
         Assert.IsType<EfIdentityRoleQueryStore<TestProfile>>(
@@ -63,7 +67,7 @@ public sealed class SqliteIdentityRegistrationTests
         Assert.Contains(
             scopedProvider.GetServices<IEfIdentityExceptionMapper>(),
             mapper => mapper is SqliteIdentityExceptionMapper);
-        Assert.Single(providerContext.Database.GetMigrations());
+        Assert.Equal(2, providerContext.Database.GetMigrations().Count());
     }
 
     public sealed record TestProfile(string DisplayName);

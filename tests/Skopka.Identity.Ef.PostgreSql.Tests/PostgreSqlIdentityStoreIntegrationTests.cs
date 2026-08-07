@@ -407,6 +407,92 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
 
     [Fact]
     [Trait("Category", "Integration")]
+    public async Task LogicalSessionMigrationPreservesLegacyRefreshChain()
+    {
+        const string schema = "logical_session_backfill";
+        await using (var connection = new NpgsqlConnection(
+            postgreSql.GetConnectionString()))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"CREATE SCHEMA {schema}";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var connectionString = new NpgsqlConnectionStringBuilder(
+            postgreSql.GetConnectionString())
+        {
+            SearchPath = schema
+        }.ConnectionString;
+        var options = new DbContextOptionsBuilder<
+                PostgreSqlIdentityDbContext<TestProfile>>()
+            .UseNpgsql(connectionString)
+            .Options;
+        await using var context =
+            new PostgreSqlIdentityDbContext<TestProfile>(options);
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync(
+            "20260803200000_SupersedeVerificationChallenges");
+
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            7,
+            12,
+            0,
+            0,
+            TimeSpan.Zero);
+        var userStore = new EfIdentityUserStore<TestProfile>(context);
+        var created = await userStore.CreateAsync(
+            NewUser(Guid.NewGuid(), "legacy-session"),
+            new NormalizedHandles("LEGACY-SESSION", null, null),
+            now,
+            CancellationToken.None);
+        Assert.True(created.IsSuccess);
+
+        var sessionId = Guid.NewGuid();
+        var oldTokenId = Guid.NewGuid();
+        var activeTokenId = Guid.NewGuid();
+        var expiresAt = now.AddDays(30);
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO identity_refresh_sessions
+                (token_id, session_id, user_id, token_hash, security_stamp,
+                 client_name, device_name, version, expires_at, created_at,
+                 modified_at, rotated_at, revoked_at, replaced_by_token_id)
+            VALUES
+                ({oldTokenId}, {sessionId}, {created.Value.Id},
+                 {new string('A', 64)}, {created.Value.SecurityStamp},
+                 {"web"}, {"legacy-device"}, {2L}, {expiresAt}, {now},
+                 {now.AddMinutes(1)}, {now.AddMinutes(1)}, NULL,
+                 {activeTokenId}),
+                ({activeTokenId}, {sessionId}, {created.Value.Id},
+                 {new string('B', 64)}, {created.Value.SecurityStamp},
+                 {"web"}, {"legacy-device"}, {1L}, {expiresAt},
+                 {now.AddMinutes(1)}, {now.AddMinutes(1)}, NULL, NULL, NULL)
+            """);
+
+        await migrator.MigrateAsync();
+        context.ChangeTracker.Clear();
+
+        var session = await context.Sessions
+            .AsNoTracking()
+            .SingleAsync(item => item.SessionId == sessionId);
+        Assert.Equal(created.Value.Id, session.UserId);
+        Assert.Equal(created.Value.SecurityStamp, session.SecurityStamp);
+        Assert.Equal("web", session.ClientName);
+        Assert.Equal("legacy-device", session.DeviceName);
+        Assert.Equal(now, session.CreatedAt);
+        Assert.Equal(now.AddMinutes(1), session.LastRefreshedAt);
+        Assert.Null(session.RevokedAt);
+        Assert.Equal(
+            2,
+            await context.RefreshSessions.CountAsync(
+                token => token.SessionId == sessionId));
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
     public async Task AtomicExternalRegistrationAndSessionMetadataRunAgainstPostgreSql()
     {
         await using var scope = serviceProvider.CreateAsyncScope();

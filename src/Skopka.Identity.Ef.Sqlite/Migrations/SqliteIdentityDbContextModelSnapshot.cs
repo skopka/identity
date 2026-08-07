@@ -99,6 +99,65 @@ namespace Skopka.Identity.Ef.Migrations
                     b.ToTable("auth_users", (string)null);
                 });
 
+            modelBuilder.Entity("Skopka.Identity.Ef.Entities.IdentitySessionEntity", b =>
+                {
+                    b.Property<Guid>("SessionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_id");
+
+                    b.Property<string>("ClientName")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("client_name");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DeviceName")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("device_name");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("expires_at");
+
+                    b.Property<long>("LastRefreshedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_refreshed_at");
+
+                    b.Property<long?>("RevokedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("security_stamp");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("SessionId");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_identity_sessions_expires_at");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_identity_sessions_user_id");
+
+                    b.ToTable("identity_sessions", (string)null);
+                });
+
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.LoginIdentifierEntity", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -175,23 +234,9 @@ namespace Skopka.Identity.Ef.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("token_id");
 
-                    b.Property<string>("ClientName")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("client_name");
-
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at");
-
-                    b.Property<string>("DeviceName")
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("device_name");
-
-                    b.Property<long>("ExpiresAt")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("expires_at");
 
                     b.Property<long>("ModifiedAt")
                         .HasColumnType("INTEGER")
@@ -201,19 +246,9 @@ namespace Skopka.Identity.Ef.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("replaced_by_token_id");
 
-                    b.Property<long?>("RevokedAt")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("revoked_at");
-
                     b.Property<long?>("RotatedAt")
                         .HasColumnType("INTEGER")
                         .HasColumnName("rotated_at");
-
-                    b.Property<string>("SecurityStamp")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("security_stamp");
 
                     b.Property<Guid>("SessionId")
                         .HasColumnType("TEXT")
@@ -225,10 +260,6 @@ namespace Skopka.Identity.Ef.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("token_hash");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("user_id");
-
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER")
@@ -236,14 +267,8 @@ namespace Skopka.Identity.Ef.Migrations
 
                     b.HasKey("TokenId");
 
-                    b.HasIndex("ExpiresAt")
-                        .HasDatabaseName("ix_identity_refresh_sessions_expires_at");
-
                     b.HasIndex("SessionId")
                         .HasDatabaseName("ix_identity_refresh_sessions_session_id");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_identity_refresh_sessions_user_id");
 
                     b.ToTable("identity_refresh_sessions", (string)null);
                 });
@@ -516,6 +541,17 @@ namespace Skopka.Identity.Ef.Migrations
                     b.ToTable("user_profiles", (string)null);
                 });
 
+            modelBuilder.Entity("Skopka.Identity.Ef.Entities.IdentitySessionEntity", b =>
+                {
+                    b.HasOne("Skopka.Identity.Ef.Entities.AuthUserEntity", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.LoginIdentifierEntity", b =>
                 {
                     b.HasOne("Skopka.Identity.Ef.Entities.AuthUserEntity", "User")
@@ -530,13 +566,13 @@ namespace Skopka.Identity.Ef.Migrations
 
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.RefreshSessionEntity", b =>
                 {
-                    b.HasOne("Skopka.Identity.Ef.Entities.AuthUserEntity", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
+                    b.HasOne("Skopka.Identity.Ef.Entities.IdentitySessionEntity", "Session")
+                        .WithMany("RefreshTokens")
+                        .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("User");
+                    b.Navigation("Session");
                 });
 
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.RoleEntity", b =>
@@ -628,6 +664,11 @@ namespace Skopka.Identity.Ef.Migrations
                         .IsRequired();
 
                     b.Navigation("RoleMemberships");
+                });
+
+            modelBuilder.Entity("Skopka.Identity.Ef.Entities.IdentitySessionEntity", b =>
+                {
+                    b.Navigation("RefreshTokens");
                 });
 
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.RoleEntity", b =>

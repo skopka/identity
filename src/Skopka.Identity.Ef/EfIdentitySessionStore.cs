@@ -6,9 +6,10 @@ using Skopka.Identity.Sessions;
 
 namespace Skopka.Identity.Ef;
 
-public sealed class EfIdentityRefreshSessionStore<TProfile>(
+public sealed class EfIdentitySessionStore<TProfile>(
     IdentityDbContext<TProfile> dbContext)
-    : IIdentityRefreshSessionStore<TProfile>
+    : IIdentityRefreshSessionStore<TProfile>,
+        IIdentitySessionStore<TProfile>
 {
     private const int MaximumConcurrencyRetries = 3;
 
@@ -27,37 +28,75 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
         "Concurrency conflict.",
         ErrorType.Conflict);
 
-    public Task<StoredRefreshSession?> FindByTokenIdAsync(
+    public async Task<StoredIdentitySession?> FindByIdAsync(
+        Guid sessionId,
+        Guid userId,
+        CancellationToken ct)
+    {
+        var session = await dbContext.Sessions
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                item => item.SessionId == sessionId
+                    && item.UserId == userId,
+                ct);
+        return session is null ? null : Map(session);
+    }
+
+    public async Task<StoredRefreshSession?> FindByTokenIdAsync(
         Guid tokenId,
         CancellationToken ct)
-        => dbContext.RefreshSessions
+    {
+        var token = await dbContext.RefreshSessions
             .AsNoTracking()
-            .Where(session => session.TokenId == tokenId)
-            .Select(session => Map(session))
-            .SingleOrDefaultAsync(ct);
+            .Include(item => item.Session)
+            .SingleOrDefaultAsync(item => item.TokenId == tokenId, ct);
+        return token is null ? null : Map(token);
+    }
 
-    public Task<StoredRefreshSession?> FindActiveBySessionIdAsync(
+    public async Task<StoredRefreshSession?> FindActiveBySessionIdAsync(
         Guid sessionId,
         Guid userId,
         DateTimeOffset now,
         CancellationToken ct)
-        => dbContext.RefreshSessions
+    {
+        var token = await dbContext.RefreshSessions
             .AsNoTracking()
-            .Where(session =>
-                session.SessionId == sessionId
-                && session.UserId == userId
-                && session.RotatedAt == null
-                && session.RevokedAt == null
-                && session.ExpiresAt > now)
-            .Select(session => Map(session))
+            .Include(item => item.Session)
+            .Where(item =>
+                item.SessionId == sessionId
+                && item.Session.UserId == userId
+                && item.RotatedAt == null
+                && item.Session.RevokedAt == null
+                && item.Session.ExpiresAt > now)
             .SingleOrDefaultAsync(ct);
+        return token is null ? null : Map(token);
+    }
+
+    public async Task<OperationResult> CreateAsync(
+        NewIdentitySession session,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        dbContext.Sessions.Add(CreateEntity(session, now));
+        await dbContext.SaveChangesAsync(ct);
+        return OperationResultFactory.Success();
+    }
 
     public async Task<OperationResult> CreateAsync(
         NewRefreshSession session,
         DateTimeOffset now,
         CancellationToken ct)
     {
-        dbContext.RefreshSessions.Add(CreateEntity(session, now));
+        var parent = CreateEntity(
+            new NewIdentitySession(
+                session.SessionId,
+                session.UserId,
+                session.SecurityStamp,
+                session.ExpiresAt,
+                session.Metadata),
+            now);
+        parent.RefreshTokens.Add(CreateEntity(session, now));
+        dbContext.Sessions.Add(parent);
         await dbContext.SaveChangesAsync(ct);
         return OperationResultFactory.Success();
     }
@@ -71,16 +110,16 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
         CancellationToken ct)
     {
         var current = await dbContext.RefreshSessions
-            .SingleOrDefaultAsync(
-                session => session.TokenId == tokenId,
-                ct);
+            .Include(item => item.Session)
+            .SingleOrDefaultAsync(item => item.TokenId == tokenId, ct);
 
         if (current is null
             || !string.Equals(
                 current.TokenHash,
                 expectedTokenHash,
                 StringComparison.Ordinal)
-            || current.ExpiresAt <= now)
+            || current.Session.ExpiresAt <= now
+            || current.Session.RevokedAt is not null)
         {
             Detach(current);
             return OperationResultFactory.Fail(RefreshTokenInvalidError);
@@ -88,14 +127,10 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
 
         if (current.RotatedAt is not null)
         {
-            await RevokeSessionAsync(current.SessionId, now, ct);
-            return OperationResultFactory.Fail(RefreshTokenReuseError);
-        }
-
-        if (current.RevokedAt is not null)
-        {
+            var sessionId = current.SessionId;
             Detach(current);
-            return OperationResultFactory.Fail(RefreshTokenInvalidError);
+            await RevokeSessionAsync(sessionId, now, ct);
+            return OperationResultFactory.Fail(RefreshTokenReuseError);
         }
 
         if (current.Version != expectedVersion)
@@ -110,6 +145,8 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
         current.ReplacedByTokenId = replacement.TokenId;
         current.ModifiedAt = now;
         current.Version = checked(current.Version + 1);
+        current.Session.LastRefreshedAt = now;
+        current.Session.Version = checked(current.Session.Version + 1);
 
         var replacementEntity = CreateEntity(replacement, now);
         dbContext.RefreshSessions.Add(replacementEntity);
@@ -133,35 +170,34 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
         }
     }
 
-    public async Task<int> RevokeSessionAsync(
+    public Task<int> RevokeSessionAsync(
         Guid sessionId,
         DateTimeOffset now,
         CancellationToken ct)
-        => await RevokeAsync(
-            dbContext.RefreshSessions.Where(
+        => RevokeAsync(
+            dbContext.Sessions.Where(
                 session => session.SessionId == sessionId),
             now,
             ct);
 
-    public async Task<int> RevokeUserSessionAsync(
+    public Task<int> RevokeUserSessionAsync(
         Guid userId,
         Guid sessionId,
         DateTimeOffset now,
         CancellationToken ct)
-        => await RevokeAsync(
-            dbContext.RefreshSessions.Where(
+        => RevokeAsync(
+            dbContext.Sessions.Where(
                 session => session.UserId == userId
                     && session.SessionId == sessionId),
             now,
             ct);
 
-    public async Task<int> RevokeAllAsync(
+    public Task<int> RevokeAllAsync(
         Guid userId,
         DateTimeOffset now,
         CancellationToken ct)
-        => await RevokeAsync(
-            dbContext.RefreshSessions.Where(
-                session => session.UserId == userId),
+        => RevokeAsync(
+            dbContext.Sessions.Where(session => session.UserId == userId),
             now,
             ct);
 
@@ -169,14 +205,13 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
         Guid userId,
         DateTimeOffset now,
         CancellationToken ct)
-        => await dbContext.RefreshSessions
+        => await dbContext.Sessions
             .AsNoTracking()
             .Where(session =>
                 session.UserId == userId
-                && session.RotatedAt == null
                 && session.RevokedAt == null
                 && session.ExpiresAt > now)
-            .OrderByDescending(session => session.ModifiedAt)
+            .OrderByDescending(session => session.LastRefreshedAt)
             .Select(session => new IdentitySessionInfo(
                 session.SessionId,
                 session.UserId,
@@ -184,10 +219,8 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
                     session.ClientName,
                     session.DeviceName),
                 session.ExpiresAt,
-                dbContext.RefreshSessions
-                    .Where(item => item.SessionId == session.SessionId)
-                    .Min(item => item.CreatedAt),
-                session.CreatedAt))
+                session.CreatedAt,
+                session.LastRefreshedAt))
             .ToListAsync(ct);
 
     public async Task<int> PruneAsync(
@@ -202,7 +235,7 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
 
         for (var attempt = 0; attempt < MaximumConcurrencyRetries; attempt++)
         {
-            var sessions = await dbContext.RefreshSessions
+            var sessions = await dbContext.Sessions
                 .Where(session => session.ExpiresAt < expiredBefore)
                 .OrderBy(session => session.ExpiresAt)
                 .Take(maxCount)
@@ -213,7 +246,7 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
                 return 0;
             }
 
-            dbContext.RefreshSessions.RemoveRange(sessions);
+            dbContext.Sessions.RemoveRange(sessions);
 
             try
             {
@@ -231,11 +264,11 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
         }
 
         throw new InvalidOperationException(
-            "Could not prune refresh sessions due to concurrent changes.");
+            "Could not prune sessions due to concurrent changes.");
     }
 
     private async Task<int> RevokeAsync(
-        IQueryable<RefreshSessionEntity> query,
+        IQueryable<IdentitySessionEntity> query,
         DateTimeOffset now,
         CancellationToken ct)
     {
@@ -247,7 +280,8 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
 
             foreach (var session in sessions)
             {
-                Revoke(session, now);
+                session.RevokedAt = now;
+                session.Version = checked(session.Version + 1);
             }
 
             if (sessions.Count == 0)
@@ -271,8 +305,24 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
         }
 
         throw new InvalidOperationException(
-            "Could not revoke refresh sessions due to concurrent changes.");
+            "Could not revoke sessions due to concurrent changes.");
     }
+
+    private static IdentitySessionEntity CreateEntity(
+        NewIdentitySession session,
+        DateTimeOffset now)
+        => new()
+        {
+            SessionId = session.SessionId,
+            UserId = session.UserId,
+            SecurityStamp = session.SecurityStamp,
+            ClientName = session.Metadata?.ClientName,
+            DeviceName = session.Metadata?.DeviceName,
+            Version = 1,
+            ExpiresAt = session.ExpiresAt,
+            CreatedAt = now,
+            LastRefreshedAt = now,
+        };
 
     private static RefreshSessionEntity CreateEntity(
         NewRefreshSession session,
@@ -281,39 +331,43 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
         {
             TokenId = session.TokenId,
             SessionId = session.SessionId,
-            UserId = session.UserId,
             TokenHash = session.TokenHash,
-            SecurityStamp = session.SecurityStamp,
-            ClientName = session.Metadata == null
-                ? null
-                : session.Metadata.ClientName,
-            DeviceName = session.Metadata == null
-                ? null
-                : session.Metadata.DeviceName,
             Version = 1,
-            ExpiresAt = session.ExpiresAt,
             CreatedAt = now,
             ModifiedAt = now,
         };
 
-    private static StoredRefreshSession Map(
-        RefreshSessionEntity session)
+    private static StoredIdentitySession Map(IdentitySessionEntity session)
         => new(
-            session.TokenId,
             session.SessionId,
             session.UserId,
-            session.TokenHash,
             session.SecurityStamp,
             session.Version,
             session.ExpiresAt,
             session.CreatedAt,
-            session.ModifiedAt,
-            session.RotatedAt,
+            session.LastRefreshedAt,
             session.RevokedAt,
-            session.ReplacedByTokenId,
             new IdentitySessionMetadata(
                 session.ClientName,
                 session.DeviceName));
+
+    private static StoredRefreshSession Map(RefreshSessionEntity token)
+        => new(
+            token.TokenId,
+            token.SessionId,
+            token.Session.UserId,
+            token.TokenHash,
+            token.Session.SecurityStamp,
+            token.Version,
+            token.Session.ExpiresAt,
+            token.CreatedAt,
+            token.ModifiedAt,
+            token.RotatedAt,
+            token.Session.RevokedAt,
+            token.ReplacedByTokenId,
+            new IdentitySessionMetadata(
+                token.Session.ClientName,
+                token.Session.DeviceName));
 
     private static void ValidateReplacement(
         RefreshSessionEntity current,
@@ -321,34 +375,25 @@ public sealed class EfIdentityRefreshSessionStore<TProfile>(
     {
         if (replacement.TokenId == current.TokenId
             || replacement.SessionId != current.SessionId
-            || replacement.UserId != current.UserId
-            || replacement.ExpiresAt != current.ExpiresAt
+            || replacement.UserId != current.Session.UserId
+            || replacement.ExpiresAt != current.Session.ExpiresAt
             || !string.Equals(
                 replacement.SecurityStamp,
-                current.SecurityStamp,
+                current.Session.SecurityStamp,
                 StringComparison.Ordinal)
             || !string.Equals(
                 replacement.Metadata?.ClientName,
-                current.ClientName,
+                current.Session.ClientName,
                 StringComparison.Ordinal)
             || !string.Equals(
                 replacement.Metadata?.DeviceName,
-                current.DeviceName,
+                current.Session.DeviceName,
                 StringComparison.Ordinal))
         {
             throw new ArgumentException(
                 "The replacement refresh token must preserve its session binding.",
                 nameof(replacement));
         }
-    }
-
-    private static void Revoke(
-        RefreshSessionEntity session,
-        DateTimeOffset now)
-    {
-        session.RevokedAt = now;
-        session.ModifiedAt = now;
-        session.Version = checked(session.Version + 1);
     }
 
     private void Detach(object? entity)

@@ -37,7 +37,8 @@ public sealed class IdentitySessionService<TProfile>(
                 AuthenticationErrors.InvalidCredentials());
         }
 
-        var metadata = NormalizeMetadata(command.Metadata);
+        var metadata = IdentitySessionMetadataNormalizer.Normalize(
+            command.Metadata);
         if (metadata.Error is not null)
         {
             return Fail<IssuedIdentitySession>(op, metadata.Error);
@@ -583,44 +584,6 @@ public sealed class IdentitySessionService<TProfile>(
         DateTimeOffset first,
         DateTimeOffset second)
         => first <= second ? first : second;
-
-    private static (IdentitySessionMetadata? Value, Error? Error)
-        NormalizeMetadata(IdentitySessionMetadata? metadata)
-    {
-        if (metadata is null)
-        {
-            return (null, null);
-        }
-
-        var clientName = NormalizeLabel(metadata.ClientName);
-        if (clientName?.Length > SessionLimits.MaximumClientNameLength)
-        {
-            return (
-                null,
-                IdentityErrors.Validation(
-                    "metadata.clientName",
-                    $"ClientName cannot exceed {SessionLimits.MaximumClientNameLength} characters."));
-        }
-
-        var deviceName = NormalizeLabel(metadata.DeviceName);
-        if (deviceName?.Length > SessionLimits.MaximumDeviceNameLength)
-        {
-            return (
-                null,
-                IdentityErrors.Validation(
-                    "metadata.deviceName",
-                    $"DeviceName cannot exceed {SessionLimits.MaximumDeviceNameLength} characters."));
-        }
-
-        return (
-            clientName is null && deviceName is null
-                ? null
-                : new IdentitySessionMetadata(clientName, deviceName),
-            null);
-    }
-
-    private static string? NormalizeLabel(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static bool FixedTimeEquals(string expected, string provided)
     {

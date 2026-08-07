@@ -104,8 +104,9 @@ small value objects.
   does not by itself claim NIST AAL or another external certification level.
 - Optional `ClientKey` command fields carry server-created transport context. They are
   not raw client DTO fields and must remain nullable for non-HTTP/background callers.
-- Session contracts expose no IdentityModel, JWT bearer middleware or EF types. Refresh
-  store models carry digests and rotation state, never plaintext refresh secrets.
+- Session contracts expose no IdentityModel, JWT bearer middleware or EF types. The
+  registry/store contracts model a transport-neutral logical session; refresh-store
+  models carry digests and rotation state, never plaintext refresh secrets.
 - Protocol/session JWT claims are reserved. Custom providers may emit repeated `role`
   claims but cannot replace issuer, audience, subject, token/session ids or timestamps.
 - `IdentityRole.ParentId` is hierarchy metadata only. The public contract does not imply

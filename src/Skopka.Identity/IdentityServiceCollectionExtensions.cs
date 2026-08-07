@@ -54,6 +54,9 @@ public static class IdentityServiceCollectionExtensions
             IIdentityRegistrationService<TProfile>,
             IdentityRegistrationService<TProfile>>();
         services.TryAddScoped<
+            IIdentitySessionRegistry<TProfile>,
+            IdentitySessionRegistry<TProfile>>();
+        services.TryAddScoped<
             ISecurityStampService<TProfile>,
             SecurityStampService<TProfile>>();
         services.TryAddSingleton(new VerificationOptions());

@@ -12,6 +12,53 @@ namespace Skopka.Identity.Core.Tests;
 public sealed class IdentitySessionServiceTests
 {
     [Fact]
+    public async Task RegistryCreatesSessionWithoutRefreshToken()
+    {
+        var fixture = new Fixture();
+
+        var result = await fixture.Registry.RegisterAsync(
+            new RegisterIdentitySessionCommand(
+                fixture.UserStore.User.Id,
+                fixture.UserStore.User.SecurityStamp,
+                new IdentitySessionMetadata("  native  ", "  phone  ")),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(fixture.SessionStore.Sessions);
+        var stored = Assert.Single(fixture.SessionStore.LogicalSessions);
+        Assert.Equal(result.Value.SessionId, stored.SessionId);
+        Assert.Equal(
+            new IdentitySessionMetadata("native", "phone"),
+            stored.Metadata);
+    }
+
+    [Fact]
+    public async Task RegistryValidationRevokesSessionWhenStampChanges()
+    {
+        var fixture = new Fixture();
+        var registered = await fixture.Registry.RegisterAsync(
+            new RegisterIdentitySessionCommand(
+                fixture.UserStore.User.Id,
+                fixture.UserStore.User.SecurityStamp),
+            CancellationToken.None);
+        Assert.True(registered.IsSuccess);
+        fixture.UserStore.User = fixture.UserStore.User with
+        {
+            SecurityStamp = "CHANGED-STAMP",
+        };
+
+        var result = await fixture.Registry.ValidateAsync(
+            new ValidateIdentitySessionCommand(
+                fixture.UserStore.User.Id,
+                registered.Value.SessionId),
+            CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.SessionInvalid);
+        Assert.NotNull(
+            Assert.Single(fixture.SessionStore.LogicalSessions).RevokedAt);
+    }
+
+    [Fact]
     public async Task CreateBindsSessionToCurrentSecurityStamp()
     {
         var fixture = new Fixture();
@@ -318,6 +365,16 @@ public sealed class IdentitySessionServiceTests
                 },
                 new NoopIdentityMetrics(),
                 securityEvents);
+            Registry = new IdentitySessionRegistry<TestProfile>(
+                UserStore,
+                SessionStore,
+                new IdentitySessionOptions
+                {
+                    RefreshSessionLifetime = refreshSessionLifetime
+                        ?? TimeSpan.FromDays(10),
+                },
+                new NoopIdentityMetrics(),
+                securityEvents);
         }
 
         public FakeUserStore UserStore { get; }
@@ -325,6 +382,7 @@ public sealed class IdentitySessionServiceTests
         public FakeAccessTokenProvider AccessTokenProvider { get; }
         public FakeRefreshTokenProvider RefreshTokenProvider { get; }
         public IdentitySessionService<TestProfile> Service { get; }
+        public IdentitySessionRegistry<TestProfile> Registry { get; }
 
         public async Task<IssuedIdentitySession> CreateAsync()
         {
@@ -425,9 +483,11 @@ public sealed class IdentitySessionServiceTests
     }
 
     private sealed class FakeSessionStore
-        : IIdentityRefreshSessionStore<TestProfile>
+        : IIdentityRefreshSessionStore<TestProfile>,
+            IIdentitySessionStore<TestProfile>
     {
         public List<StoredRefreshSession> Sessions { get; } = [];
+        public List<StoredIdentitySession> LogicalSessions { get; } = [];
 
         public StoredRefreshSession Active
             => Sessions.Single(session =>
@@ -440,6 +500,34 @@ public sealed class IdentitySessionServiceTests
             => Task.FromResult(
                 Sessions.SingleOrDefault(
                     session => session.TokenId == tokenId));
+
+        public Task<StoredIdentitySession?> FindByIdAsync(
+            Guid sessionId,
+            Guid userId,
+            CancellationToken ct)
+            => Task.FromResult(
+                LogicalSessions.SingleOrDefault(session =>
+                    session.SessionId == sessionId
+                    && session.UserId == userId));
+
+        public Task<OperationResult> CreateAsync(
+            NewIdentitySession session,
+            DateTimeOffset now,
+            CancellationToken ct)
+        {
+            LogicalSessions.Add(
+                new StoredIdentitySession(
+                    session.SessionId,
+                    session.UserId,
+                    session.SecurityStamp,
+                    1,
+                    session.ExpiresAt,
+                    now,
+                    now,
+                    null,
+                    session.Metadata));
+            return Task.FromResult(OperationResultFactory.Success());
+        }
 
         public Task<StoredRefreshSession?> FindActiveBySessionIdAsync(
             Guid sessionId,
@@ -587,6 +675,23 @@ public sealed class IdentitySessionServiceTests
                 {
                     RevokedAt = now,
                     ModifiedAt = now,
+                    Version = session.Version + 1,
+                };
+                count++;
+            }
+
+            for (var index = 0; index < LogicalSessions.Count; index++)
+            {
+                var session = LogicalSessions[index];
+                if (session.SessionId != sessionId
+                    || session.RevokedAt is not null)
+                {
+                    continue;
+                }
+
+                LogicalSessions[index] = session with
+                {
+                    RevokedAt = now,
                     Version = session.Version + 1,
                 };
                 count++;
