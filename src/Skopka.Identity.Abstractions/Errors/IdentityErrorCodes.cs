@@ -43,6 +43,14 @@ public static class IdentityErrorCodes
     public const string VerificationProofInvalid = "identity.verification.proof_invalid";
     public const string VerificationMethodUnavailable = "identity.verification.method_unavailable";
 
+    public const string TotpAlreadyEnabled = "identity.totp.already_enabled";
+    public const string TotpNotEnabled = "identity.totp.not_enabled";
+    public const string TotpEnrollmentInvalid =
+        "identity.totp.enrollment_invalid";
+    public const string TotpCodeInvalid = "identity.totp.code_invalid";
+    public const string TotpSecretUnavailable =
+        "identity.totp.secret_unavailable";
+
     public const string StepUpPolicyUnavailable = "identity.step_up.policy_unavailable";
     public const string StepUpMethodNotAllowed = "identity.step_up.method_not_allowed";
 

@@ -8,6 +8,7 @@ using Skopka.Identity.Registration;
 using Skopka.Identity.Roles;
 using Skopka.Identity.Roles.Queries;
 using Skopka.Identity.Sessions;
+using Skopka.Identity.Totp;
 using Skopka.Identity.Users.Queries;
 using Skopka.Identity.Verification;
 using Xunit;
@@ -58,6 +59,8 @@ public sealed class SqliteIdentityRegistrationTests
             scopedProvider.GetRequiredService<IIdentityRoleQueryStore<TestProfile>>());
         Assert.IsType<EfIdentityUserRoleStore<TestProfile>>(
             scopedProvider.GetRequiredService<IIdentityUserRoleStore<TestProfile>>());
+        Assert.IsType<EfTotpFactorStore<TestProfile>>(
+            scopedProvider.GetRequiredService<ITotpFactorStore<TestProfile>>());
 
         var providerContext = scopedProvider.GetRequiredService<
             SqliteIdentityDbContext<TestProfile>>();
@@ -67,7 +70,7 @@ public sealed class SqliteIdentityRegistrationTests
         Assert.Contains(
             scopedProvider.GetServices<IEfIdentityExceptionMapper>(),
             mapper => mapper is SqliteIdentityExceptionMapper);
-        Assert.Equal(2, providerContext.Database.GetMigrations().Count());
+        Assert.Equal(3, providerContext.Database.GetMigrations().Count());
     }
 
     public sealed record TestProfile(string DisplayName);

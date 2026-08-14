@@ -30,6 +30,16 @@ public sealed class IdentityRateLimitOptions
     public TimeSpan VerificationClientWindow { get; set; } =
         TimeSpan.FromMinutes(1);
 
+    public int VerificationResponseAccountPermitLimit { get; set; } = 20;
+
+    public TimeSpan VerificationResponseAccountWindow { get; set; } =
+        TimeSpan.FromMinutes(15);
+
+    public int VerificationResponseClientPermitLimit { get; set; } = 60;
+
+    public TimeSpan VerificationResponseClientWindow { get; set; } =
+        TimeSpan.FromMinutes(1);
+
     public TimeSpan BucketRetention { get; set; } = TimeSpan.FromDays(1);
 
     public int CleanupBatchSize { get; set; } = 500;

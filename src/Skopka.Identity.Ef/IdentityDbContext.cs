@@ -14,6 +14,9 @@ public class IdentityDbContext<TProfile>(DbContextOptions options) : DbContext(o
         => Set<LoginIdentifierEntity>();
     public DbSet<VerificationChallengeEntity> VerificationChallenges
         => Set<VerificationChallengeEntity>();
+    public DbSet<TotpFactorEntity> TotpFactors => Set<TotpFactorEntity>();
+    public DbSet<TotpRecoveryCodeEntity> TotpRecoveryCodes
+        => Set<TotpRecoveryCodeEntity>();
     public DbSet<RateLimitBucketEntity> RateLimitBuckets
         => Set<RateLimitBucketEntity>();
     public DbSet<RefreshSessionEntity> RefreshSessions
@@ -34,6 +37,8 @@ public class IdentityDbContext<TProfile>(DbContextOptions options) : DbContext(o
         modelBuilder.ApplyConfiguration(new UserExternalLoginConfiguration());
         modelBuilder.ApplyConfiguration(new LoginIdentifierConfiguration());
         modelBuilder.ApplyConfiguration(new VerificationChallengeConfiguration());
+        modelBuilder.ApplyConfiguration(new TotpFactorConfiguration());
+        modelBuilder.ApplyConfiguration(new TotpRecoveryCodeConfiguration());
         modelBuilder.ApplyConfiguration(new RateLimitBucketConfiguration());
         modelBuilder.ApplyConfiguration(new RefreshSessionConfiguration());
         modelBuilder.ApplyConfiguration(new IdentitySessionConfiguration());

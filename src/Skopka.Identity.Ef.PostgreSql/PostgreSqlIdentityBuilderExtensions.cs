@@ -12,6 +12,7 @@ using Skopka.Identity.Registration;
 using Skopka.Identity.Roles;
 using Skopka.Identity.Roles.Queries;
 using Skopka.Identity.Sessions;
+using Skopka.Identity.Totp;
 using Skopka.Identity.Verification;
 using Skopka.Identity.Users.Queries;
 
@@ -58,6 +59,9 @@ public static class PostgreSqlIdentityBuilderExtensions
         builder.Services.TryAddScoped<
             IVerificationChallengeStore<TProfile>,
             EfVerificationChallengeStore<TProfile>>();
+        builder.Services.TryAddScoped<
+            ITotpFactorStore<TProfile>,
+            EfTotpFactorStore<TProfile>>();
         builder.Services.TryAddScoped<
             IRateLimitBucketStore<TProfile>,
             EfRateLimitBucketStore<TProfile>>();

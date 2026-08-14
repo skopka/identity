@@ -327,6 +327,104 @@ namespace Skopka.Identity.Ef.Migrations
                     b.ToTable("identity_roles", (string)null);
                 });
 
+            modelBuilder.Entity("Skopka.Identity.Ef.Entities.TotpFactorEntity", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at");
+
+                    b.Property<long?>("EnabledAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("enabled_at");
+
+                    b.Property<Guid>("EnrollmentId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("enrollment_id");
+
+                    b.Property<long?>("LastAcceptedCounter")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_accepted_counter");
+
+                    b.Property<long>("ModifiedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("modified_at");
+
+                    b.Property<long?>("PendingExpiresAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("pending_expires_at");
+
+                    b.Property<string>("ProtectedSecret")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("protected_secret");
+
+                    b.Property<int>("State")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("state");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("EnrollmentId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_user_totp_factors_enrollment_id");
+
+                    b.ToTable("user_totp_factors", (string)null);
+                });
+
+            modelBuilder.Entity("Skopka.Identity.Ef.Entities.TotpRecoveryCodeEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("code_hash")
+                        .IsFixedLength();
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EnrollmentId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("enrollment_id");
+
+                    b.Property<long?>("UsedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "EnrollmentId", "CodeHash")
+                        .IsUnique()
+                        .HasDatabaseName("ux_user_totp_recovery_codes_hash");
+
+                    b.ToTable("user_totp_recovery_codes", (string)null);
+                });
+
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.UserCredentialEntity", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -586,6 +684,28 @@ namespace Skopka.Identity.Ef.Migrations
                     b.Navigation("Parent");
                 });
 
+            modelBuilder.Entity("Skopka.Identity.Ef.Entities.TotpFactorEntity", b =>
+                {
+                    b.HasOne("Skopka.Identity.Ef.Entities.AuthUserEntity", "User")
+                        .WithOne()
+                        .HasForeignKey("Skopka.Identity.Ef.Entities.TotpFactorEntity", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Skopka.Identity.Ef.Entities.TotpRecoveryCodeEntity", b =>
+                {
+                    b.HasOne("Skopka.Identity.Ef.Entities.TotpFactorEntity", "Factor")
+                        .WithMany("RecoveryCodes")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Factor");
+                });
+
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.UserCredentialEntity", b =>
                 {
                     b.HasOne("Skopka.Identity.Ef.Entities.AuthUserEntity", "User")
@@ -676,6 +796,11 @@ namespace Skopka.Identity.Ef.Migrations
                     b.Navigation("Children");
 
                     b.Navigation("Memberships");
+                });
+
+            modelBuilder.Entity("Skopka.Identity.Ef.Entities.TotpFactorEntity", b =>
+                {
+                    b.Navigation("RecoveryCodes");
                 });
 #pragma warning restore 612, 618
         }

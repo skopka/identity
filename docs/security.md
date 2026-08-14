@@ -94,6 +94,22 @@ unmodified from an untrusted client.
 
 A successful step-up decision does not replace role or domain authorization.
 
+The optional `UseDataProtectionTotp()` verification method implements the
+standard RFC 6238 application-authenticator profile: Base32 secret,
+HMAC-SHA1, six digits and a 30-second step. Verification accepts one adjacent
+step in either direction. The store atomically advances the last accepted
+counter, so a TOTP cannot be reused within its window, and atomically consumes
+each SHA-256-hashed recovery code once. The enrollment secret is protected with
+ASP.NET Core Data Protection and does not become an enabled factor until a
+correct code is confirmed. Persist and share both the database and Data
+Protection key ring across replicas; losing the key ring makes stored factors
+unreadable.
+
+TOTP enrollment and verification responses use the existing account/client
+rate-limit partitions. Hosts must derive the client key from trusted request
+context and must never log the secret, TOTP response, provisioning URI or
+recovery codes.
+
 ## JWT and Refresh Sessions
 
 Access tokens should remain short-lived. With default stateless JwtBearer validation:
@@ -211,9 +227,7 @@ application level when legal or operational requirements require irreversible er
 The current pre-1.0 release does not include:
 
 - built-in OAuth/OIDC protocol clients;
-- TOTP;
 - WebAuthn/passkeys;
-- recovery codes;
 - cookie sign-in;
 - controllers, Razor UI or delivery adapters;
 - a built-in breached-password data source.

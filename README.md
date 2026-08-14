@@ -39,8 +39,8 @@ with `Microsoft.AspNetCore.Identity`.
 - Step-up verification decisions separated from normal application authorization.
 - EF Core stores with PostgreSQL and SQLite mappings and packaged migrations.
 
-OAuth/OIDC protocol clients, TOTP, WebAuthn/passkeys and UI/endpoints are not
-implemented here. A host validates the provider response and passes only the trusted
+OAuth/OIDC protocol clients, WebAuthn/passkeys and UI/endpoints are not implemented
+here. A host validates the provider response and passes only the trusted
 provider/subject pair to the identity services.
 
 ## Packages
@@ -331,6 +331,7 @@ All optional modules compose through `IdentityBuilder<TProfile>`:
 ```csharp
 identity
     .UseDataProtectionActionTokens()
+    .UseDataProtectionTotp()
     .UseHmacOneTimeCodes("otp-2026-01", otpHmacKey)
     .UseHmacRateLimiting(
         currentVersion: "rate-limit-2026-07",
@@ -347,6 +348,15 @@ Use separate random keys for password peppering, JWT signing, OTP verification a
 rate-limit partition hashing. Persist and share the ASP.NET Core Data Protection key
 ring in multi-instance deployments. A custom non-HMAC partition strategy can be
 registered with `UseRateLimiting(customPartitionHasher)`.
+
+`UseDataProtectionTotp()` adds RFC 6238 authenticator enrollment and the
+`totp` verification method. It deliberately uses the broadly compatible
+HMAC-SHA1, six-digit, 30-second profile with one adjacent time step of clock
+drift. The generated Base32 secret is Data Protection-encrypted in the factor
+store. Enrollment becomes active only after a correct code; that code is
+immediately burned for replay protection. Confirmation also returns one-use
+recovery codes whose stored values are hashes. Persist the Data Protection key ring
+before enabling this module, and apply the packaged TOTP-factor migrations.
 
 During rate-limit key rotation, every replica must temporarily expose the same old and
 new versions while selecting the new version as current. The limiter checks and writes

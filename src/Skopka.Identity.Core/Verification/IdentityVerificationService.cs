@@ -32,7 +32,7 @@ public sealed class IdentityVerificationService<TProfile>
         this.rateLimitOptions = rateLimitOptions;
         rateLimiter = rateLimiters.FirstOrDefault();
 
-        ValidateOptions(options);
+        ValidateOptions(options, rateLimitOptions);
         methods = methodProviders.ToDictionary(
             provider => provider.Method,
             StringComparer.Ordinal);
@@ -125,7 +125,14 @@ public sealed class IdentityVerificationService<TProfile>
             challengeId,
             user!.Id,
             cmd.Purpose,
-            cmd.Binding);
+            cmd.Binding,
+            cmd.ClientKey);
+        var availability = await method.CheckAvailabilityAsync(context, ct);
+        if (!availability.IsSuccess)
+        {
+            return Finish<IssuedVerificationChallenge>(op, availability);
+        }
+
         var methodChallenge = await method.IssueAsync(context, ct);
 
         if (string.IsNullOrWhiteSpace(methodChallenge.Verifier)
@@ -186,6 +193,15 @@ public sealed class IdentityVerificationService<TProfile>
                 VerificationErrors.ResponseInvalid());
         }
 
+        if (cmd.ClientKey is { Length: > RateLimitLimits.MaximumClientKeyLength })
+        {
+            return Fail<VerificationProof>(
+                op,
+                IdentityErrors.Validation(
+                    "clientKey",
+                    "ClientKey exceeds the supported length."));
+        }
+
         var now = DateTimeOffset.UtcNow;
         var challenge = await challengeStore.FindByIdAsync(cmd.ChallengeId, ct);
         var challengeError = ValidatePendingChallenge(
@@ -214,6 +230,48 @@ public sealed class IdentityVerificationService<TProfile>
                 VerificationErrors.ChallengeInvalid());
         }
 
+
+        if (rateLimiter is not null)
+        {
+            var clientKey = NormalizeClientKey(cmd.ClientKey);
+            if (clientKey is not null)
+            {
+                var clientDecision = await rateLimiter.HitAsync(
+                    new RateLimitRequest(
+                        IdentityRateLimitScopes.VerificationResponseClient,
+                        clientKey,
+                        rateLimitOptions
+                            .VerificationResponseClientPermitLimit,
+                        rateLimitOptions
+                            .VerificationResponseClientWindow),
+                    ct);
+                if (!clientDecision.IsAllowed)
+                {
+                    return Fail<VerificationProof>(
+                        op,
+                        IdentityRateLimitErrors.Exceeded(
+                            clientDecision.RetryAfter));
+                }
+            }
+
+            var accountDecision = await rateLimiter.HitAsync(
+                new RateLimitRequest(
+                    IdentityRateLimitScopes.VerificationResponseAccount,
+                    user.Id.ToString("N"),
+                    rateLimitOptions
+                        .VerificationResponseAccountPermitLimit,
+                    rateLimitOptions
+                        .VerificationResponseAccountWindow),
+                ct);
+            if (!accountDecision.IsAllowed)
+            {
+                return Fail<VerificationProof>(
+                    op,
+                    IdentityRateLimitErrors.Exceeded(
+                        accountDecision.RetryAfter));
+            }
+        }
+
         if (!methods.TryGetValue(challenge.Method, out var method))
         {
             return Fail<VerificationProof>(
@@ -225,7 +283,8 @@ public sealed class IdentityVerificationService<TProfile>
             challenge.Id,
             challenge.UserId,
             challenge.Purpose,
-            challenge.Binding);
+            challenge.Binding,
+            cmd.ClientKey);
         var succeeded = await method.VerifyAsync(
             context,
             challenge.Verifier,
@@ -270,7 +329,8 @@ public sealed class IdentityVerificationService<TProfile>
             new VerificationProof(
                 challenge.Id,
                 proof!,
-                proofExpiresAt!.Value));
+                proofExpiresAt!.Value,
+                challenge.Method));
     }
 
     public async Task<OperationResult> ConsumeAsync(
@@ -457,9 +517,12 @@ public sealed class IdentityVerificationService<TProfile>
         DateTimeOffset second)
         => first <= second ? first : second;
 
-    private static void ValidateOptions(VerificationOptions options)
+    private static void ValidateOptions(
+        VerificationOptions options,
+        IdentityRateLimitOptions rateLimitOptions)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(rateLimitOptions);
 
         if (options.ChallengeLifetime <= TimeSpan.Zero)
         {
@@ -482,6 +545,19 @@ public sealed class IdentityVerificationService<TProfile>
         {
             throw new ArgumentOutOfRangeException(
                 nameof(options.MaximumResponseLength));
+        }
+
+
+        if (rateLimitOptions.VerificationResponseAccountPermitLimit <= 0
+            || rateLimitOptions.VerificationResponseAccountWindow
+                <= TimeSpan.Zero
+            || rateLimitOptions.VerificationResponseClientPermitLimit <= 0
+            || rateLimitOptions.VerificationResponseClientWindow
+                <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(rateLimitOptions),
+                "Verification response rate-limit permit counts and windows must be positive.");
         }
     }
 

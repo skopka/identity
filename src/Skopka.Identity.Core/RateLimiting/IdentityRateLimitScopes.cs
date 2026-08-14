@@ -7,4 +7,8 @@ internal static class IdentityRateLimitScopes
     public const string VerificationAccount = "verification.account";
     public const string VerificationIntent = "verification.intent";
     public const string VerificationClient = "verification.client";
+    public const string VerificationResponseAccount =
+        "verification.response.account";
+    public const string VerificationResponseClient =
+        "verification.response.client";
 }

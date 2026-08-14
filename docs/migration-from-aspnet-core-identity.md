@@ -24,7 +24,7 @@ alongside this guide and inventory every feature the application uses.
 | Identity cookies | Host-owned; optional Skopka JWT sessions are not cookie-compatible |
 | Identity UI | Host-owned |
 | External login tables | `IExternalLoginService<TProfile>` and `user_external_logins` |
-| Authenticator TOTP / recovery codes | Not yet implemented |
+| Authenticator TOTP / recovery codes | `IIdentityTotpService<TProfile>` and the TOTP factor stores |
 
 Custom Microsoft user claims do not automatically become Skopka session claims. Project
 them through `IIdentitySessionClaimsProvider<TProfile>` or keep domain authorization in
@@ -35,9 +35,9 @@ the application.
 Do not cut over yet if the application requires any current gap:
 
 - built-in OAuth/OIDC protocol clients when no host adapter can be added;
-- authenticator TOTP;
 - WebAuthn/passkeys;
-- recovery codes;
+- existing authenticator secrets and recovery codes to remain valid without an
+  explicit encrypted-data migration or user re-enrollment;
 - existing Identity cookies to remain valid;
 - existing Microsoft email/reset tokens to remain valid;
 - APIs written directly against `UserManager`, `SignInManager` or Identity EF entities

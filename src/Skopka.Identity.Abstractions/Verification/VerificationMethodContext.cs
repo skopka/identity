@@ -4,4 +4,5 @@ public sealed record VerificationMethodContext(
     Guid ChallengeId,
     Guid UserId,
     string Purpose,
-    string Binding);
+    string Binding,
+    string? ClientKey = null);

@@ -197,6 +197,32 @@ public sealed class IdentityVerificationServiceTests
     }
 
     [Fact]
+    public async Task VerifyUsesResponsePartitionsAndReturnsTrustedMethod()
+    {
+        var limiter = new FakeIdentityRateLimiter();
+        var fixture = new Fixture(rateLimiter: limiter);
+        var challenge = await fixture.BeginAsync();
+        limiter.Hits.Clear();
+
+        var result = await fixture.Service.VerifyAsync(
+            new VerifyVerificationChallengeCommand(
+                challenge.ChallengeId,
+                fixture.UserStore.User.Id,
+                "123456",
+                "ip:203.0.113.10"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(VerificationMethods.OneTimeCode, result.Value.Method);
+        Assert.Contains(
+            limiter.Hits,
+            request => request.Scope == "verification.response.client");
+        Assert.Contains(
+            limiter.Hits,
+            request => request.Scope == "verification.response.account");
+    }
+
+    [Fact]
     public async Task ResendCooldownPreventsIssuingSecondCode()
     {
         var intentHits = 0;
