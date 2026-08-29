@@ -11,4 +11,8 @@ internal static class IdentityRateLimitScopes
         "verification.response.account";
     public const string VerificationResponseClient =
         "verification.response.client";
+    public const string DeviceAuthorizationCreateClient =
+        "device_authorization.create.client";
+    public const string DeviceAuthorizationStatusClient =
+        "device_authorization.status.client";
 }

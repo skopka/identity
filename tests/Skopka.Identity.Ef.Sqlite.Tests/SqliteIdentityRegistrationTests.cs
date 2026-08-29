@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
+using Skopka.Identity.DeviceAuthorization;
 using Skopka.Identity.ExternalLogins;
 using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Registration;
@@ -61,6 +62,9 @@ public sealed class SqliteIdentityRegistrationTests
             scopedProvider.GetRequiredService<IIdentityUserRoleStore<TestProfile>>());
         Assert.IsType<EfTotpFactorStore<TestProfile>>(
             scopedProvider.GetRequiredService<ITotpFactorStore<TestProfile>>());
+        Assert.IsType<EfDeviceAuthorizationRequestStore<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IDeviceAuthorizationRequestStore<TestProfile>>());
 
         var providerContext = scopedProvider.GetRequiredService<
             SqliteIdentityDbContext<TestProfile>>();
@@ -70,7 +74,12 @@ public sealed class SqliteIdentityRegistrationTests
         Assert.Contains(
             scopedProvider.GetServices<IEfIdentityExceptionMapper>(),
             mapper => mapper is SqliteIdentityExceptionMapper);
-        Assert.Equal(3, providerContext.Database.GetMigrations().Count());
+        Assert.Equal(4, providerContext.Database.GetMigrations().Count());
+        Assert.Contains(
+            providerContext.Database.GetMigrations(),
+            migration => migration.EndsWith(
+                "_AddDeviceAuthorization",
+                StringComparison.Ordinal));
     }
 
     public sealed record TestProfile(string DisplayName);

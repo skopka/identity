@@ -31,6 +31,8 @@ Implements identity use cases:
 - action-token binding;
 - verification challenges and one-time proofs;
 - session creation, refresh, validation and revocation;
+- persistent device-authorization state transitions and single-session
+  consumption reservations;
 - rate-limit orchestration;
 - roles, memberships and step-up decisions;
 - bounded administrative user and role queries.
@@ -165,6 +167,13 @@ Only one `Pending` or `Verified` challenge is active for an exact
 active rows `Superseded`, including already expired rows. This invalidates both an old
 OTP response and an unconsumed proof. Different bindings, purposes or methods are
 independent, so unrelated step-up actions can proceed in parallel.
+
+Cross-device approval is a separate persistent request aggregate. It stores a
+hash of B's browser verifier and accepts only a fresh step-up decision bound to
+the exact device code. An atomic `Approved -> Consuming` reservation ensures
+only one caller can create B's independent session. See
+[device authorization requests](device-authorization.md) for failure and
+cleanup semantics.
 
 ## Sessions and Roles
 

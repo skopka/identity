@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
+using Skopka.Identity.DeviceAuthorization;
 using Skopka.Identity.ExternalLogins;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.RateLimiting;
@@ -84,6 +85,9 @@ public sealed class PostgreSqlIdentityRegistrationTests
         Assert.IsType<EfVerificationChallengeStore<TestProfile>>(
             scopedProvider.GetRequiredService<
                 IVerificationChallengeStore<TestProfile>>());
+        Assert.IsType<EfDeviceAuthorizationRequestStore<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IDeviceAuthorizationRequestStore<TestProfile>>());
         Assert.IsType<IdentityVerificationService<TestProfile>>(
             scopedProvider.GetRequiredService<
                 IIdentityVerificationService<TestProfile>>());
@@ -186,6 +190,11 @@ public sealed class PostgreSqlIdentityRegistrationTests
             providerContext.Database.GetMigrations(),
             name => name.EndsWith(
                 "_AddLogicalIdentitySessions",
+                StringComparison.Ordinal));
+        Assert.Single(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith(
+                "_AddDeviceAuthorization",
                 StringComparison.Ordinal));
         Assert.False(providerContext.Database.HasPendingModelChanges());
 

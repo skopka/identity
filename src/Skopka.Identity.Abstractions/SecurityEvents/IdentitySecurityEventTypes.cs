@@ -19,6 +19,16 @@ public static class IdentitySecurityEventTypes
     public const string SessionRefreshed = "identity.session.refreshed";
     public const string SessionRevoked = "identity.session.revoked";
     public const string SessionsRevoked = "identity.session.revoked_all";
+    public const string DeviceAuthorizationCreated =
+        "identity.device_authorization.created";
+    public const string DeviceAuthorizationApproved =
+        "identity.device_authorization.approved";
+    public const string DeviceAuthorizationDenied =
+        "identity.device_authorization.denied";
+    public const string DeviceAuthorizationExpired =
+        "identity.device_authorization.expired";
+    public const string DeviceAuthorizationConsumed =
+        "identity.device_authorization.consumed";
     public const string RoleAssigned = "identity.role.assigned";
     public const string RoleRemoved = "identity.role.removed";
     public const string UserNameChanged = "identity.user_name.changed";

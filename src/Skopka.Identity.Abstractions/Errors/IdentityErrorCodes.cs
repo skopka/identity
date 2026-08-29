@@ -54,6 +54,15 @@ public static class IdentityErrorCodes
     public const string StepUpPolicyUnavailable = "identity.step_up.policy_unavailable";
     public const string StepUpMethodNotAllowed = "identity.step_up.method_not_allowed";
 
+    public const string DeviceAuthorizationInvalid =
+        "identity.device_authorization.invalid";
+    public const string DeviceAuthorizationVerifierInvalid =
+        "identity.device_authorization.verifier_invalid";
+    public const string DeviceAuthorizationStateInvalid =
+        "identity.device_authorization.state_invalid";
+    public const string DeviceAuthorizationStepUpInvalid =
+        "identity.device_authorization.step_up_invalid";
+
     public const string RateLimitExceeded = "identity.rate_limit.exceeded";
 
     public const string AccessTokenInvalid = "identity.session.access_token_invalid";

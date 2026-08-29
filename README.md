@@ -31,6 +31,8 @@ with `Microsoft.AspNetCore.Identity`.
 - Short-lived JWT access tokens with signing-key overlap and rotating opaque refresh
   sessions.
 - Active-session listing, device labels and user-scoped session revocation.
+- Persistent, single-consumption device-authorization requests for
+  host-owned cross-device sign-in flows.
 - Optional online access-token/session validation.
 - Role CRUD, direct memberships, bounded role queries and role projection into
   session claims.
@@ -210,6 +212,9 @@ var issued = await sessions.CreateAsync(
 The host decides how to return the access token and protect the refresh token. For a
 browser, prefer a `Secure`, `HttpOnly`, `SameSite` cookie and add CSRF protection to
 state-changing endpoints.
+
+For an RFC 8628-inspired approval flow that creates a separate session on a
+new browser, see [device authorization requests](docs/device-authorization.md).
 
 OAuth/OIDC and other protocol adapters that own their token storage can create a common
 logical session without issuing an Identity refresh token:

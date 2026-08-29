@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skopka.Identity;
 using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
+using Skopka.Identity.DeviceAuthorization;
 using Skopka.Identity.Ef;
 using Skopka.Identity.Ef.Sqlite;
 using Skopka.Identity.ExternalLogins;
@@ -103,6 +104,9 @@ public static class SqliteIdentityBuilderExtensions
         builder.Services.TryAddScoped<
             IIdentitySessionStore<TProfile>,
             EfIdentitySessionStore<TProfile>>();
+        builder.Services.TryAddScoped<
+            IDeviceAuthorizationRequestStore<TProfile>,
+            EfDeviceAuthorizationRequestStore<TProfile>>();
         builder.Services.TryAddScoped<
             IIdentityRoleStore<TProfile>,
             EfIdentityRoleStore<TProfile>>();

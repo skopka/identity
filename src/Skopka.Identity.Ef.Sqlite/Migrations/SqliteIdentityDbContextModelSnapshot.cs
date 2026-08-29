@@ -99,6 +99,124 @@ namespace Skopka.Identity.Ef.Migrations
                     b.ToTable("auth_users", (string)null);
                 });
 
+            modelBuilder.Entity("Skopka.Identity.Ef.Entities.DeviceAuthorizationRequestEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ApprovedSecurityStamp")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("approved_security_stamp");
+
+                    b.Property<string>("BrowserVerifierHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("browser_verifier_hash");
+
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("client_id");
+
+                    b.Property<long?>("ConsumedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("consumed_at");
+
+                    b.Property<Guid?>("ConsumptionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("consumption_id");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DeviceCode")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("device_code");
+
+                    b.Property<string>("DeviceDisplayName")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("device_display_name");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("ip_address");
+
+                    b.Property<long>("ModifiedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("modified_at");
+
+                    b.Property<long?>("ResolvedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<Guid?>("ResolvedByUserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("resolved_by_user_id");
+
+                    b.Property<string>("ReturnUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("return_url");
+
+                    b.Property<string>("SessionClientName")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_client_name");
+
+                    b.Property<string>("SessionDeviceName")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_device_name");
+
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_id");
+
+                    b.Property<int>("State")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("state");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_agent");
+
+                    b.Property<string>("UserCode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_code");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceCode")
+                        .IsUnique()
+                        .HasDatabaseName("ux_device_authorization_requests_device_code");
+
+                    b.HasIndex("State", "ExpiresAt")
+                        .HasDatabaseName("ix_device_authorization_requests_state_expires_at");
+
+                    b.ToTable("device_authorization_requests", (string)null);
+                });
+
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.IdentitySessionEntity", b =>
                 {
                     b.Property<Guid>("SessionId")

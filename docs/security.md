@@ -110,6 +110,25 @@ rate-limit partitions. Hosts must derive the client key from trusted request
 context and must never log the secret, TOTP response, provisioning URI or
 recovery codes.
 
+## Device authorization
+
+Device-authorization requests separate a random public device code from a
+random browser verifier. Persistence contains only the verifier's SHA-256
+hash. A short user code is for visual comparison and is never sufficient to
+approve or consume a request. Approval requires a fresh step-up decision bound
+to the exact user, action, device code and configured method.
+
+Consumption rechecks expiry, the verifier in fixed time, current user state
+and the approval-time security stamp. An atomic `Consuming` reservation is
+taken before the ordinary session service is called. If final persistence is
+uncertain and the issued session cannot be revoked, the reservation stays
+closed instead of permitting a duplicate. See
+[device authorization requests](device-authorization.md).
+
+IP, User-Agent and device descriptions are untrusted display values. Never log
+device codes, browser verifiers, visual codes, TOTP responses or issued
+session tokens.
+
 ## JWT and Refresh Sessions
 
 Access tokens should remain short-lived. With default stateless JwtBearer validation:

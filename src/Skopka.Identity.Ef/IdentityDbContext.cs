@@ -25,6 +25,8 @@ public class IdentityDbContext<TProfile>(DbContextOptions options) : DbContext(o
         => Set<IdentitySessionEntity>();
     public DbSet<RoleEntity> Roles => Set<RoleEntity>();
     public DbSet<UserRoleEntity> UserRoles => Set<UserRoleEntity>();
+    public DbSet<DeviceAuthorizationRequestEntity>
+        DeviceAuthorizationRequests => Set<DeviceAuthorizationRequestEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -44,6 +46,8 @@ public class IdentityDbContext<TProfile>(DbContextOptions options) : DbContext(o
         modelBuilder.ApplyConfiguration(new IdentitySessionConfiguration());
         modelBuilder.ApplyConfiguration(new RoleConfiguration());
         modelBuilder.ApplyConfiguration(new UserRoleConfiguration());
+        modelBuilder.ApplyConfiguration(
+            new DeviceAuthorizationRequestConfiguration());
 
         ConfigureProviderModel(modelBuilder);
     }
