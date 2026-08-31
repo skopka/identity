@@ -15,6 +15,10 @@ public sealed record GetDeviceAuthorizationApprovalDetailsCommand(
     string DeviceCode,
     string? ClientKey = null);
 
+public sealed record GetDeviceAuthorizationApprovalDetailsByUserCodeCommand(
+    string UserCode,
+    string? ClientKey = null);
+
 public sealed record ApproveDeviceAuthorizationRequestCommand(
     string DeviceCode,
     Guid UserId,

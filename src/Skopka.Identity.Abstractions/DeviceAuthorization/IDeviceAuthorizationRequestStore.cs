@@ -13,6 +13,13 @@ public interface IDeviceAuthorizationRequestStore<TProfile>
         string deviceCode,
         CancellationToken ct);
 
+    Task<IReadOnlyList<StoredDeviceAuthorizationRequest>>
+        FindPendingByUserCodeAsync(
+            string userCode,
+            DateTimeOffset now,
+            int maxCount,
+            CancellationToken ct);
+
     Task<OperationResult<StoredDeviceAuthorizationRequest>> ApproveAsync(
         Guid requestId,
         long expectedVersion,

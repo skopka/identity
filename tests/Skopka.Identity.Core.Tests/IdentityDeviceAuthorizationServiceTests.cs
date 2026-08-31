@@ -138,6 +138,41 @@ public sealed class IdentityDeviceAuthorizationServiceTests
     }
 
     [Fact]
+    public async Task ApprovalDetailsCanBeFoundByNormalizedUserCode()
+    {
+        var fixture = new Fixture();
+        var created = await fixture.CreateAsync();
+        var enteredCode = created.UserCode
+            .Replace('-', ' ')
+            .ToLowerInvariant();
+
+        var result = await fixture.Service
+            .GetApprovalDetailsByUserCodeAsync(
+                new GetDeviceAuthorizationApprovalDetailsByUserCodeCommand(
+                    enteredCode),
+                CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(created.DeviceCode, result.Value.DeviceCode);
+        Assert.Equal(created.UserCode, result.Value.UserCode);
+    }
+
+    [Fact]
+    public async Task UnknownUserCodeUsesGenericInvalidError()
+    {
+        var fixture = new Fixture();
+        await fixture.CreateAsync();
+
+        var result = await fixture.Service
+            .GetApprovalDetailsByUserCodeAsync(
+                new GetDeviceAuthorizationApprovalDetailsByUserCodeCommand(
+                    "ZZZZ-ZZZZ"),
+                CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.DeviceAuthorizationInvalid);
+    }
+
+    [Fact]
     public async Task SecurityStampChangeAfterApprovalRejectsConsume()
     {
         var fixture = new Fixture();
@@ -404,6 +439,20 @@ public sealed class IdentityDeviceAuthorizationServiceTests
             CancellationToken ct)
             => Task.FromResult(
                 Request?.DeviceCode == deviceCode ? Request : null);
+
+        public Task<IReadOnlyList<StoredDeviceAuthorizationRequest>>
+            FindPendingByUserCodeAsync(
+                string userCode,
+                DateTimeOffset now,
+                int maxCount,
+                CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<
+                StoredDeviceAuthorizationRequest>>(
+                    Request is { State: DeviceAuthorizationState.Pending }
+                        && Request.ExpiresAt > now
+                        && Request.UserCode == userCode
+                            ? [Request]
+                            : []);
 
         public Task<OperationResult<StoredDeviceAuthorizationRequest>>
             ApproveAsync(

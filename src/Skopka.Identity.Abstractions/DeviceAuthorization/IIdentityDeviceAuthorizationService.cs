@@ -17,6 +17,11 @@ public interface IIdentityDeviceAuthorizationService<TProfile>
             GetDeviceAuthorizationApprovalDetailsCommand command,
             CancellationToken ct);
 
+    Task<OperationResult<DeviceAuthorizationApprovalDetails>>
+        GetApprovalDetailsByUserCodeAsync(
+            GetDeviceAuthorizationApprovalDetailsByUserCodeCommand command,
+            CancellationToken ct);
+
     Task<OperationResult> ApproveAsync(
         ApproveDeviceAuthorizationRequestCommand command,
         CancellationToken ct);

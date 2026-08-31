@@ -107,6 +107,32 @@ public sealed class EfDeviceAuthorizationRequestStoreTests
     }
 
     [Fact]
+    public async Task UserCodeLookupReturnsOnlyActivePendingRequests()
+    {
+        await using var context = CreateContext();
+        await context.Database.EnsureCreatedAsync();
+        var store = new EfDeviceAuthorizationRequestStore<TestProfile>(context);
+        var created = NewRequest();
+        var now = DateTimeOffset.UtcNow;
+        await store.CreateAsync(created, now, CancellationToken.None);
+
+        var pending = await store.FindPendingByUserCodeAsync(
+            created.UserCode,
+            now,
+            2,
+            CancellationToken.None);
+        var missing = await store.FindPendingByUserCodeAsync(
+            "WXYZ-2345",
+            now,
+            2,
+            CancellationToken.None);
+
+        Assert.Single(pending);
+        Assert.Equal(created.DeviceCode, pending[0].DeviceCode);
+        Assert.Empty(missing);
+    }
+
+    [Fact]
     public async Task ConcurrentConsumptionClaimHasOneWinner()
     {
         var root = new InMemoryDatabaseRoot();

@@ -198,6 +198,62 @@ public sealed class IdentityDeviceAuthorizationService<TProfile>(
                 request.Metadata.DeviceDisplayName));
     }
 
+    public async Task<OperationResult<DeviceAuthorizationApprovalDetails>>
+        GetApprovalDetailsByUserCodeAsync(
+            GetDeviceAuthorizationApprovalDetailsByUserCodeCommand command,
+            CancellationToken ct)
+    {
+        using var op = metrics.Begin(
+            "device_authorization.approval_details_by_user_code");
+        ValidateOptions();
+        ArgumentNullException.ThrowIfNull(command);
+
+        var userCode = NormalizeUserCode(command.UserCode);
+        if (userCode is null)
+        {
+            return Fail<DeviceAuthorizationApprovalDetails>(
+                op,
+                DeviceAuthorizationErrors.Invalid());
+        }
+
+        var rateLimitError = await CheckRateLimitAsync(
+            IdentityRateLimitScopes.DeviceAuthorizationStatusClient,
+            NormalizeClientKey(command.ClientKey),
+            options.StatusClientPermitLimit,
+            options.StatusClientWindow,
+            ct);
+        if (rateLimitError is not null)
+        {
+            return Fail<DeviceAuthorizationApprovalDetails>(op, rateLimitError);
+        }
+
+        var matches = await requests.FindPendingByUserCodeAsync(
+            userCode,
+            DateTimeOffset.UtcNow,
+            maxCount: 2,
+            ct);
+        if (matches.Count != 1)
+        {
+            return Fail<DeviceAuthorizationApprovalDetails>(
+                op,
+                DeviceAuthorizationErrors.Invalid());
+        }
+
+        var request = matches[0];
+        op.Success();
+        return OperationResultFactory.Success(
+            new DeviceAuthorizationApprovalDetails(
+                request.Id,
+                request.DeviceCode,
+                request.UserCode,
+                request.State,
+                request.CreatedAt,
+                request.ExpiresAt,
+                request.Metadata.IpAddress,
+                request.Metadata.UserAgent,
+                request.Metadata.DeviceDisplayName));
+    }
+
     public async Task<OperationResult> ApproveAsync(
         ApproveDeviceAuthorizationRequestCommand command,
         CancellationToken ct)
@@ -682,6 +738,39 @@ public sealed class IdentityDeviceAuthorizationService<TProfile>(
         return string.Join(
             '-',
             characters
+                .Chunk(options.UserCodeGroupSize)
+                .Select(group => new string(group)));
+    }
+
+    private string? NormalizeUserCode(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var compact = new string(
+                value
+                    .Where(character => character != '-'
+                        && !char.IsWhiteSpace(character))
+                    .ToArray())
+            .ToUpperInvariant();
+        if (compact.Length != options.UserCodeLength
+            || compact.Any(character =>
+                !options.UserCodeAlphabet.Contains(character)))
+        {
+            return null;
+        }
+
+        if (options.UserCodeGroupSize == 0
+            || options.UserCodeGroupSize >= compact.Length)
+        {
+            return compact;
+        }
+
+        return string.Join(
+            '-',
+            compact
                 .Chunk(options.UserCodeGroupSize)
                 .Select(group => new string(group)));
     }

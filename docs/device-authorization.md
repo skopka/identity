@@ -32,9 +32,14 @@ must also register an `IIdentitySessionService<TProfile>` and the step-up
 infrastructure used by its transport.
 
 Resolve `IIdentityDeviceAuthorizationService<TProfile>` for `CreateAsync`,
-`GetStatusAsync`, `GetApprovalDetailsAsync`, `ApproveAsync`, `DenyAsync`,
-`ConsumeAsync` and bounded `PruneAsync` operations. Expected failures are
-returned as `OperationResult` values.
+`GetStatusAsync`, `GetApprovalDetailsAsync`,
+`GetApprovalDetailsByUserCodeAsync`, `ApproveAsync`, `DenyAsync`,
+`ConsumeAsync` and bounded `PruneAsync` operations. The user-code lookup is
+intended for an authenticated approving-device page when scanning the QR code
+is impractical. It returns a request only when exactly one unexpired pending
+row matches the normalized code; a missing or ambiguous code fails with the
+same generic invalid-request result. Expected failures are returned as
+`OperationResult` values.
 
 ## State and consumption safety
 

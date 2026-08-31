@@ -63,6 +63,29 @@ public sealed class EfDeviceAuthorizationRequestStore<TProfile>(
             .Select(request => Map(request))
             .SingleOrDefaultAsync(ct);
 
+    public async Task<IReadOnlyList<StoredDeviceAuthorizationRequest>>
+        FindPendingByUserCodeAsync(
+            string userCode,
+            DateTimeOffset now,
+            int maxCount,
+            CancellationToken ct)
+    {
+        if (maxCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxCount));
+        }
+
+        return await dbContext.DeviceAuthorizationRequests
+            .AsNoTracking()
+            .Where(request => request.UserCode == userCode
+                && request.State == DeviceAuthorizationState.Pending
+                && request.ExpiresAt > now)
+            .OrderByDescending(request => request.CreatedAt)
+            .Take(maxCount)
+            .Select(request => Map(request))
+            .ToListAsync(ct);
+    }
+
     public Task<OperationResult<StoredDeviceAuthorizationRequest>> ApproveAsync(
         Guid requestId,
         long expectedVersion,
