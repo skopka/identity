@@ -17,6 +17,7 @@ using Skopka.Identity.Sessions;
 using Skopka.Identity.Users.Queries;
 using Skopka.Identity.Verification;
 using Skopka.Identity.Totp;
+using Skopka.Identity.WebAuthn;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -95,6 +96,9 @@ public static class SqliteIdentityBuilderExtensions
         builder.Services.TryAddScoped<
             ITotpFactorStore<TProfile>,
             EfTotpFactorStore<TProfile>>();
+        builder.Services.TryAddScoped<
+            IWebAuthnCredentialStore<TProfile>,
+            EfWebAuthnCredentialStore<TProfile>>();
         builder.Services.TryAddScoped<
             IRateLimitBucketStore<TProfile>,
             EfRateLimitBucketStore<TProfile>>();

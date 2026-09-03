@@ -196,6 +196,11 @@ public sealed class PostgreSqlIdentityRegistrationTests
             name => name.EndsWith(
                 "_AddDeviceAuthorization",
                 StringComparison.Ordinal));
+        Assert.Single(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith(
+                "_AddWebAuthnCredentials",
+                StringComparison.Ordinal));
         Assert.False(providerContext.Database.HasPendingModelChanges());
 
         var script = providerContext.GetService<IMigrator>().GenerateScript(

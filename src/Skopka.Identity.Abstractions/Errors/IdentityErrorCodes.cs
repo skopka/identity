@@ -63,7 +63,35 @@ public static class IdentityErrorCodes
     public const string DeviceAuthorizationStepUpInvalid =
         "identity.device_authorization.step_up_invalid";
 
+    public const string WebAuthnClientDataInvalid =
+        "identity.webauthn.client_data_invalid";
+    public const string WebAuthnCeremonyMismatch =
+        "identity.webauthn.ceremony_mismatch";
+    public const string WebAuthnChallengeMismatch =
+        "identity.webauthn.challenge_mismatch";
+    public const string WebAuthnOriginNotAllowed =
+        "identity.webauthn.origin_not_allowed";
+    public const string WebAuthnRelyingPartyMismatch =
+        "identity.webauthn.relying_party_mismatch";
+    public const string WebAuthnUserNotPresent =
+        "identity.webauthn.user_not_present";
+    public const string WebAuthnUserNotVerified =
+        "identity.webauthn.user_not_verified";
+    public const string WebAuthnAttestationInvalid =
+        "identity.webauthn.attestation_invalid";
+    public const string WebAuthnAlgorithmNotSupported =
+        "identity.webauthn.algorithm_not_supported";
+    public const string WebAuthnSignatureInvalid =
+        "identity.webauthn.signature_invalid";
+    public const string WebAuthnCounterRegressed =
+        "identity.webauthn.counter_regressed";
+    public const string WebAuthnCredentialAlreadyRegistered =
+        "identity.webauthn.credential_already_registered";
+    public const string WebAuthnCredentialNotFound =
+        "identity.webauthn.credential_not_found";
+
     public const string RateLimitExceeded = "identity.rate_limit.exceeded";
+
 
     public const string AccessTokenInvalid = "identity.session.access_token_invalid";
     public const string SessionInvalid = "identity.session.invalid";

@@ -14,6 +14,8 @@ public class IdentityDbContext<TProfile>(DbContextOptions options) : DbContext(o
         => Set<LoginIdentifierEntity>();
     public DbSet<VerificationChallengeEntity> VerificationChallenges
         => Set<VerificationChallengeEntity>();
+    public DbSet<WebAuthnCredentialEntity> WebAuthnCredentials
+        => Set<WebAuthnCredentialEntity>();
     public DbSet<TotpFactorEntity> TotpFactors => Set<TotpFactorEntity>();
     public DbSet<TotpRecoveryCodeEntity> TotpRecoveryCodes
         => Set<TotpRecoveryCodeEntity>();
@@ -41,6 +43,7 @@ public class IdentityDbContext<TProfile>(DbContextOptions options) : DbContext(o
         modelBuilder.ApplyConfiguration(new VerificationChallengeConfiguration());
         modelBuilder.ApplyConfiguration(new TotpFactorConfiguration());
         modelBuilder.ApplyConfiguration(new TotpRecoveryCodeConfiguration());
+        modelBuilder.ApplyConfiguration(new WebAuthnCredentialConfiguration());
         modelBuilder.ApplyConfiguration(new RateLimitBucketConfiguration());
         modelBuilder.ApplyConfiguration(new RefreshSessionConfiguration());
         modelBuilder.ApplyConfiguration(new IdentitySessionConfiguration());

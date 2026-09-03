@@ -10,6 +10,7 @@ using Skopka.Identity.Roles;
 using Skopka.Identity.Roles.Queries;
 using Skopka.Identity.Sessions;
 using Skopka.Identity.Totp;
+using Skopka.Identity.WebAuthn;
 using Skopka.Identity.Users.Queries;
 using Skopka.Identity.Verification;
 using Xunit;
@@ -62,6 +63,9 @@ public sealed class SqliteIdentityRegistrationTests
             scopedProvider.GetRequiredService<IIdentityUserRoleStore<TestProfile>>());
         Assert.IsType<EfTotpFactorStore<TestProfile>>(
             scopedProvider.GetRequiredService<ITotpFactorStore<TestProfile>>());
+        Assert.IsType<EfWebAuthnCredentialStore<TestProfile>>(
+            scopedProvider.GetRequiredService<
+                IWebAuthnCredentialStore<TestProfile>>());
         Assert.IsType<EfDeviceAuthorizationRequestStore<TestProfile>>(
             scopedProvider.GetRequiredService<
                 IDeviceAuthorizationRequestStore<TestProfile>>());
@@ -74,11 +78,16 @@ public sealed class SqliteIdentityRegistrationTests
         Assert.Contains(
             scopedProvider.GetServices<IEfIdentityExceptionMapper>(),
             mapper => mapper is SqliteIdentityExceptionMapper);
-        Assert.Equal(4, providerContext.Database.GetMigrations().Count());
+        Assert.Equal(5, providerContext.Database.GetMigrations().Count());
         Assert.Contains(
             providerContext.Database.GetMigrations(),
             migration => migration.EndsWith(
                 "_AddDeviceAuthorization",
+                StringComparison.Ordinal));
+        Assert.Contains(
+            providerContext.Database.GetMigrations(),
+            migration => migration.EndsWith(
+                "_AddWebAuthnCredentials",
                 StringComparison.Ordinal));
     }
 

@@ -77,6 +77,11 @@ file first and then the module-local file:
   cryptography and wire formats from Core.
 - `IIdentitySessionClaimsProvider<TProfile>` projects user/application claims into each
   newly issued access token. Multiple providers and repeated `role` claims are allowed.
+- `IWebAuthnCeremonyVerifier` reads a WebAuthn registration response and verifies an
+  assertion against a stored public key. It is synchronous and stateless: challenge,
+  origins, relying party and key are arguments, not lookups.
+- `IWebAuthnCredentialStore<TProfile>` persists public-key credentials and records the
+  signature counter of an accepted assertion.
 - `IIdentityRoleService<TProfile>` owns role CRUD and direct user-role membership.
 - `IIdentityRoleQueryService<TProfile>` provides bounded cursor-based role catalog
   queries without exposing `IQueryable`.
@@ -234,6 +239,14 @@ Preserve these rules:
   purposes. Tokens cannot be reused across purposes. Password reset rotates the security
   stamp atomically with the verifier change, making a successfully used reset token
   invalid.
+- WebAuthn credentials are stored by an identifier that is unique across the table
+  rather than per user: an assertion arrives carrying a credential id and nothing else.
+  Public keys are kept as DER SubjectPublicKeyInfo, so nothing after registration has to
+  know COSE. Attestation statements are read but not verified; judging authenticator
+  models needs a trusted metadata set and a policy that belong to an application. A
+  signature counter that did not advance is refused, except when it has always been
+  zero, which is an authenticator that does not count. Deciding whether the counter may
+  move is the verifier's; the store keeps what it is told.
 - Action tokens are not OTP authenticators. Keep future TOTP/SMS/email OTP challenge
   state, attempt limits and MFA rules in the separate Verification subsystem.
 - Verification owns challenge expiry, failed-attempt limits, purpose/binding/stamp

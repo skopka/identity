@@ -2,81 +2,89 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using Skopka.Identity.Ef.Sqlite;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using Skopka.Identity.Ef.PostgreSql;
 
 #nullable disable
 
 namespace Skopka.Identity.Ef.Migrations
 {
-    [DbContext(typeof(SqliteIdentityDbContext<SqliteIdentityDesignTimeProfile>))]
-    partial class SqliteIdentityDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(PostgreSqlIdentityDbContext<PostgreSqlIdentityDesignTimeProfile>))]
+    [Migration("20260903130401_AddWebAuthnCredentials")]
+    partial class AddWebAuthnCredentials
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.10")
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
+
+            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.AuthUserEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long?>("BlockedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset?>("BlockedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("blocked_at");
 
-                    b.Property<long?>("BlockedUntil")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset?>("BlockedUntil")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("blocked_until");
 
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<long?>("DeletedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
                     b.Property<bool>("EmailConfirmed")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("email_confirmed");
 
                     b.Property<int>("Flags")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("flags");
 
-                    b.Property<long>("ModifiedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("modified_at");
 
                     b.Property<string>("NormalizedEmail")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("normalized_email");
 
                     b.Property<string>("NormalizedPhone")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("normalized_phone");
 
                     b.Property<string>("NormalizedUserName")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("normalized_user_name");
 
                     b.Property<bool>("PhoneConfirmed")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("phone_confirmed");
 
                     b.Property<string>("SecurityStamp")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("security_stamp");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("version");
 
                     b.HasKey("Id");
@@ -103,106 +111,106 @@ namespace Skopka.Identity.Ef.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("ApprovedSecurityStamp")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("approved_security_stamp");
 
                     b.Property<string>("BrowserVerifierHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("browser_verifier_hash");
 
                     b.Property<string>("ClientId")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(128)")
                         .HasColumnName("client_id");
 
-                    b.Property<long?>("ConsumedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("consumed_at");
 
                     b.Property<Guid?>("ConsumptionId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("consumption_id");
 
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<string>("DeviceCode")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(128)")
                         .HasColumnName("device_code");
 
                     b.Property<string>("DeviceDisplayName")
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(256)")
                         .HasColumnName("device_display_name");
 
-                    b.Property<long>("ExpiresAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
                     b.Property<string>("IpAddress")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("ip_address");
 
-                    b.Property<long>("ModifiedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("modified_at");
 
-                    b.Property<long?>("ResolvedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("resolved_at");
 
                     b.Property<Guid?>("ResolvedByUserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("resolved_by_user_id");
 
                     b.Property<string>("ReturnUrl")
                         .HasMaxLength(2048)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(2048)")
                         .HasColumnName("return_url");
 
                     b.Property<string>("SessionClientName")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(128)")
                         .HasColumnName("session_client_name");
 
                     b.Property<string>("SessionDeviceName")
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(256)")
                         .HasColumnName("session_device_name");
 
                     b.Property<Guid?>("SessionId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("session_id");
 
                     b.Property<int>("State")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("state");
 
                     b.Property<string>("UserAgent")
                         .HasMaxLength(512)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(512)")
                         .HasColumnName("user_agent");
 
                     b.Property<string>("UserCode")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(32)")
                         .HasColumnName("user_code");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("version");
 
                     b.HasKey("Id");
@@ -221,48 +229,48 @@ namespace Skopka.Identity.Ef.Migrations
                 {
                     b.Property<Guid>("SessionId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("session_id");
 
                     b.Property<string>("ClientName")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(128)")
                         .HasColumnName("client_name");
 
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<string>("DeviceName")
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(256)")
                         .HasColumnName("device_name");
 
-                    b.Property<long>("ExpiresAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
-                    b.Property<long>("LastRefreshedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("LastRefreshedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_refreshed_at");
 
-                    b.Property<long?>("RevokedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("revoked_at");
 
                     b.Property<string>("SecurityStamp")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("security_stamp");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("version");
 
                     b.HasKey("SessionId");
@@ -279,16 +287,16 @@ namespace Skopka.Identity.Ef.Migrations
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.LoginIdentifierEntity", b =>
                 {
                     b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.Property<string>("NormalizedKey")
                         .HasMaxLength(512)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(512)")
                         .HasColumnName("normalized_key");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
                     b.HasKey("UserId", "NormalizedKey")
@@ -297,7 +305,7 @@ namespace Skopka.Identity.Ef.Migrations
                     b.HasIndex("NormalizedKey")
                         .IsUnique()
                         .HasDatabaseName("ux_identity_login_identifiers_active_normalized_key")
-                        .HasFilter("is_active = 1");
+                        .HasFilter("is_active = TRUE");
 
                     b.ToTable("identity_login_identifiers", (string)null);
                 });
@@ -306,38 +314,38 @@ namespace Skopka.Identity.Ef.Migrations
                 {
                     b.Property<string>("Scope")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("scope");
 
                     b.Property<string>("PartitionVersion")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("partition_version");
 
                     b.Property<string>("KeyHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("key_hash");
 
                     b.Property<int>("HitCount")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("hit_count");
 
-                    b.Property<long>("LastHitAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("LastHitAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_hit_at");
 
-                    b.Property<long>("ModifiedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("modified_at");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("version");
 
-                    b.Property<long>("WindowStartedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("WindowStartedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("window_started_at");
 
                     b.HasKey("Scope", "PartitionVersion", "KeyHash");
@@ -349,38 +357,38 @@ namespace Skopka.Identity.Ef.Migrations
                 {
                     b.Property<Guid>("TokenId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("token_id");
 
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<long>("ModifiedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("modified_at");
 
                     b.Property<Guid?>("ReplacedByTokenId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("replaced_by_token_id");
 
-                    b.Property<long?>("RotatedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset?>("RotatedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("rotated_at");
 
                     b.Property<Guid>("SessionId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("session_id");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("token_hash");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("version");
 
                     b.HasKey("TokenId");
@@ -395,41 +403,41 @@ namespace Skopka.Identity.Ef.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<string>("Description")
                         .HasMaxLength(1024)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(1024)")
                         .HasColumnName("description");
 
-                    b.Property<long>("ModifiedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("modified_at");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(256)")
                         .HasColumnName("name");
 
                     b.Property<string>("NormalizedName")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(256)")
                         .HasColumnName("normalized_name");
 
                     b.Property<Guid?>("ParentId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("parent_id");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("version");
 
                     b.HasKey("Id")
@@ -448,46 +456,46 @@ namespace Skopka.Identity.Ef.Migrations
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.TotpFactorEntity", b =>
                 {
                     b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<long?>("EnabledAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset?>("EnabledAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("enabled_at");
 
                     b.Property<Guid>("EnrollmentId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("enrollment_id");
 
                     b.Property<long?>("LastAcceptedCounter")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("last_accepted_counter");
 
-                    b.Property<long>("ModifiedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("modified_at");
 
-                    b.Property<long?>("PendingExpiresAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset?>("PendingExpiresAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("pending_expires_at");
 
                     b.Property<string>("ProtectedSecret")
                         .IsRequired()
                         .HasMaxLength(2048)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(2048)")
                         .HasColumnName("protected_secret");
 
                     b.Property<int>("State")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("state");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("version");
 
                     b.HasKey("UserId");
@@ -503,35 +511,35 @@ namespace Skopka.Identity.Ef.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("CodeHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character(64)")
                         .HasColumnName("code_hash")
                         .IsFixedLength();
 
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("EnrollmentId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("enrollment_id");
 
-                    b.Property<long?>("UsedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("used_at");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("version");
 
                     b.HasKey("Id");
@@ -546,15 +554,15 @@ namespace Skopka.Identity.Ef.Migrations
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.UserCredentialEntity", b =>
                 {
                     b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.Property<string>("PasswordVerifier")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("password_verifier");
 
-                    b.Property<long>("UpdatedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
                     b.HasKey("UserId");
@@ -566,20 +574,20 @@ namespace Skopka.Identity.Ef.Migrations
                 {
                     b.Property<string>("Provider")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(128)")
                         .HasColumnName("provider");
 
                     b.Property<string>("Subject")
                         .HasMaxLength(512)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(512)")
                         .HasColumnName("subject");
 
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.HasKey("Provider", "Subject")
@@ -594,19 +602,19 @@ namespace Skopka.Identity.Ef.Migrations
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.UserProfileEntityBase", b =>
                 {
                     b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.Property<string>("Email")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("email");
 
                     b.Property<string>("Phone")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("phone");
 
                     b.Property<string>("UserName")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("user_name");
 
                     b.HasKey("UserId");
@@ -619,15 +627,15 @@ namespace Skopka.Identity.Ef.Migrations
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.UserRoleEntity", b =>
                 {
                     b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.Property<Guid>("RoleId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("role_id");
 
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.HasKey("UserId", "RoleId")
@@ -643,93 +651,93 @@ namespace Skopka.Identity.Ef.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Binding")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(512)")
                         .HasColumnName("binding");
 
-                    b.Property<long?>("ConsumedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("consumed_at");
 
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<long>("ExpiresAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
                     b.Property<int>("FailedAttemptCount")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("failed_attempt_count");
 
                     b.Property<string>("IntentHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("intent_hash");
 
                     b.Property<int>("MaxAttempts")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("max_attempts");
 
                     b.Property<string>("Method")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("method");
 
-                    b.Property<long>("ModifiedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("modified_at");
 
-                    b.Property<long?>("ProofExpiresAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset?>("ProofExpiresAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("proof_expires_at");
 
                     b.Property<string>("ProofHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("proof_hash");
 
                     b.Property<string>("Purpose")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(128)")
                         .HasColumnName("purpose");
 
                     b.Property<string>("SecurityStamp")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("security_stamp");
 
                     b.Property<int>("State")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("state");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
-                    b.Property<long?>("VerifiedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("verified_at");
 
                     b.Property<string>("Verifier")
                         .IsRequired()
                         .HasMaxLength(2048)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(2048)")
                         .HasColumnName("verifier");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("version");
 
                     b.HasKey("Id");
@@ -749,57 +757,57 @@ namespace Skopka.Identity.Ef.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<int>("Algorithm")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("algorithm");
 
                     b.Property<Guid>("AuthenticatorId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("authenticator_id");
 
                     b.Property<bool>("BackedUp")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("backed_up");
 
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<byte[]>("CredentialId")
                         .IsRequired()
                         .HasMaxLength(1023)
-                        .HasColumnType("BLOB")
+                        .HasColumnType("bytea")
                         .HasColumnName("credential_id");
 
                     b.Property<string>("Label")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("label");
 
-                    b.Property<long?>("LastUsedAt")
-                        .HasColumnType("INTEGER")
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_used_at");
 
                     b.Property<byte[]>("PublicKey")
                         .IsRequired()
                         .HasMaxLength(1024)
-                        .HasColumnType("BLOB")
+                        .HasColumnType("bytea")
                         .HasColumnName("public_key");
 
                     b.Property<long>("SignatureCounter")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("signature_counter");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("version");
 
                     b.HasKey("Id");
@@ -814,13 +822,13 @@ namespace Skopka.Identity.Ef.Migrations
                     b.ToTable("user_webauthn_credentials", (string)null);
                 });
 
-            modelBuilder.Entity("Skopka.Identity.Ef.Entities.UserProfileEntity<Skopka.Identity.Ef.Sqlite.SqliteIdentityDesignTimeProfile>", b =>
+            modelBuilder.Entity("Skopka.Identity.Ef.Entities.UserProfileEntity<Skopka.Identity.Ef.PostgreSql.PostgreSqlIdentityDesignTimeProfile>", b =>
                 {
                     b.HasBaseType("Skopka.Identity.Ef.Entities.UserProfileEntityBase");
 
                     b.Property<string>("Profile")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("jsonb")
                         .HasColumnName("profile");
 
                     b.ToTable("user_profiles", (string)null);

@@ -14,6 +14,7 @@ using Skopka.Identity.Roles;
 using Skopka.Identity.Roles.Queries;
 using Skopka.Identity.Sessions;
 using Skopka.Identity.Totp;
+using Skopka.Identity.WebAuthn;
 using Skopka.Identity.Verification;
 using Skopka.Identity.Users.Queries;
 
@@ -63,6 +64,9 @@ public static class PostgreSqlIdentityBuilderExtensions
         builder.Services.TryAddScoped<
             ITotpFactorStore<TProfile>,
             EfTotpFactorStore<TProfile>>();
+        builder.Services.TryAddScoped<
+            IWebAuthnCredentialStore<TProfile>,
+            EfWebAuthnCredentialStore<TProfile>>();
         builder.Services.TryAddScoped<
             IRateLimitBucketStore<TProfile>,
             EfRateLimitBucketStore<TProfile>>();

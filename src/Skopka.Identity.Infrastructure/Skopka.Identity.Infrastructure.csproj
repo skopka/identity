@@ -13,6 +13,7 @@
         <PackageReference Include="Microsoft.AspNetCore.DataProtection.Extensions" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
         <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+        <PackageReference Include="System.Formats.Cbor" />
     </ItemGroup>
 
     <ItemGroup>

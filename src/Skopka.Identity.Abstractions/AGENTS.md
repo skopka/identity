@@ -64,6 +64,10 @@ small value objects.
   verifier.
 - Define bounded cursor-based user query contracts under `Users/Queries`; never expose
   EF or `IQueryable`.
+- Define WebAuthn contracts under `WebAuthn`: the credential model, the persistence
+  port and the ceremony verifier. Public keys are DER SubjectPublicKeyInfo rather than
+  COSE, so consumers never parse an authenticator wire format. The verifier is
+  synchronous and takes everything it compares against as arguments.
 - Define security-event observer contracts under `SecurityEvents`. Events contain no
   credentials, tokens, handles or provider subjects.
 

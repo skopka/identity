@@ -750,6 +750,75 @@ namespace Skopka.Identity.Ef.Migrations
                     b.ToTable("verification_challenges", (string)null);
                 });
 
+            modelBuilder.Entity("Skopka.Identity.Ef.Entities.WebAuthnCredentialEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Algorithm")
+                        .HasColumnType("integer")
+                        .HasColumnName("algorithm");
+
+                    b.Property<Guid>("AuthenticatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("authenticator_id");
+
+                    b.Property<bool>("BackedUp")
+                        .HasColumnType("boolean")
+                        .HasColumnName("backed_up");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<byte[]>("CredentialId")
+                        .IsRequired()
+                        .HasMaxLength(1023)
+                        .HasColumnType("bytea")
+                        .HasColumnName("credential_id");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("label");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<byte[]>("PublicKey")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("bytea")
+                        .HasColumnName("public_key");
+
+                    b.Property<long>("SignatureCounter")
+                        .HasColumnType("bigint")
+                        .HasColumnName("signature_counter");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CredentialId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_user_webauthn_credentials_credential_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_user_webauthn_credentials_user_id");
+
+                    b.ToTable("user_webauthn_credentials", (string)null);
+                });
+
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.UserProfileEntity<Skopka.Identity.Ef.PostgreSql.PostgreSqlIdentityDesignTimeProfile>", b =>
                 {
                     b.HasBaseType("Skopka.Identity.Ef.Entities.UserProfileEntityBase");
@@ -885,6 +954,17 @@ namespace Skopka.Identity.Ef.Migrations
                 });
 
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.VerificationChallengeEntity", b =>
+                {
+                    b.HasOne("Skopka.Identity.Ef.Entities.AuthUserEntity", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Skopka.Identity.Ef.Entities.WebAuthnCredentialEntity", b =>
                 {
                     b.HasOne("Skopka.Identity.Ef.Entities.AuthUserEntity", "User")
                         .WithMany()

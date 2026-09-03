@@ -337,6 +337,7 @@ All optional modules compose through `IdentityBuilder<TProfile>`:
 identity
     .UseDataProtectionActionTokens()
     .UseDataProtectionTotp()
+    .UseWebAuthn()
     .UseHmacOneTimeCodes("otp-2026-01", otpHmacKey)
     .UseHmacRateLimiting(
         currentVersion: "rate-limit-2026-07",
@@ -362,6 +363,14 @@ store. Enrollment becomes active only after a correct code; that code is
 immediately burned for replay protection. Confirmation also returns one-use
 recovery codes whose stored values are hashes. Persist the Data Protection key ring
 before enabling this module, and apply the packaged TOTP-factor migrations.
+
+`UseWebAuthn()` adds the WebAuthn ceremony verifier, and the EF provider adds the
+credential store. The library keeps public-key credentials and checks what a
+browser sends against them; it does not issue challenges or decide what a
+verified assertion may do, which belong to the host. Attestation statements are
+read but not verified, because judging authenticator models needs a trusted
+metadata set and a policy that belong to an application. `ES256` and `RS256` are
+verified. See [WebAuthn credentials](docs/webauthn.md).
 
 During rate-limit key rotation, every replica must temporarily expose the same old and
 new versions while selecting the new version as current. The limiter checks and writes
