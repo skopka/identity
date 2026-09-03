@@ -77,6 +77,9 @@ file first and then the module-local file:
   cryptography and wire formats from Core.
 - `IIdentitySessionClaimsProvider<TProfile>` projects user/application claims into each
   newly issued access token. Multiple providers and repeated `role` claims are allowed.
+- `IIdentityWebAuthnService<TProfile>` owns the WebAuthn credential lifecycle and
+  verifies both ceremonies itself, so a host cannot persist a key without having
+  checked the response that delivered it.
 - `IWebAuthnCeremonyVerifier` reads a WebAuthn registration response and verifies an
   assertion against a stored public key. It is synchronous and stateless: challenge,
   origins, relying party and key are arguments, not lookups.
@@ -247,6 +250,11 @@ Preserve these rules:
   signature counter that did not advance is refused, except when it has always been
   zero, which is an authenticator that does not count. Deciding whether the counter may
   move is the verifier's; the store keeps what it is told.
+- The WebAuthn relying party id and allowed origins are startup configuration, never
+  request fields: an authenticator refuses to answer for another domain, and letting a
+  caller name the domain would give that property away. An unknown credential id answers
+  exactly as a bad signature does, because whether an identifier exists is not something
+  an unauthenticated caller may learn. Removing a credential rotates the security stamp.
 - Action tokens are not OTP authenticators. Keep future TOTP/SMS/email OTP challenge
   state, attempt limits and MFA rules in the separate Verification subsystem.
 - Verification owns challenge expiry, failed-attempt limits, purpose/binding/stamp

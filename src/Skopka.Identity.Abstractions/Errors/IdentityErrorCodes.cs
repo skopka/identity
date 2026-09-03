@@ -89,6 +89,8 @@ public static class IdentityErrorCodes
         "identity.webauthn.credential_already_registered";
     public const string WebAuthnCredentialNotFound =
         "identity.webauthn.credential_not_found";
+    public const string WebAuthnTooManyCredentials =
+        "identity.webauthn.too_many_credentials";
 
     public const string RateLimitExceeded = "identity.rate_limit.exceeded";
 

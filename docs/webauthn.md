@@ -8,6 +8,9 @@ endpoints and the page that calls `navigator.credentials`.
 
 The pieces are deliberately separate:
 
+- `IIdentityWebAuthnService<TProfile>` owns the credential lifecycle: list,
+  register, authenticate, remove. It verifies the ceremonies itself, so a host
+  that had to remember to verify before persisting cannot forget.
 - `IWebAuthnCeremonyVerifier` reads a registration response and verifies an
   assertion. It is synchronous, touches no storage and is given everything it
   compares against, so what it answers depends on its arguments alone.
@@ -20,11 +23,21 @@ The pieces are deliberately separate:
 var identity = services
     .AddSkopkaIdentity<AppProfile>()
     .UsePostgreSql(connectionString)
-    .UseWebAuthn();
+    .UseWebAuthn(options =>
+    {
+        options.RelyingPartyId = "example.test";
+        options.Origins.Add("https://example.test");
+    });
 ```
 
 `UsePostgreSql` and `UseSqlite` register the EF credential store; `UseWebAuthn`
-registers the verifier.
+registers the service and the verifier.
+
+The relying party id and the origins are configuration, never request fields.
+An authenticator will not answer for another domain, which is what makes a
+credential un-phishable; letting a caller name the domain would give that away.
+Origins are validated at startup as scheme and authority only, with no trailing
+slash, because that is the form a browser reports and the comparison is exact.
 
 ## What is verified
 
@@ -82,8 +95,25 @@ while registering rather than stored and refused at every sign-in afterwards.
   arriving twice at once, and the caller has already decided the signature is
   good.
 
+## What the service adds
+
+- A credential belongs to one active user, and a blocked or deleted one cannot
+  sign in with it.
+- `MaximumCredentialsPerUser` bounds registration.
+- An unknown credential id answers exactly as a bad signature does. Whether an
+  identifier is known is not something an unauthenticated caller may learn.
+- One assertion signs in once. The counter is written under the version it was
+  read at, so a second attempt with the same assertion finds the row moved and
+  is refused.
+- Removing a credential rotates the security stamp, so it cannot go on signing
+  in through a session issued while it was there.
+
 ## Boundaries
 
 The store keeps what it is told. Whether a counter may move to a given value is
 decided by the verifier before the store is called, because that is a rule
 about authenticators rather than about rows.
+
+The host owns the challenge: issuing it, and spending it once. The library takes
+it as an argument and never stores one, because most started ceremonies are
+never finished.
