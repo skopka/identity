@@ -47,7 +47,8 @@ public sealed class IdentitySignInMethodQueryService<TProfile>(
                 user.Id,
                 user.Version,
                 hasPassword,
-                externalLogins.ToArray()));
+                externalLogins.ToArray(),
+                user.PhoneConfirmed && !string.IsNullOrWhiteSpace(user.Phone)));
     }
 
     private static OperationResult<SignInMethodSnapshot> Fail(

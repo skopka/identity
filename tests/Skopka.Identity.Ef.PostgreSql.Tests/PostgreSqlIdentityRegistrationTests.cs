@@ -196,12 +196,25 @@ public sealed class PostgreSqlIdentityRegistrationTests
             name => name.EndsWith(
                 "_AddDeviceAuthorization",
                 StringComparison.Ordinal));
-        Assert.Single(
+        var webAuthnMigration = Assert.Single(
             providerContext.Database.GetMigrations(),
             name => name.EndsWith(
                 "_AddWebAuthnCredentials",
                 StringComparison.Ordinal));
+        var phoneOtpMigration = Assert.Single(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith(
+                "_AddAnonymousPhoneVerification",
+                StringComparison.Ordinal));
         Assert.False(providerContext.Database.HasPendingModelChanges());
+
+        var phoneOtpScript = providerContext.GetService<IMigrator>()
+            .GenerateScript(webAuthnMigration, phoneOtpMigration);
+        Assert.Contains(
+            "ux_verification_challenges_anonymous_intent",
+            phoneOtpScript, StringComparison.Ordinal);
+        Assert.Contains("user_id IS NULL", phoneOtpScript,
+            StringComparison.Ordinal);
 
         var script = providerContext.GetService<IMigrator>().GenerateScript(
             fromMigration: null,

@@ -174,6 +174,24 @@ public sealed class IdentityRegistrationServiceTests
         Assert.Null(fixture.Store.User);
     }
 
+    [Fact]
+    public async Task VerifiedPhoneRegistrationRejectsOtherLoginHandles()
+    {
+        var fixture = new Fixture(passwordHasher: null);
+        var command = new RegisterVerifiedPhoneUserCommand<TestProfile>(
+            new CreateUserCommand<TestProfile>(
+                "alice", null, "+79991234567",
+                new TestProfile("Alice")),
+            new Skopka.Identity.Verification.VerificationProof(
+                Guid.NewGuid(), "opaque", DateTimeOffset.UtcNow.AddMinutes(1)));
+
+        var result = await fixture.Service.RegisterVerifiedPhoneAsync(
+            command, CancellationToken.None);
+
+        AssertError(result, IdentityErrorCodes.Validation);
+        Assert.Null(fixture.Store.User);
+    }
+
     private static CreateUserCommand<TestProfile> CreateCommand()
         => new(
             "alice",
@@ -204,7 +222,8 @@ public sealed class IdentityRegistrationServiceTests
                 new NoopIdentityMetrics(),
                 new PasswordPolicyOptions(),
                 passwordHasher is null ? [] : [passwordHasher],
-                validators ?? []);
+                validators ?? [],
+                null!);
         }
 
         public FakeRegistrationStore Store { get; }
@@ -248,6 +267,17 @@ public sealed class IdentityRegistrationServiceTests
             return Task.FromResult(
                 OperationResultFactory.Success(ToModel(user, now)));
         }
+
+        public Task<OperationResult<IdentityUser<TestProfile>>>
+            CreateWithVerifiedPhoneAsync(
+                NewIdentityUser<TestProfile> user,
+                NormalizedHandles handles,
+                Guid challengeId,
+                long challengeVersion,
+                string proofHash,
+                DateTimeOffset now,
+                CancellationToken ct)
+            => throw new NotSupportedException();
 
         private static IdentityUser<TestProfile> ToModel(
             NewIdentityUser<TestProfile> user,

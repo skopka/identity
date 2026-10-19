@@ -20,6 +20,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Skopka.Identity.Ef.Sqlite\Skopka.Identity.Ef.Sqlite.csproj" />
+        <ProjectReference Include="..\..\src\Skopka.Identity.Infrastructure\Skopka.Identity.Infrastructure.csproj" />
     </ItemGroup>
 
 </Project>

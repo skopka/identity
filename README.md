@@ -17,7 +17,7 @@ with `Microsoft.AspNetCore.Identity`.
 
 - Generic application profile stored as PostgreSQL `jsonb` or SQLite JSON text.
 - Nullable user name, email and phone for external-login-only users.
-- Atomic password and external-login registration workflows.
+- Atomic password, verified-phone and external-login registration workflows.
 - External login resolve, list, link and unlink lifecycle.
 - Sign-in-method snapshots for stricter host-owned unlink policy.
 - Optimistic concurrency through a numeric user version.
@@ -28,6 +28,8 @@ with `Microsoft.AspNetCore.Identity`.
 - Exact normalized active-user lookup for trusted account-message workflows.
 - Email, phone and password-reset action tokens based on ASP.NET Core Data Protection.
 - OTP challenge/proof orchestration with HMAC-protected generated codes.
+- Passwordless phone OTP sign-in with E.164 normalization, one-time proofs,
+  persistent rate limits and optional country-prefix allowlist.
 - Short-lived JWT access tokens with signing-key overlap and rotating opaque refresh
   sessions.
 - Active-session listing, device labels and user-scoped session revocation.

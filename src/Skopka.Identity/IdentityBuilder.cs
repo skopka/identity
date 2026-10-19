@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skopka.Identity.Credentials;
+using Skopka.Identity.PhoneOtp;
 using Skopka.Identity.Roles;
 using Skopka.Identity.Roles.Queries;
 using Skopka.Identity.Sessions;
@@ -33,6 +34,32 @@ public sealed class IdentityBuilder<TProfile>
         Services.RemoveAll<PasswordPolicyOptions>();
         Services.AddSingleton(options);
 
+        return this;
+    }
+
+    public IdentityBuilder<TProfile> ConfigurePhoneOtp(
+        Action<PhoneOtpOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        var options = Services.LastOrDefault(descriptor =>
+                descriptor.ServiceType == typeof(PhoneOtpOptions))
+            ?.ImplementationInstance as PhoneOtpOptions
+            ?? new PhoneOtpOptions();
+        configure(options);
+        if (options.DailyPhonePermitLimit <= 0
+            || options.DailyClientPermitLimit <= 0
+            || options.DailyWindow <= TimeSpan.Zero
+            || options.AllowedCountryCodes.Any(code =>
+                code.Length is < 2 or > 5
+                || code[0] != '+'
+                || code.Skip(1).Any(character =>
+                    character is < '0' or > '9')))
+        {
+            throw new ArgumentOutOfRangeException(nameof(configure));
+        }
+
+        Services.RemoveAll<PhoneOtpOptions>();
+        Services.AddSingleton(options);
         return this;
     }
 

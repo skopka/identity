@@ -20,4 +20,13 @@ public interface IIdentityRegistrationStore<TProfile>
         ExternalLoginKey login,
         DateTimeOffset now,
         CancellationToken ct);
+
+    Task<OperationResult<IdentityUser<TProfile>>> CreateWithVerifiedPhoneAsync(
+        NewIdentityUser<TProfile> user,
+        NormalizedHandles handles,
+        Guid challengeId,
+        long challengeVersion,
+        string proofHash,
+        DateTimeOffset now,
+        CancellationToken ct);
 }

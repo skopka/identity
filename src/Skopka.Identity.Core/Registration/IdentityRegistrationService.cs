@@ -7,6 +7,8 @@ using Skopka.Identity.SecurityEvents;
 using Skopka.Identity.Users;
 using Skopka.Identity.Users.Commands;
 using Skopka.Identity.Users.Handles;
+using Skopka.Identity.Verification;
+using Skopka.Identity.Errors;
 
 namespace Skopka.Identity.Registration;
 
@@ -19,6 +21,7 @@ public sealed class IdentityRegistrationService<TProfile>(
     PasswordPolicyOptions passwordPolicyOptions,
     IEnumerable<IPasswordHasher> passwordHashers,
     IEnumerable<IPasswordValidator<TProfile>> passwordValidators,
+    IVerificationChallengeStore<TProfile> verificationStore,
     IIdentitySecurityEventObserver? securityEvents = null)
     : IIdentityRegistrationService<TProfile>
 {
@@ -127,6 +130,63 @@ public sealed class IdentityRegistrationService<TProfile>(
         {
             securityEvents.Observe(
                 IdentitySecurityEventTypes.ExternalUserRegistered,
+                now,
+                result.Value.Id);
+        }
+
+        return Finish(op, result);
+    }
+
+    public async Task<OperationResult<IdentityUser<TProfile>>> RegisterVerifiedPhoneAsync(
+        RegisterVerifiedPhoneUserCommand<TProfile> command,
+        CancellationToken ct)
+    {
+        using var op = metrics.Begin("registration.phone_otp");
+        var now = DateTimeOffset.UtcNow;
+        if (command.User.Phone is null
+            || command.User.UserName is not null
+            || command.User.Email is not null)
+        {
+            return Fail(op, IdentityErrors.Validation(
+                "phone", "Phone-only registration requires a phone."));
+        }
+
+        var prepared = PrepareUser(command.User, now, out var userError);
+        if (userError is not null)
+        {
+            return Fail(op, userError);
+        }
+
+        var challenge = await verificationStore.FindByIdAsync(
+            command.Proof.ChallengeId, ct);
+        if (challenge is null
+            || challenge.UserId != Guid.Empty
+            || challenge.Purpose != VerificationPurposes.PhoneSignIn
+            || challenge.Binding != command.User.Phone
+            || challenge.State != VerificationChallengeState.Verified
+            || challenge.ProofExpiresAt <= now
+            || challenge.ProofHash is null
+            || !VerificationProofCodec.Matches(
+                challenge.ProofHash, command.Proof.Token))
+        {
+            return Fail(op, new Error(
+                IdentityErrorCodes.VerificationProofInvalid,
+                "Verification proof is invalid or expired.",
+                ErrorType.Unauthorized));
+        }
+
+        var result = await registrationStore.CreateWithVerifiedPhoneAsync(
+            prepared!.User,
+            prepared.Handles,
+            challenge.Id,
+            challenge.Version,
+            challenge.ProofHash,
+            now,
+            ct);
+        if (result.IsSuccess)
+        {
+            securityEvents?.Observe(
+                IdentitySecurityEventTypes.PhoneUserRegistered,
                 now,
                 result.Value.Id);
         }

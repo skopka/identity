@@ -7,6 +7,16 @@ public static class IdentitySecurityEventTypes
         "identity.registration.password";
     public const string ExternalUserRegistered =
         "identity.registration.external";
+    public const string PhoneUserRegistered =
+        "identity.registration.phone_otp";
+    public const string PhoneCodeRequested =
+        "identity.phone_otp.requested";
+    public const string PhoneCodeInvalid =
+        "identity.phone_otp.invalid";
+    public const string PhoneCodeAttemptsExceeded =
+        "identity.phone_otp.attempts_exceeded";
+    public const string PhoneSignIn =
+        "identity.phone_otp.signed_in";
     public const string ExternalLoginLinked =
         "identity.external_login.linked";
     public const string ExternalLoginUnlinked =

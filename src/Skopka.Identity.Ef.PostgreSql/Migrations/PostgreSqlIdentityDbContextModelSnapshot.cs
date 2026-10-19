@@ -718,7 +718,7 @@ namespace Skopka.Identity.Ef.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("state");
 
-                    b.Property<Guid>("UserId")
+                    b.Property<Guid?>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
@@ -746,6 +746,11 @@ namespace Skopka.Identity.Ef.Migrations
 
                     b.HasIndex("UserId", "State")
                         .HasDatabaseName("ix_verification_challenges_user_state");
+
+                    b.HasIndex(new[] { "IntentHash" }, "ix_verification_challenges_anonymous_intent")
+                        .IsUnique()
+                        .HasDatabaseName("ux_verification_challenges_anonymous_intent")
+                        .HasFilter("user_id IS NULL AND state IN (0, 1)");
 
                     b.ToTable("verification_challenges", (string)null);
                 });
@@ -958,8 +963,7 @@ namespace Skopka.Identity.Ef.Migrations
                     b.HasOne("Skopka.Identity.Ef.Entities.AuthUserEntity", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("User");
                 });

@@ -145,13 +145,15 @@ public sealed class EfVerificationChallengeStore<TProfile>(
         DateTimeOffset now,
         CancellationToken ct)
     {
-        var userExists = await dbContext.Users
-            .Where(user => user.Id == challenge.UserId)
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(
-                    user => user.ModifiedAt,
-                    user => user.ModifiedAt),
-                ct);
+        var userExists = challenge.UserId == Guid.Empty
+            ? 1
+            : await dbContext.Users
+                .Where(user => user.Id == challenge.UserId)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        user => user.ModifiedAt,
+                        user => user.ModifiedAt),
+                    ct);
         if (userExists == 0)
         {
             return OperationResultFactory.Fail(UserNotFoundError);
@@ -189,7 +191,7 @@ public sealed class EfVerificationChallengeStore<TProfile>(
         DateTimeOffset now)
         => existing.State == VerificationChallengeState.Pending
             && existing.ExpiresAt > now
-            && existing.UserId == challenge.UserId
+            && existing.UserId == ToStoreUserId(challenge.UserId)
             && string.Equals(
                 existing.Purpose,
                 challenge.Purpose,
@@ -220,7 +222,7 @@ public sealed class EfVerificationChallengeStore<TProfile>(
         CancellationToken ct)
     {
         var activeChallenges = await dbContext.VerificationChallenges
-            .Where(entity => entity.UserId == challenge.UserId
+            .Where(entity => entity.UserId == ToStoreUserId(challenge.UserId)
                 && entity.Purpose == challenge.Purpose
                 && entity.Binding == challenge.Binding
                 && entity.Method == challenge.Method
@@ -244,7 +246,7 @@ public sealed class EfVerificationChallengeStore<TProfile>(
         => new()
         {
             Id = challenge.Id,
-            UserId = challenge.UserId,
+            UserId = ToStoreUserId(challenge.UserId),
             IntentHash = VerificationIntentHasher.Hash(
                 challenge.Purpose,
                 challenge.Binding,
@@ -363,7 +365,7 @@ public sealed class EfVerificationChallengeStore<TProfile>(
             || entity.State != VerificationChallengeState.Verified
             || entity.ProofExpiresAt is null
             || entity.ProofExpiresAt <= now
-            || entity.UserId != userId
+            || entity.UserId != ToStoreUserId(userId)
             || !string.Equals(entity.Purpose, purpose, StringComparison.Ordinal)
             || !string.Equals(entity.Binding, binding, StringComparison.Ordinal)
             || !string.Equals(
@@ -406,7 +408,7 @@ public sealed class EfVerificationChallengeStore<TProfile>(
         VerificationChallengeEntity entity)
         => new(
             entity.Id,
-            entity.UserId,
+            entity.UserId ?? Guid.Empty,
             entity.Purpose,
             entity.Binding,
             entity.Method,
@@ -423,6 +425,9 @@ public sealed class EfVerificationChallengeStore<TProfile>(
             entity.ModifiedAt,
             entity.VerifiedAt,
             entity.ConsumedAt);
+
+    private static Guid? ToStoreUserId(Guid userId)
+        => userId == Guid.Empty ? null : userId;
 
     private void Detach(object? entity)
     {

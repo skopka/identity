@@ -60,6 +60,13 @@ public sealed class SqliteIdentityDbContext<TProfile>(
             .IsUnique()
             .HasDatabaseName(SqliteIdentityConstraintNames.ActiveVerificationIntent)
             .HasFilter("state IN (0, 1)");
+
+        modelBuilder.Entity<VerificationChallengeEntity>()
+            .HasIndex(challenge => challenge.IntentHash,
+                "ix_verification_challenges_anonymous_intent")
+            .IsUnique()
+            .HasDatabaseName("ux_verification_challenges_anonymous_intent")
+            .HasFilter("user_id IS NULL AND state IN (0, 1)");
     }
 
     private static void ConfigureDateTimeOffsets(ModelBuilder modelBuilder)

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Ef.Entities;
 using Skopka.Identity.Errors;
@@ -6,6 +7,7 @@ using Skopka.Identity.ExternalLogins;
 using Skopka.Identity.Registration;
 using Skopka.Identity.Users;
 using Skopka.Identity.Users.Handles;
+using Skopka.Identity.Verification;
 
 namespace Skopka.Identity.Ef;
 
@@ -76,14 +78,74 @@ public sealed class EfIdentityRegistrationStore<TProfile>
             ct);
     }
 
+    public Task<OperationResult<IdentityUser<TProfile>>> CreateWithVerifiedPhoneAsync(
+        NewIdentityUser<TProfile> user,
+        NormalizedHandles handles,
+        Guid challengeId,
+        long challengeVersion,
+        string proofHash,
+        DateTimeOffset now,
+        CancellationToken ct)
+        => dbContext.Database.CreateExecutionStrategy().ExecuteAsync(
+            () => CreateAsync(
+                user,
+                handles,
+                passwordVerifier: null,
+                externalLogin: null,
+                now,
+                ct,
+                new VerifiedPhoneClaim(
+                    challengeId, challengeVersion, proofHash)));
+
     private async Task<OperationResult<IdentityUser<TProfile>>> CreateAsync(
         NewIdentityUser<TProfile> user,
         NormalizedHandles handles,
         string? passwordVerifier,
         ExternalLoginKey? externalLogin,
         DateTimeOffset now,
-        CancellationToken ct)
+        CancellationToken ct,
+        VerifiedPhoneClaim? verifiedPhone = null)
     {
+        IDbContextTransaction? transaction = null;
+        VerificationChallengeEntity? challenge = null;
+        if (verifiedPhone is not null)
+        {
+            if (dbContext.Database.IsRelational())
+            {
+                transaction = await dbContext.Database.BeginTransactionAsync(ct);
+            }
+
+            challenge = await dbContext.VerificationChallenges
+                .SingleOrDefaultAsync(
+                    entry => entry.Id == verifiedPhone.ChallengeId,
+                    ct);
+            if (challenge is null
+                || challenge.UserId is not null
+                || challenge.Purpose != VerificationPurposes.PhoneSignIn
+                || challenge.Binding != user.Phone
+                || challenge.State != VerificationChallengeState.Verified
+                || challenge.ProofExpiresAt <= now
+                || challenge.ProofHash != verifiedPhone.ProofHash
+                || challenge.Version != verifiedPhone.ChallengeVersion)
+            {
+                if (transaction is not null)
+                {
+                    await transaction.DisposeAsync();
+                }
+
+                return OperationResultFactory.Fail<IdentityUser<TProfile>>(
+                    new Error(
+                        IdentityErrorCodes.VerificationProofInvalid,
+                        "Verification proof is invalid or expired.",
+                        ErrorType.Unauthorized));
+            }
+
+            challenge.State = VerificationChallengeState.Consumed;
+            challenge.ConsumedAt = now;
+            challenge.ModifiedAt = now;
+            challenge.Version = checked(challenge.Version + 1);
+        }
+
         var userId = user.Id ?? Guid.NewGuid();
         var profile = new UserProfileEntity<TProfile>
         {
@@ -100,6 +162,7 @@ public sealed class EfIdentityRegistrationStore<TProfile>
             NormalizedUserName = handles.UserName,
             NormalizedEmail = handles.Email,
             NormalizedPhone = handles.Phone,
+            PhoneConfirmed = verifiedPhone is not null,
             Version = 1,
             SecurityStamp = user.SecurityStamp,
             CreatedAt = now,
@@ -157,25 +220,47 @@ public sealed class EfIdentityRegistrationStore<TProfile>
         try
         {
             await dbContext.SaveChangesAsync(ct);
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(ct);
+            }
             return OperationResultFactory.Success(
                 EfIdentityUserStore<TProfile>.ToModel(profile));
         }
         catch (DbUpdateConcurrencyException)
         {
-            Detach(authUser, profile, credential, login, loginIdentifiers);
+            Detach(authUser, profile, credential, login, loginIdentifiers, challenge);
             return OperationResultFactory.Fail<IdentityUser<TProfile>>(
                 ConcurrencyError);
         }
         catch (DbUpdateException exception)
         {
-            Detach(authUser, profile, credential, login, loginIdentifiers);
+            Detach(authUser, profile, credential, login, loginIdentifiers, challenge);
             var error = MapException(exception);
             if (error is null)
             {
                 throw;
             }
 
+            if (verifiedPhone is not null
+                && error.Code is IdentityErrorCodes.DuplicatePhone
+                    or IdentityErrorCodes.DuplicateLoginIdentifier)
+            {
+                error = new Error(
+                    IdentityErrorCodes.DuplicatePhone,
+                    "Phone is already in use.",
+                    ErrorType.Conflict,
+                    new DuplicateDetails("phone", null));
+            }
+
             return OperationResultFactory.Fail<IdentityUser<TProfile>>(error);
+        }
+        finally
+        {
+            if (transaction is not null)
+            {
+                await transaction.DisposeAsync();
+            }
         }
     }
 
@@ -216,4 +301,9 @@ public sealed class EfIdentityRegistrationStore<TProfile>
             }
         }
     }
+
+    private sealed record VerifiedPhoneClaim(
+        Guid ChallengeId,
+        long ChallengeVersion,
+        string ProofHash);
 }

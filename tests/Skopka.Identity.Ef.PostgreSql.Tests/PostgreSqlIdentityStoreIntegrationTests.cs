@@ -8,6 +8,7 @@ using Skopka.Identity.Credentials;
 using Skopka.Identity.Ef.Entities;
 using Skopka.Identity.Errors;
 using Skopka.Identity.ExternalLogins;
+using Skopka.Identity.PhoneOtp;
 using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Registration;
 using Skopka.Identity.Roles.Queries;
@@ -16,6 +17,7 @@ using Skopka.Identity.SignInMethods;
 using Skopka.Identity.Users;
 using Skopka.Identity.Users.Handles;
 using Skopka.Identity.Users.Queries;
+using Skopka.Identity.Users.Commands;
 using Skopka.Identity.Verification;
 using Testcontainers.PostgreSql;
 using Xunit;
@@ -43,7 +45,12 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
             .AddSkopkaIdentity<TestProfile>()
             .UsePostgreSql(
                 postgreSql.GetConnectionString(),
-                options => options.EnableRetryOnFailure());
+                options => options.EnableRetryOnFailure())
+            .UseHmacOneTimeCodes("test", Enumerable.Repeat((byte)7, 32).ToArray())
+            .UseHmacRateLimiting(
+                Enumerable.Repeat((byte)9, 32).ToArray(),
+                options => options.VerificationResendCooldown =
+                    TimeSpan.FromMilliseconds(1));
 
         serviceProvider = services.BuildServiceProvider(
             new ServiceProviderOptions
@@ -66,6 +73,60 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
         }
 
         await postgreSql.DisposeAsync();
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task PhoneProofRegistersAtomicallyAndSignsInLater()
+    {
+        await using var scope = serviceProvider.CreateAsyncScope();
+        var otp = scope.ServiceProvider.GetRequiredService<
+            IIdentityPhoneOtpService<TestProfile>>();
+        var issued = await otp.BeginAsync(
+            new BeginPhoneOtpCommand("+79991234567", "phone-client"),
+            CancellationToken.None);
+        Assert.True(issued.IsSuccess);
+
+        var verified = await otp.VerifyAsync(
+            new VerifyPhoneOtpCommand(
+                issued.Value.ChallengeId,
+                issued.Value.DeliveryCode,
+                "phone-client"),
+            CancellationToken.None);
+        Assert.True(verified.IsSuccess);
+        Assert.NotNull(verified.Value.RegistrationProof);
+
+        var registration = scope.ServiceProvider.GetRequiredService<
+            IIdentityRegistrationService<TestProfile>>();
+        var command = new RegisterVerifiedPhoneUserCommand<TestProfile>(
+            new CreateUserCommand<TestProfile>(
+                null, null, verified.Value.Phone,
+                new TestProfile("Phone user", [])),
+            verified.Value.RegistrationProof!);
+        var created = await registration.RegisterVerifiedPhoneAsync(
+            command, CancellationToken.None);
+        Assert.True(created.IsSuccess);
+        Assert.True(created.Value.PhoneConfirmed);
+
+        var replay = await registration.RegisterVerifiedPhoneAsync(
+            command, CancellationToken.None);
+        Assert.False(replay.IsSuccess);
+        Assert.Contains(replay.Errors,
+            error => error.Code == IdentityErrorCodes.VerificationProofInvalid);
+
+        await Task.Delay(20);
+        var next = await otp.BeginAsync(
+            new BeginPhoneOtpCommand("+79991234567", "another-client"),
+            CancellationToken.None);
+        Assert.True(next.IsSuccess);
+        var signedIn = await otp.VerifyAsync(
+            new VerifyPhoneOtpCommand(
+                next.Value.ChallengeId,
+                next.Value.DeliveryCode,
+                "another-client"),
+            CancellationToken.None);
+        Assert.True(signedIn.IsSuccess);
+        Assert.Equal(created.Value.Id, signedIn.Value.User?.Id);
     }
 
     [Fact]

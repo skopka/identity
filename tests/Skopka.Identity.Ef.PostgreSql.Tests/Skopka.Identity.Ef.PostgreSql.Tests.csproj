@@ -22,6 +22,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Skopka.Identity.Ef.PostgreSql\Skopka.Identity.Ef.PostgreSql.csproj" />
+        <ProjectReference Include="..\..\src\Skopka.Identity.Infrastructure\Skopka.Identity.Infrastructure.csproj" />
     </ItemGroup>
 
 </Project>

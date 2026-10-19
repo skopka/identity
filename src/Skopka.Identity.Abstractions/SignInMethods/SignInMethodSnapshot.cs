@@ -6,4 +6,5 @@ public sealed record SignInMethodSnapshot(
     Guid UserId,
     long Version,
     bool HasPassword,
-    IReadOnlyList<ExternalLoginInfo> ExternalLogins);
+    IReadOnlyList<ExternalLoginInfo> ExternalLogins,
+    bool HasPhoneOtp = false);

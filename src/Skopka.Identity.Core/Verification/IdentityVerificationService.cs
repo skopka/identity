@@ -8,6 +8,7 @@ namespace Skopka.Identity.Verification;
 public sealed class IdentityVerificationService<TProfile>
     : IIdentityVerificationService<TProfile>
 {
+    internal const string AnonymousSecurityStamp = "phone-sign-in";
     private readonly IVerificationChallengeStore<TProfile> challengeStore;
     private readonly IIdentityUserStore<TProfile> userStore;
     private readonly IReadOnlyDictionary<string, IVerificationMethodProvider> methods;
@@ -79,8 +80,11 @@ public sealed class IdentityVerificationService<TProfile>
             }
         }
 
-        var user = await userStore.FindByIdAsync(cmd.UserId, ct);
-        var userError = ValidateActiveUser(user, now);
+        var anonymous = cmd.UserId == Guid.Empty;
+        var user = anonymous
+            ? null
+            : await userStore.FindByIdAsync(cmd.UserId, ct);
+        var userError = anonymous ? null : ValidateActiveUser(user, now);
         if (userError is not null)
         {
             return Fail<IssuedVerificationChallenge>(op, userError);
@@ -107,7 +111,7 @@ public sealed class IdentityVerificationService<TProfile>
             var accountDecision = await rateLimiter.HitAsync(
                 new RateLimitRequest(
                     IdentityRateLimitScopes.VerificationAccount,
-                    user!.Id.ToString("N"),
+                    anonymous ? cmd.Binding : user!.Id.ToString("N"),
                     rateLimitOptions.VerificationAccountPermitLimit,
                     rateLimitOptions.VerificationAccountWindow),
                 ct);
@@ -123,7 +127,7 @@ public sealed class IdentityVerificationService<TProfile>
         var challengeId = Guid.NewGuid();
         var context = new VerificationMethodContext(
             challengeId,
-            user!.Id,
+            cmd.UserId,
             cmd.Purpose,
             cmd.Binding,
             cmd.ClientKey);
@@ -146,12 +150,12 @@ public sealed class IdentityVerificationService<TProfile>
         var expiresAt = now.Add(options.ChallengeLifetime);
         var challenge = new NewVerificationChallenge(
             challengeId,
-            user.Id,
+            cmd.UserId,
             cmd.Purpose,
             cmd.Binding,
             method.Method,
             methodChallenge.Verifier,
-            user.SecurityStamp,
+            anonymous ? AnonymousSecurityStamp : user!.SecurityStamp,
             options.MaxAttempts,
             expiresAt);
         var result = await challengeStore.CreateAndSupersedeAsync(
@@ -178,7 +182,7 @@ public sealed class IdentityVerificationService<TProfile>
     {
         using var op = metrics.Begin("verification.verify");
 
-        if (cmd.ChallengeId == Guid.Empty || cmd.UserId == Guid.Empty)
+        if (cmd.ChallengeId == Guid.Empty)
         {
             return Fail<VerificationProof>(
                 op,
@@ -213,15 +217,25 @@ public sealed class IdentityVerificationService<TProfile>
             return Fail<VerificationProof>(op, challengeError);
         }
 
-        var user = await userStore.FindByIdAsync(cmd.UserId, ct);
-        var userError = ValidateActiveUser(user, now);
+        var anonymous = cmd.UserId == Guid.Empty;
+        if (anonymous && challenge!.Purpose != VerificationPurposes.PhoneSignIn)
+        {
+            return Fail<VerificationProof>(
+                op,
+                VerificationErrors.ChallengeInvalid());
+        }
+
+        var user = anonymous
+            ? null
+            : await userStore.FindByIdAsync(cmd.UserId, ct);
+        var userError = anonymous ? null : ValidateActiveUser(user, now);
         if (userError is not null)
         {
             return Fail<VerificationProof>(op, userError);
         }
 
         if (!string.Equals(
-                user!.SecurityStamp,
+                anonymous ? AnonymousSecurityStamp : user!.SecurityStamp,
                 challenge!.SecurityStamp,
                 StringComparison.Ordinal))
         {
@@ -257,7 +271,7 @@ public sealed class IdentityVerificationService<TProfile>
             var accountDecision = await rateLimiter.HitAsync(
                 new RateLimitRequest(
                     IdentityRateLimitScopes.VerificationResponseAccount,
-                    user.Id.ToString("N"),
+                    anonymous ? challenge.Binding : user!.Id.ToString("N"),
                     rateLimitOptions
                         .VerificationResponseAccountPermitLimit,
                     rateLimitOptions
@@ -340,7 +354,6 @@ public sealed class IdentityVerificationService<TProfile>
         using var op = metrics.Begin("verification.consume");
 
         if (cmd.ChallengeId == Guid.Empty
-            || cmd.UserId == Guid.Empty
             || !IsValidRequiredValue(
                 cmd.Purpose,
                 VerificationLimits.MaximumPurposeLength)
@@ -378,15 +391,23 @@ public sealed class IdentityVerificationService<TProfile>
             return Fail(op, VerificationErrors.ProofInvalid());
         }
 
-        var user = await userStore.FindByIdAsync(cmd.UserId, ct);
-        var userError = ValidateActiveUser(user, now);
+        var anonymous = cmd.UserId == Guid.Empty;
+        if (anonymous && challenge.Purpose != VerificationPurposes.PhoneSignIn)
+        {
+            return Fail(op, VerificationErrors.ProofInvalid());
+        }
+
+        var user = anonymous
+            ? null
+            : await userStore.FindByIdAsync(cmd.UserId, ct);
+        var userError = anonymous ? null : ValidateActiveUser(user, now);
         if (userError is not null)
         {
             return Fail(op, userError);
         }
 
         if (!string.Equals(
-                user!.SecurityStamp,
+                anonymous ? AnonymousSecurityStamp : user!.SecurityStamp,
                 challenge.SecurityStamp,
                 StringComparison.Ordinal))
         {
@@ -408,7 +429,8 @@ public sealed class IdentityVerificationService<TProfile>
 
     private static Error? ValidateBeginCommand(BeginVerificationCommand cmd)
     {
-        if (cmd.UserId == Guid.Empty)
+        if (cmd.UserId == Guid.Empty
+            && cmd.Purpose != VerificationPurposes.PhoneSignIn)
         {
             return IdentityErrors.Validation("userId", "UserId is required.");
         }

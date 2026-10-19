@@ -5,7 +5,7 @@ namespace Skopka.Identity.Ef.Entities;
 public sealed class VerificationChallengeEntity
 {
     public Guid Id { get; set; }
-    public Guid UserId { get; set; }
+    public Guid? UserId { get; set; }
     public string IntentHash { get; set; } = null!;
     public string Purpose { get; set; } = null!;
     public string Binding { get; set; } = null!;
@@ -24,5 +24,5 @@ public sealed class VerificationChallengeEntity
     public DateTimeOffset? VerifiedAt { get; set; }
     public DateTimeOffset? ConsumedAt { get; set; }
 
-    public AuthUserEntity User { get; set; } = null!;
+    public AuthUserEntity? User { get; set; }
 }

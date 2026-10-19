@@ -12,4 +12,8 @@ public interface IIdentityRegistrationService<TProfile>
     Task<OperationResult<IdentityUser<TProfile>>> RegisterExternalAsync(
         RegisterExternalUserCommand<TProfile> command,
         CancellationToken ct);
+
+    Task<OperationResult<IdentityUser<TProfile>>> RegisterVerifiedPhoneAsync(
+        RegisterVerifiedPhoneUserCommand<TProfile> command,
+        CancellationToken ct);
 }

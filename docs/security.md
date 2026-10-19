@@ -32,6 +32,24 @@ action-token binding, exact lookup and explicit/automatic password login. Overri
 `IIdentityNormalizer.NormalizePhoneLoginIdentifier` for a different numbering plan;
 do not normalize arbitrary letter-containing input into a phone login key.
 
+## Phone OTP
+
+`IIdentityPhoneOtpService<TProfile>` issues a userless `phone-sign-in`
+Verification challenge for a normalized E.164 number. The HMAC code and
+one-time proof remain in Verification; the service resolves an active account
+only after successful code verification. A confirmed phone can authenticate,
+while an unknown number receives a short-lived registration proof. The
+`RegisterVerifiedPhoneAsync` store transaction consumes that proof and creates
+the confirmed phone user and profile together. A duplicate phone returns
+`DuplicateDetails` without the existing account's identity.
+
+Configure `PhoneOtpOptions` to limit daily phone and client requests and to
+allow only selected country prefixes. Existing Verification settings control
+code length, lifetime, attempts and resend cooldown. Use a persistent HMAC
+rate limiter when deploying multiple instances and deliver the code only
+through an out-of-band channel. Request responses must not disclose whether
+the number is registered.
+
 ## Secret Inventory
 
 Use independent random keys for each purpose:

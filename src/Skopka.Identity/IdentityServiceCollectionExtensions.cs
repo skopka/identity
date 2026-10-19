@@ -4,6 +4,7 @@ using Skopka.Identity.Authentication;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.ExternalLogins;
 using Skopka.Identity.Metrics;
+using Skopka.Identity.PhoneOtp;
 using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Registration;
 using Skopka.Identity.Security;
@@ -32,6 +33,7 @@ public static class IdentityServiceCollectionExtensions
             NoopIdentitySecurityEventObserver>();
         services.TryAddSingleton(new PasswordPolicyOptions());
         services.TryAddSingleton(new IdentityRateLimitOptions());
+        services.TryAddSingleton(new PhoneOtpOptions());
         services.TryAddSingleton(new IdentitySessionOptions());
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<
@@ -63,6 +65,9 @@ public static class IdentityServiceCollectionExtensions
         services.TryAddScoped<
             IIdentityVerificationService<TProfile>,
             IdentityVerificationService<TProfile>>();
+        services.TryAddScoped<
+            IIdentityPhoneOtpService<TProfile>,
+            IdentityPhoneOtpService<TProfile>>();
 
         return new IdentityBuilder<TProfile>(services);
     }
