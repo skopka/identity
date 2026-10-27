@@ -13,6 +13,8 @@ with `Microsoft.AspNetCore.Identity`.
 > The API is pre-1.0 and currently targets .NET 10. Validate the library against your
 > threat model and deployment requirements before using it in production.
 
+Phone OTP validates input through `IIdentityPhoneNumberPolicy`, using the configured `IIdentityNormalizer` and `PhoneOtpOptions.AllowedCountryCodes`. The default allowlist is empty. Hosts can configure, for example, `identity.ConfigurePhoneOtp(options => options.AllowedCountryCodes = ["+7"])`. The policy reports invalid format and disallowed country with distinct structured error codes. Only a confirmed phone can sign in an existing account; an unconfirmed number is not linked by OTP.
+
 ## Features
 
 - Generic application profile stored as PostgreSQL `jsonb` or SQLite JSON text.

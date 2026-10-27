@@ -34,6 +34,7 @@ public static class IdentityServiceCollectionExtensions
         services.TryAddSingleton(new PasswordPolicyOptions());
         services.TryAddSingleton(new IdentityRateLimitOptions());
         services.TryAddSingleton(new PhoneOtpOptions());
+        services.TryAddSingleton<IIdentityPhoneNumberPolicy, IdentityPhoneNumberPolicy>();
         services.TryAddSingleton(new IdentitySessionOptions());
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<

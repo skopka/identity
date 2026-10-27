@@ -18,9 +18,26 @@ public sealed class IdentityPhoneOtpService<TProfile>(
     IdentityRateLimitOptions rateLimitOptions,
     PhoneOtpOptions options,
     IIdentityMetrics metrics,
-    IIdentitySecurityEventObserver securityEvents)
+    IIdentitySecurityEventObserver securityEvents,
+    IIdentityPhoneNumberPolicy phonePolicy)
     : IIdentityPhoneOtpService<TProfile>
 {
+    public IdentityPhoneOtpService(
+        IIdentityNormalizer normalizer,
+        IIdentityVerificationService<TProfile> verification,
+        IVerificationChallengeStore<TProfile> challengeStore,
+        IIdentityUserLookupService<TProfile> lookup,
+        IEnumerable<IIdentityRateLimiter<TProfile>> rateLimiters,
+        IdentityRateLimitOptions rateLimitOptions,
+        PhoneOtpOptions options,
+        IIdentityMetrics metrics,
+        IIdentitySecurityEventObserver securityEvents)
+        : this(normalizer, verification, challengeStore, lookup, rateLimiters,
+            rateLimitOptions, options, metrics, securityEvents,
+            new IdentityPhoneNumberPolicy(normalizer, options))
+    {
+    }
+
     private readonly IIdentityRateLimiter<TProfile>? rateLimiter =
         rateLimiters.FirstOrDefault();
 
@@ -29,12 +46,14 @@ public sealed class IdentityPhoneOtpService<TProfile>(
         CancellationToken ct)
     {
         using var op = metrics.Begin("phone_otp.begin");
-        var phone = NormalizePhone(command.Phone);
-        if (phone is null)
+        ArgumentNullException.ThrowIfNull(normalizer);
+        var normalized = phonePolicy.Normalize(command.Phone);
+        if (!normalized.IsSuccess)
         {
-            return Fail<IssuedPhoneOtpChallenge>(op, IdentityErrors.Validation(
-                "phone", "A valid E.164 phone number is required."));
+            op.Failure(normalized.Errors.First().Code);
+            return OperationResultFactory.Fail<IssuedPhoneOtpChallenge>(normalized.Errors);
         }
+        var phone = normalized.Value;
 
         if (rateLimiter is null)
         {
@@ -191,28 +210,6 @@ public sealed class IdentityPhoneOtpService<TProfile>(
         op.Success();
         return OperationResultFactory.Success(
             new VerifiedPhoneOtp<TProfile>(challenge.Binding, user, null));
-    }
-
-    private string? NormalizePhone(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)
-            || !value.TrimStart().StartsWith('+'))
-        {
-            return null;
-        }
-
-        var digits = normalizer.NormalizePhoneLoginIdentifier(value);
-        if (digits is null || digits.Length is < 8 or > 15)
-        {
-            return null;
-        }
-
-        var phone = "+" + digits;
-        return options.AllowedCountryCodes.Count == 0
-            || options.AllowedCountryCodes.Any(prefix =>
-                phone.StartsWith(prefix, StringComparison.Ordinal))
-            ? phone
-            : null;
     }
 
     private static OperationResult<T> Fail<T>(IIdentityOpScope op, Error error)

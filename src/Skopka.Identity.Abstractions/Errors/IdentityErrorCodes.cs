@@ -8,6 +8,8 @@ public static class IdentityErrorCodes
 
     public const string DuplicateUserName = "identity.user_name.duplicate";
     public const string DuplicateEmail = "identity.email.duplicate";
+    public const string PhoneInvalidFormat = "identity.phone.invalid_format";
+    public const string PhoneCountryNotAllowed = "identity.phone.country_not_allowed";
     public const string DuplicatePhone = "identity.phone.duplicate";
     public const string DuplicateLoginIdentifier =
         "identity.login_identifier.duplicate";
