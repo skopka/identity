@@ -19,6 +19,32 @@ The release workflow publishes:
 - `Skopka.Identity.Infrastructure`
 - `Skopka.Identity`
 
+## Documentation
+
+For consumer-visible API, options, defaults, behavior or package changes, update the
+package README, relevant documentation and XML comments and the matching Russian and
+English Products overview, guides and examples in the same work before release. Build
+and verify complete working examples against the supported version. If a change has no
+documentation impact, record the explicit reason in the release work.
+
+The public site is https://products.skopka.ru; its repository is
+`H:\Rep\skopka\products`. Follow `docs/documentation-workflow.md` there. Prepare the
+Products changes before release, but do not publish unreleased API documentation from a
+moving `main` branch. After the GitHub tag and the coordinated NuGet package set are published,
+verify their availability and update the Identity source pin in
+`scripts/fetch-sources.sh` to the release tag and its full commit. Update affected
+version mentions in the Products README, `identity/index.md`, `en/identity/index.md`,
+`guides/ru/identity.md` and its subpages, `guides/en/identity.md` and its subpages,
+and `api-index/identity/index.md`; update the table of contents only when needed.
+
+Run `sh scripts/build.sh` in the Products repository and verify the generated API,
+examples and links. Publish the documentation under the existing authorization scope.
+If publication is not complete, report the exact remaining stage; writing the changes
+alone does not mean they are live. After deployment, verify the live Russian and English
+overview, guide and API pages, including README and NuGet links, without Basic Auth.
+Include the package version, tag and commit, the Products commit and the live-check
+result in the release summary.
+
 ## Publish a Release
 
 Start from a verified commit on `main`, then create and push an annotated version tag:

@@ -517,3 +517,8 @@ dependencies and pack all seven source packages without publishing them. Tag pus
 matching `v*` publish all seven packages through `.github/workflows/release.yml`; keep the
 tag-derived version, package count validation, NuGet.org publication and GitHub Release
 attachments aligned. Release setup and operator steps live in `docs/releasing.md`.
+
+Consumer-visible API, options, defaults, behavior or package changes require package
+README, documentation and XML updates and matching Russian and English Products
+documentation in the same work before release. Follow the Products documentation
+workflow and record an explicit reason if there is no documentation impact.
