@@ -17,7 +17,8 @@ public sealed class IdentitySessionService<TProfile>(
     IEnumerable<IIdentitySessionClaimsProvider<TProfile>> claimsProviders,
     IdentitySessionOptions options,
     IIdentityMetrics metrics,
-    IIdentitySecurityEventObserver? securityEvents = null)
+    IIdentitySecurityEventObserver? securityEvents = null,
+    IEnumerable<IIdentitySessionAdmissionPolicy<TProfile>>? admissionPolicies = null)
     : IIdentitySessionService<TProfile>
 {
     internal const int CurrentAccessTokenFormatVersion = 1;
@@ -29,7 +30,8 @@ public sealed class IdentitySessionService<TProfile>(
         using var op = metrics.Begin("session.create");
         ValidateOptions();
 
-        if (string.IsNullOrWhiteSpace(command.SecurityStamp)
+        if (!Enum.IsDefined(command.Assurance)
+            || string.IsNullOrWhiteSpace(command.SecurityStamp)
             || command.SecurityStamp.Length > SessionLimits.SecurityStampLength)
         {
             return Fail<IssuedIdentitySession>(
@@ -56,6 +58,11 @@ public sealed class IdentitySessionService<TProfile>(
                 AuthenticationErrors.InvalidCredentials());
         }
 
+        var admission = await IdentitySessionAdmission.CheckAsync(admissionPolicies,
+            new IdentitySessionAdmissionContext<TProfile>(user, command.Assurance,
+                IdentitySessionAdmissionOperation.Create, null, metadata.Value), ct);
+        if (!admission.IsSuccess) return Fail<IssuedIdentitySession>(op, admission.Errors);
+
         var sessionId = Guid.NewGuid();
         var refreshTokenId = Guid.NewGuid();
         var refreshToken = refreshTokenProvider.Generate(refreshTokenId);
@@ -75,7 +82,7 @@ public sealed class IdentitySessionService<TProfile>(
                 refreshToken.TokenHash,
                 user.SecurityStamp,
                 refreshExpiresAt,
-                metadata.Value),
+                metadata.Value) { Assurance = command.Assurance },
             now,
             ct);
 
@@ -154,6 +161,11 @@ public sealed class IdentitySessionService<TProfile>(
                 op,
                 IdentitySessionErrors.RefreshTokenInvalid());
         }
+
+        var admission = await IdentitySessionAdmission.CheckAsync(admissionPolicies,
+            new IdentitySessionAdmissionContext<TProfile>(user, IdentitySessionAdmission.Known(current.Assurance),
+                IdentitySessionAdmissionOperation.Refresh, current.SessionId, current.Metadata), ct);
+        if (!admission.IsSuccess) return Fail<IssuedIdentitySession>(op, admission.Errors);
 
         var replacementTokenId = Guid.NewGuid();
         var replacementToken = refreshTokenProvider.Generate(
@@ -258,6 +270,11 @@ public sealed class IdentitySessionService<TProfile>(
                 op,
                 IdentitySessionErrors.AccessTokenInvalid());
         }
+
+        var admission = await IdentitySessionAdmission.CheckAsync(admissionPolicies,
+            new IdentitySessionAdmissionContext<TProfile>(user, IdentitySessionAdmission.Known(session.Assurance),
+                IdentitySessionAdmissionOperation.Validate, session.SessionId, session.Metadata), ct);
+        if (!admission.IsSuccess) return Fail<IdentityUser<TProfile>>(op, admission.Errors);
 
         op.Success();
         return OperationResultFactory.Success(user);

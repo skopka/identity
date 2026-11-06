@@ -59,11 +59,57 @@ public sealed class EfTotpFactorStore<TProfile>(
         DateTimeOffset now,
         CancellationToken ct)
     {
-        if (!await dbContext.Users.AnyAsync(
-                user => user.Id == enrollment.UserId,
-                ct))
+        var user = await dbContext.Users
+            .AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == enrollment.UserId, ct);
+        return user is null
+            ? OperationResultFactory.Fail(UserNotFoundError)
+            : await CreateOrReplacePendingAsync(
+                enrollment, user.Version, now, ct);
+    }
+
+    public async Task<OperationResult<StoredTotpFactor>> EnableAsync(
+        Guid userId,
+        Guid enrollmentId,
+        long expectedVersion,
+        long initialAcceptedCounter,
+        IReadOnlyCollection<string> recoveryCodeHashes,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        var user = await dbContext.Users
+            .AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == userId, ct);
+        return user is null
+            ? OperationResultFactory.Fail<StoredTotpFactor>(UserNotFoundError)
+            : await EnableAsync(
+                userId,
+                enrollmentId,
+                expectedVersion,
+                user.Version,
+                initialAcceptedCounter,
+                recoveryCodeHashes,
+                now,
+                ct);
+    }
+
+    public async Task<OperationResult> CreateOrReplacePendingAsync(
+        NewTotpEnrollment enrollment,
+        long expectedUserVersion,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        var user = await dbContext.Users.SingleOrDefaultAsync(
+            user => user.Id == enrollment.UserId, ct);
+        if (user is null)
         {
             return OperationResultFactory.Fail(UserNotFoundError);
+        }
+
+        if (user.Version != expectedUserVersion)
+        {
+            Detach(user);
+            return OperationResultFactory.Fail(ConcurrencyError);
         }
 
         var factor = await dbContext.TotpFactors
@@ -72,24 +118,25 @@ public sealed class EfTotpFactorStore<TProfile>(
                 ct);
         if (factor?.State == TotpFactorState.Enabled)
         {
+            Detach(user);
             Detach(factor);
             return OperationResultFactory.Fail(AlreadyEnabledError);
         }
 
         if (factor is null)
         {
-            dbContext.TotpFactors.Add(
-                new TotpFactorEntity
-                {
-                    UserId = enrollment.UserId,
-                    EnrollmentId = enrollment.EnrollmentId,
-                    ProtectedSecret = enrollment.ProtectedSecret,
-                    State = TotpFactorState.Pending,
-                    Version = 1,
-                    PendingExpiresAt = Normalize(enrollment.ExpiresAt),
-                    CreatedAt = Normalize(now),
-                    ModifiedAt = Normalize(now),
-                });
+            factor = new TotpFactorEntity
+            {
+                UserId = enrollment.UserId,
+                EnrollmentId = enrollment.EnrollmentId,
+                ProtectedSecret = enrollment.ProtectedSecret,
+                State = TotpFactorState.Pending,
+                Version = 1,
+                PendingExpiresAt = Normalize(enrollment.ExpiresAt),
+                CreatedAt = Normalize(now),
+                ModifiedAt = Normalize(now),
+            };
+            dbContext.TotpFactors.Add(factor);
         }
         else
         {
@@ -103,6 +150,8 @@ public sealed class EfTotpFactorStore<TProfile>(
             factor.Version = checked(factor.Version + 1);
         }
 
+        user.Version = checked(user.Version + 1);
+        user.ModifiedAt = Normalize(now);
         try
         {
             await dbContext.SaveChangesAsync(ct);
@@ -110,6 +159,7 @@ public sealed class EfTotpFactorStore<TProfile>(
         }
         catch (DbUpdateConcurrencyException)
         {
+            Detach(user);
             Detach(factor);
             return OperationResultFactory.Fail(ConcurrencyError);
         }
@@ -119,6 +169,7 @@ public sealed class EfTotpFactorStore<TProfile>(
         Guid userId,
         Guid enrollmentId,
         long expectedVersion,
+        long expectedUserVersion,
         long initialAcceptedCounter,
         IReadOnlyCollection<string> recoveryCodeHashes,
         DateTimeOffset now,
@@ -144,6 +195,17 @@ public sealed class EfTotpFactorStore<TProfile>(
                 ConcurrencyError);
         }
 
+        var user = await dbContext.Users
+            .SingleOrDefaultAsync(item => item.Id == userId, ct);
+        if (user is null || user.Version != expectedUserVersion)
+        {
+            Detach(user);
+            Detach(factor);
+            return OperationResultFactory.Fail<StoredTotpFactor>(
+                ConcurrencyError);
+        }
+        user.Version = checked(user.Version + 1);
+        user.ModifiedAt = Normalize(now);
         factor.State = TotpFactorState.Enabled;
         factor.LastAcceptedCounter = initialAcceptedCounter;
         factor.PendingExpiresAt = null;
@@ -172,9 +234,65 @@ public sealed class EfTotpFactorStore<TProfile>(
         }
         catch (DbUpdateConcurrencyException)
         {
+            Detach(user);
             Detach(factor);
+            foreach (var entry in dbContext.ChangeTracker
+                         .Entries<TotpRecoveryCodeEntity>()
+                         .Where(entry => entry.State == EntityState.Added)
+                         .ToArray())
+            {
+                entry.State = EntityState.Detached;
+            }
             return OperationResultFactory.Fail<StoredTotpFactor>(
                 ConcurrencyError);
+        }
+    }
+
+    public async Task<OperationResult> ResetAsync(
+        Guid userId,
+        long expectedUserVersion,
+        Guid enrollmentId,
+        long expectedFactorVersion,
+        string newSecurityStamp,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        var user = await dbContext.Users
+            .SingleOrDefaultAsync(item => item.Id == userId, ct);
+        // Load dependants so cascade deletion also works for providers without
+        // database-enforced foreign keys, and recovery-code concurrency is checked.
+        var factor = await dbContext.TotpFactors
+            .Include(item => item.RecoveryCodes)
+            .SingleOrDefaultAsync(item => item.UserId == userId, ct);
+        if (user is null
+            || user.Version != expectedUserVersion
+            || factor is null
+            || factor.State != TotpFactorState.Enabled
+            || factor.EnrollmentId != enrollmentId
+            || factor.Version != expectedFactorVersion)
+        {
+            Detach(user);
+            Detach(factor);
+            return OperationResultFactory.Fail(ConcurrencyError);
+        }
+        user.Version = checked(user.Version + 1);
+        user.SecurityStamp = newSecurityStamp;
+        user.ModifiedAt = Normalize(now);
+        dbContext.TotpFactors.Remove(factor);
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+            return OperationResultFactory.Success();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            Detach(user);
+            foreach (var code in factor.RecoveryCodes)
+            {
+                Detach(code);
+            }
+            Detach(factor);
+            return OperationResultFactory.Fail(ConcurrencyError);
         }
     }
 

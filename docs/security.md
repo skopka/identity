@@ -43,6 +43,19 @@ while an unknown number receives a short-lived registration proof. The
 the confirmed phone user and profile together. A duplicate phone returns
 `DuplicateDetails` without the existing account's identity.
 
+For an authenticated user attaching a phone, call `BeginAsync` and deliver the
+code out of band. After the user submits it, `VerifyForBindingAsync` verifies
+the same phone-sign-in challenge without looking up an account and returns a
+short-lived proof. Call `BindVerifiedPhoneAsync` with that proof, the normalized
+phone, authenticated user ID, and a fresh expected user version. The EF store
+consumes the proof and sets the confirmed phone in one transaction; uniqueness
+and version conflicts leave the proof unconsumed. The host must bind the pending
+flow to the authenticated user and session, authorize the mutation, and keep the
+proof secret. A custom registration store must implement the aggregate binding
+operation; its default fails closed. The EF binding operation requires relational
+transactional storage and fails closed with EF InMemory. Never expose account occupancy before a valid
+code has been verified.
+
 Configure `PhoneOtpOptions` to limit daily phone and client requests and to
 allow only selected country prefixes. Existing Verification settings control
 code length, lifetime, attempts and resend cooldown. Use a persistent HMAC

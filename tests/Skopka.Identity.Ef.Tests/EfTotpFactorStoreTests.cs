@@ -19,6 +19,7 @@ public sealed class EfTotpFactorStoreTests
                 enrollmentId,
                 "protected-secret",
                 database.Now.AddMinutes(10)),
+            database.Version,
             database.Now,
             CancellationToken.None);
         Assert.True(pending.IsSuccess);
@@ -31,6 +32,7 @@ public sealed class EfTotpFactorStoreTests
             database.UserId,
             enrollmentId,
             stored.Version,
+            database.Version,
             41,
             [Hash('A'), Hash('B')],
             database.Now.AddMinutes(1),
@@ -95,6 +97,7 @@ public sealed class EfTotpFactorStoreTests
                 firstId,
                 "first-protected-secret",
                 database.Now.AddMinutes(10)),
+            database.Version,
             database.Now,
             CancellationToken.None);
         var secondId = Guid.NewGuid();
@@ -104,6 +107,7 @@ public sealed class EfTotpFactorStoreTests
                 secondId,
                 "second-protected-secret",
                 database.Now.AddMinutes(10)),
+            database.Version,
             database.Now.AddMinutes(1),
             CancellationToken.None);
 
@@ -114,6 +118,7 @@ public sealed class EfTotpFactorStoreTests
             database.UserId,
             firstId,
             factor!.Version,
+            database.Version,
             41,
             [Hash('A')],
             database.Now.AddMinutes(2),
@@ -135,6 +140,7 @@ public sealed class EfTotpFactorStoreTests
                 enrollmentId,
                 "protected-secret",
                 database.Now.AddMinutes(10)),
+            database.Version,
             database.Now,
             CancellationToken.None);
         var factor = await database.Store.FindByUserIdAsync(
@@ -144,6 +150,7 @@ public sealed class EfTotpFactorStoreTests
             database.UserId,
             enrollmentId,
             factor!.Version,
+            database.Version,
             41,
             [Hash('A')],
             database.Now.AddMinutes(1),
@@ -161,6 +168,35 @@ public sealed class EfTotpFactorStoreTests
         Assert.Empty(database.Context.TotpRecoveryCodes);
     }
 
+    [Fact]
+    public async Task ResetRequiresSnapshotAndInvalidatesRecoveryAndStaleEnrollment()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var id = Guid.NewGuid();
+        Assert.True((await database.Store.CreateOrReplacePendingAsync(
+            new NewTotpEnrollment(database.UserId, id, "protected", database.Now.AddMinutes(10)),
+            database.Version, database.Now, CancellationToken.None)).IsSuccess);
+        var pending = await database.Store.FindByUserIdAsync(database.UserId, CancellationToken.None);
+        Assert.True((await database.Store.EnableAsync(database.UserId, id, pending!.Version,
+            database.Version, 1, [Hash('A')], database.Now, CancellationToken.None)).IsSuccess);
+        var enabled = await database.Store.FindByUserIdAsync(database.UserId, CancellationToken.None);
+        var version = database.Version;
+        Assert.False((await database.Store.ResetAsync(database.UserId, version, Guid.NewGuid(),
+            enabled!.Version, "NEW-STAMP", database.Now, CancellationToken.None)).IsSuccess);
+        Assert.False((await database.Store.ResetAsync(database.UserId, version - 1, id,
+            enabled.Version, "NEW-STAMP", database.Now, CancellationToken.None)).IsSuccess);
+        Assert.True((await database.Store.ResetAsync(database.UserId, version, id,
+            enabled.Version, "NEW-STAMP", database.Now, CancellationToken.None)).IsSuccess);
+        Assert.Null(await database.Store.FindByUserIdAsync(database.UserId, CancellationToken.None));
+        Assert.Empty(database.Context.TotpRecoveryCodes);
+        Assert.Equal("NEW-STAMP", database.Context.Users.Single().SecurityStamp);
+        Assert.False((await database.Store.CreateOrReplacePendingAsync(
+            new NewTotpEnrollment(database.UserId, Guid.NewGuid(), "protected", database.Now.AddMinutes(10)),
+            version, database.Now, CancellationToken.None)).IsSuccess);
+        Assert.False((await database.Store.TryConsumeRecoveryCodeAsync(database.UserId, id,
+            Hash('A'), database.Now, CancellationToken.None)).Value);
+    }
+
     private static string Hash(char value) => new(value, 64);
 
     private sealed record TestProfile(string DisplayName);
@@ -175,6 +211,7 @@ public sealed class EfTotpFactorStoreTests
         public IdentityDbContext<TestProfile> Context { get; } = context;
         public EfTotpFactorStore<TestProfile> Store { get; } = store;
         public Guid UserId { get; } = userId;
+        public long Version => Context.Users.Single(user => user.Id == UserId).Version;
         public DateTimeOffset Now { get; } = now;
 
         public static async Task<TestDatabase> CreateAsync()

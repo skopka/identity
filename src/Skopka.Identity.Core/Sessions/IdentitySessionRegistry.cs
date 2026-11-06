@@ -14,7 +14,8 @@ public sealed class IdentitySessionRegistry<TProfile>(
     IIdentitySessionStore<TProfile> sessionStore,
     IdentitySessionOptions options,
     IIdentityMetrics metrics,
-    IIdentitySecurityEventObserver? securityEvents = null)
+    IIdentitySecurityEventObserver? securityEvents = null,
+    IEnumerable<IIdentitySessionAdmissionPolicy<TProfile>>? admissionPolicies = null)
     : IIdentitySessionRegistry<TProfile>
 {
     public async Task<OperationResult<IdentitySessionInfo>> RegisterAsync(
@@ -25,6 +26,7 @@ public sealed class IdentitySessionRegistry<TProfile>(
         ValidateOptions();
 
         if (command.UserId == Guid.Empty
+            || !Enum.IsDefined(command.Assurance)
             || string.IsNullOrWhiteSpace(command.SecurityStamp)
             || command.SecurityStamp.Length > SessionLimits.SecurityStampLength)
         {
@@ -50,12 +52,17 @@ public sealed class IdentitySessionRegistry<TProfile>(
                 AuthenticationErrors.InvalidCredentials());
         }
 
+        var admission = await IdentitySessionAdmission.CheckAsync(admissionPolicies,
+            new IdentitySessionAdmissionContext<TProfile>(user, command.Assurance,
+                IdentitySessionAdmissionOperation.Register, null, metadata.Value), ct);
+        if (!admission.IsSuccess) return Fail<IdentitySessionInfo>(op, admission.Errors);
+
         var session = new NewIdentitySession(
             Guid.NewGuid(),
             user.Id,
             user.SecurityStamp,
             now.Add(options.RefreshSessionLifetime),
-            metadata.Value);
+            metadata.Value) { Assurance = command.Assurance };
         var created = await sessionStore.CreateAsync(session, now, ct);
         if (!created.IsSuccess)
         {
@@ -82,11 +89,20 @@ public sealed class IdentitySessionRegistry<TProfile>(
         ValidateIdentitySessionCommand command,
         CancellationToken ct)
     {
+        var validated = await ValidateWithAssuranceAsync(command, ct);
+        return validated.IsSuccess
+            ? OperationResultFactory.Success(validated.Value.User)
+            : OperationResultFactory.Fail<IdentityUser<TProfile>>(validated.Errors);
+    }
+
+    public async Task<OperationResult<IdentityValidatedSession<TProfile>>> ValidateWithAssuranceAsync(
+        ValidateIdentitySessionCommand command, CancellationToken ct)
+    {
         using var op = metrics.Begin("session.validate");
 
         if (command.UserId == Guid.Empty || command.SessionId == Guid.Empty)
         {
-            return Fail<IdentityUser<TProfile>>(
+            return Fail<IdentityValidatedSession<TProfile>>(
                 op,
                 IdentitySessionErrors.SessionInvalid());
         }
@@ -100,7 +116,7 @@ public sealed class IdentitySessionRegistry<TProfile>(
             || session.RevokedAt is not null
             || session.ExpiresAt <= now)
         {
-            return Fail<IdentityUser<TProfile>>(
+            return Fail<IdentityValidatedSession<TProfile>>(
                 op,
                 IdentitySessionErrors.SessionInvalid());
         }
@@ -113,13 +129,19 @@ public sealed class IdentitySessionRegistry<TProfile>(
                 session.SessionId,
                 now,
                 ct);
-            return Fail<IdentityUser<TProfile>>(
+            return Fail<IdentityValidatedSession<TProfile>>(
                 op,
                 IdentitySessionErrors.SessionInvalid());
         }
 
+        var assurance = IdentitySessionAdmission.Known(session.Assurance);
+        var admission = await IdentitySessionAdmission.CheckAsync(admissionPolicies,
+            new IdentitySessionAdmissionContext<TProfile>(user, assurance,
+                IdentitySessionAdmissionOperation.Validate, session.SessionId, session.Metadata), ct);
+        if (!admission.IsSuccess) return Fail<IdentityValidatedSession<TProfile>>(op, admission.Errors);
+
         op.Success();
-        return OperationResultFactory.Success(user);
+        return OperationResultFactory.Success(new IdentityValidatedSession<TProfile>(user, assurance));
     }
 
     public async Task<OperationResult> RevokeByIdAsync(

@@ -21,6 +21,7 @@ public static class IdentitySecurityEventTypes
         "identity.external_login.linked";
     public const string ExternalLoginUnlinked =
         "identity.external_login.unlinked";
+    public const string TotpReset = "identity.totp.reset";
     public const string PasswordSet = "identity.password.set";
     public const string PasswordChanged = "identity.password.changed";
     public const string PasswordRemoved = "identity.password.removed";

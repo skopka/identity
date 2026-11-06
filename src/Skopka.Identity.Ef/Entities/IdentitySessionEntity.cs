@@ -7,6 +7,7 @@ public sealed class IdentitySessionEntity
     public string SecurityStamp { get; set; } = null!;
     public string? ClientName { get; set; }
     public string? DeviceName { get; set; }
+    public int Assurance { get; set; }
     public long Version { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

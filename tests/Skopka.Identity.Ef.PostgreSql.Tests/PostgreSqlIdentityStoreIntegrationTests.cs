@@ -131,6 +131,39 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
 
     [Fact]
     [Trait("Category", "Integration")]
+    public async Task PhoneBindingPreservesProofOnConflictAndConsumesOnSuccess()
+    {
+        await using var scope = serviceProvider.CreateAsyncScope();
+        var users = scope.ServiceProvider.GetRequiredService<IIdentityUserService<TestProfile>>();
+        var owner = await users.CreateAsync(new CreateUserCommand<TestProfile>(
+            "owner", null, "+79991234567", new TestProfile("Owner", [])), CancellationToken.None);
+        var other = await users.CreateAsync(new CreateUserCommand<TestProfile>(
+            "other", null, null, new TestProfile("Other", [])), CancellationToken.None);
+        Assert.True(owner.IsSuccess);
+        Assert.True(other.IsSuccess);
+        var otp = scope.ServiceProvider.GetRequiredService<IIdentityPhoneOtpService<TestProfile>>();
+        var issued = await otp.BeginAsync(new BeginPhoneOtpCommand("+79991234567"), CancellationToken.None);
+        Assert.True(issued.IsSuccess);
+        var proof = await otp.VerifyForBindingAsync(new VerifyPhoneOtpCommand(
+            issued.Value.ChallengeId, issued.Value.DeliveryCode), CancellationToken.None);
+        Assert.True(proof.IsSuccess);
+        var command = new BindVerifiedPhoneCommand(other.Value.Id, other.Value.Version,
+            issued.Value.Phone, proof.Value);
+        var conflict = await otp.BindVerifiedPhoneAsync(command, CancellationToken.None);
+        Assert.False(conflict.IsSuccess);
+        Assert.Contains(conflict.Errors, error => error.Code is IdentityErrorCodes.DuplicatePhone
+            or IdentityErrorCodes.DuplicateLoginIdentifier);
+        var bound = await otp.BindVerifiedPhoneAsync(command with
+            { UserId = owner.Value.Id, ExpectedVersion = owner.Value.Version }, CancellationToken.None);
+        Assert.True(bound.IsSuccess);
+        Assert.True(bound.Value.PhoneConfirmed);
+        var replay = await otp.BindVerifiedPhoneAsync(command, CancellationToken.None);
+        Assert.False(replay.IsSuccess);
+        Assert.Contains(replay.Errors, error => error.Code == IdentityErrorCodes.VerificationProofInvalid);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
     public async Task MigrationsAndStoreContractsRunAgainstPostgreSql()
     {
         await AssertAllMigrationsAppliedAsync();

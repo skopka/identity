@@ -42,6 +42,7 @@ public static class IdentityErrorCodes
     public const string VerificationChallengeInvalid = "identity.verification.challenge_invalid";
     public const string VerificationResponseInvalid = "identity.verification.response_invalid";
     public const string VerificationAttemptsExceeded = "identity.verification.attempts_exceeded";
+    public const string PhoneBindingUnavailable = "identity.phone_binding.unavailable";
     public const string VerificationProofInvalid = "identity.verification.proof_invalid";
     public const string VerificationMethodUnavailable = "identity.verification.method_unavailable";
 

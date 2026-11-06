@@ -110,3 +110,12 @@ Call `IIdentityDeviceAuthorizationService<TProfile>.PruneAsync` periodically.
 It removes at most `CleanupBatchSize` rows whose expiry is older than
 `RetentionAfterExpiration`; repeat while a full batch is returned when a
 large backlog is possible.
+
+## Session admission
+
+Device approval does not itself assert TOTP assurance to Identity. The generic device
+authorization service creates its session with `IdentitySessionAssurance.None`, regardless
+of the host's approval method. An admission policy requiring stronger assurance rejects
+consumption before a session is issued and the consume claim is released. Hosts must
+provide a separately verified completion flow before admitting such a session; do not
+assert factor verification merely because a device-approval option is enabled.

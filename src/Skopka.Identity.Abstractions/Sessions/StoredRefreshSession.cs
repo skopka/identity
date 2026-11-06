@@ -13,4 +13,8 @@ public sealed record StoredRefreshSession(
     DateTimeOffset? RotatedAt,
     DateTimeOffset? RevokedAt,
     Guid? ReplacedByTokenId,
-    IdentitySessionMetadata? Metadata = null);
+    IdentitySessionMetadata? Metadata = null)
+{
+    /// <summary>Assurance of the parent logical session, or none for legacy stores.</summary>
+    public IdentitySessionAssurance Assurance { get; init; }
+}

@@ -36,6 +36,26 @@ public sealed class EfIdentityRefreshSessionStoreTests
     }
 
     [Fact]
+    public async Task AssuranceIsStoredOnLogicalSessionAndSurvivesRotation()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var first = database.NewSession(Guid.NewGuid(), Guid.NewGuid(), database.Now.AddDays(2),
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA") with
+        {
+            Assurance = IdentitySessionAssurance.TotpVerified,
+        };
+        Assert.True((await database.Store.CreateAsync(first, database.Now, CancellationToken.None)).IsSuccess);
+        var current = await database.FindAsync(first.TokenId);
+        var replacement = database.NewSession(Guid.NewGuid(), first.SessionId, first.ExpiresAt,
+            "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
+        Assert.True((await database.Store.RotateAsync(current.TokenId, current.Version, current.TokenHash,
+            replacement, database.Now.AddMinutes(1), CancellationToken.None)).IsSuccess);
+        var stored = await database.Store.FindByIdAsync(first.SessionId, first.UserId, CancellationToken.None);
+        Assert.NotNull(stored);
+        Assert.Equal(IdentitySessionAssurance.TotpVerified, stored.Assurance);
+    }
+
+    [Fact]
     public async Task RotateConsumesCurrentTokenAndCreatesReplacement()
     {
         await using var database = await TestDatabase.CreateAsync();

@@ -13,7 +13,7 @@ with `Microsoft.AspNetCore.Identity`.
 > The API is pre-1.0 and currently targets .NET 10. Validate the library against your
 > threat model and deployment requirements before using it in production.
 
-Phone OTP validates input through `IIdentityPhoneNumberPolicy`, using the configured `IIdentityNormalizer` and `PhoneOtpOptions.AllowedCountryCodes`. The default allowlist is empty. Hosts can configure, for example, `identity.ConfigurePhoneOtp(options => options.AllowedCountryCodes = ["+7"])`. The policy reports invalid format and disallowed country with distinct structured error codes. Only a confirmed phone can sign in an existing account; an unconfirmed number is not linked by OTP.
+Phone OTP validates input through `IIdentityPhoneNumberPolicy`, using the configured `IIdentityNormalizer` and `PhoneOtpOptions.AllowedCountryCodes`. The default allowlist is empty. Hosts can configure, for example, `identity.ConfigurePhoneOtp(options => options.AllowedCountryCodes = ["+7"])`. The policy reports invalid format and disallowed country with distinct structured error codes. Only a confirmed phone can sign in an existing account; an unconfirmed number is not linked by OTP. Trusted applications can use `VerifyForBindingAsync` and `BindVerifiedPhoneAsync` to bind a verified number to an existing user; the binding consumes the proof atomically and requires the expected user version.
 
 ## Documentation
 
@@ -217,6 +217,23 @@ var issued = await sessions.CreateAsync(
     cancellationToken);
 ```
 
+
+Logical sessions carry an immutable `IdentitySessionAssurance` value. It defaults to
+`None`, including existing rows after the PostgreSQL or SQLite migration and custom
+stores that have not adopted the property. Only trusted server code may set
+`TotpVerified`, after verifying a TOTP factor or its recovery code; never bind it from
+an HTTP request. Refresh rotation preserves the logical session's assurance.
+`IIdentitySessionRegistry<TProfile>.ValidateWithAssuranceAsync` returns it alongside the
+online-validated user; older registry implementations safely report `None`.
+
+A host may register `IIdentitySessionAdmissionPolicy<TProfile>` implementations to
+evaluate the current user, assurance and operation before session creation, registry
+registration, refresh rotation or online validation. Every policy must succeed; no
+registered policies preserves the existing behavior. Custom refresh stores must return
+the parent session's assurance in `StoredRefreshSession` for policy checks, and custom
+registry implementations must implement assurance-aware validation themselves.
+Stateless access-token validation does not invoke these online checks.
+
 The host decides how to return the access token and protect the refresh token. For a
 browser, prefer a `Secure`, `HttpOnly`, `SameSite` cookie and add CSRF protection to
 state-changing endpoints.
@@ -371,6 +388,17 @@ store. Enrollment becomes active only after a correct code; that code is
 immediately burned for replay protection. Confirmation also returns one-use
 recovery codes whose stored values are hashes. Persist the Data Protection key ring
 before enabling this module, and apply the packaged TOTP-factor migrations.
+
+Trusted administration can reset an enabled authenticator with
+`IIdentityTotpService<TProfile>.ResetAsync`, supplying the user version and the
+`EnrollmentId` from the enabled factor status. Authorize the action and require
+appropriate step-up before calling it. Reset atomically removes the exact factor
+and its recovery codes, increments the user version, and rotates the security
+stamp, invalidating existing online sessions and verification proofs. A new
+factor requires enrollment. Pending enrollment creation and confirmation also
+increment the user version and use it as a concurrency guard. Custom
+`ITotpFactorStore<TProfile>` implementations must implement the guarded
+creation, enablement and reset overloads; their defaults fail closed.
 
 `UseWebAuthn()` adds the WebAuthn credential lifecycle and ceremony verifier,
 and the EF provider adds the credential store. The relying party id and allowed

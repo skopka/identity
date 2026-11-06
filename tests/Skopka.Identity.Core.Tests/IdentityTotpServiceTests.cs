@@ -1,5 +1,6 @@
 using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Metrics;
+using Skopka.Identity.Security;
 using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Totp;
 using Skopka.Identity.Users;
@@ -25,7 +26,9 @@ public sealed class IdentityTotpServiceTests
             new TotpOptions { RecoveryCodeCount = 4 },
             new IdentityRateLimitOptions(),
             [],
-            new NoopIdentityMetrics());
+            new NoopIdentityMetrics(),
+            new DefaultUserOperationPolicy(),
+            new DefaultSecurityStampGenerator());
 
         var begun = await service.BeginEnrollmentAsync(
             new BeginTotpEnrollmentCommand(user.Id, "client-a"),
@@ -111,7 +114,9 @@ public sealed class IdentityTotpServiceTests
             new TotpOptions(),
             new IdentityRateLimitOptions(),
             [limiter],
-            new NoopIdentityMetrics());
+            new NoopIdentityMetrics(),
+            new DefaultUserOperationPolicy(),
+            new DefaultSecurityStampGenerator());
 
         var begun = await service.BeginEnrollmentAsync(
             new BeginTotpEnrollmentCommand(user.Id, "client-a"),
@@ -213,8 +218,17 @@ public sealed class IdentityTotpServiceTests
             => Task.FromResult(
                 Factor?.UserId == userId ? Factor : null);
 
+        public Task<OperationResult> CreateOrReplacePendingAsync(NewTotpEnrollment enrollment, DateTimeOffset now, CancellationToken ct)
+            => CreateOrReplacePendingAsync(enrollment, 1, now, ct);
+
+        public Task<OperationResult<StoredTotpFactor>> EnableAsync(Guid userId, Guid enrollmentId,
+            long expectedVersion, long initialAcceptedCounter, IReadOnlyCollection<string> recoveryCodeHashes,
+            DateTimeOffset now, CancellationToken ct)
+            => EnableAsync(userId, enrollmentId, expectedVersion, 1, initialAcceptedCounter, recoveryCodeHashes, now, ct);
+
         public Task<OperationResult> CreateOrReplacePendingAsync(
             NewTotpEnrollment enrollment,
+            long expectedUserVersion,
             DateTimeOffset now,
             CancellationToken ct)
         {
@@ -238,6 +252,7 @@ public sealed class IdentityTotpServiceTests
             Guid userId,
             Guid enrollmentId,
             long expectedVersion,
+            long expectedUserVersion,
             long initialAcceptedCounter,
             IReadOnlyCollection<string> recoveryCodeHashes,
             DateTimeOffset now,
@@ -269,6 +284,17 @@ public sealed class IdentityTotpServiceTests
             };
             return Task.FromResult(
                 OperationResultFactory.Success(Factor));
+        }
+
+        public Task<OperationResult> ResetAsync(Guid userId, long expectedUserVersion,
+            Guid enrollmentId, long expectedFactorVersion, string newSecurityStamp,
+            DateTimeOffset now, CancellationToken ct)
+        {
+            if (Factor?.EnrollmentId != enrollmentId || Factor.Version != expectedFactorVersion)
+                return Task.FromResult(OperationResultFactory.Fail(new Error("test.concurrency", "Conflict", ErrorType.Conflict)));
+            Factor = null;
+            RecoveryHashes.Clear();
+            return Task.FromResult(OperationResultFactory.Success());
         }
 
         public Task<OperationResult> DisableAsync(

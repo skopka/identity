@@ -206,6 +206,11 @@ public sealed class PostgreSqlIdentityRegistrationTests
             name => name.EndsWith(
                 "_AddAnonymousPhoneVerification",
                 StringComparison.Ordinal));
+        Assert.Contains(
+            providerContext.Database.GetMigrations(),
+            name => name.EndsWith(
+                "_AddSessionAssurance",
+                StringComparison.Ordinal));
         Assert.False(providerContext.Database.HasPendingModelChanges());
 
         var phoneOtpScript = providerContext.GetService<IMigrator>()

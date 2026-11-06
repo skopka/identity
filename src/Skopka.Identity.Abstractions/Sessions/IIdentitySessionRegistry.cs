@@ -13,6 +13,16 @@ public interface IIdentitySessionRegistry<TProfile>
         ValidateIdentitySessionCommand command,
         CancellationToken ct);
 
+    /// <summary>Validates a logical session and returns its trusted assurance. Legacy implementations report none.</summary>
+    async Task<OperationResult<IdentityValidatedSession<TProfile>>> ValidateWithAssuranceAsync(
+        ValidateIdentitySessionCommand command, CancellationToken ct)
+    {
+        var result = await ValidateAsync(command, ct);
+        return result.IsSuccess
+            ? OperationResultFactory.Success(new IdentityValidatedSession<TProfile>(result.Value, IdentitySessionAssurance.None))
+            : OperationResultFactory.Fail<IdentityValidatedSession<TProfile>>(result.Errors);
+    }
+
     Task<OperationResult> RevokeByIdAsync(
         RevokeIdentitySessionByIdCommand command,
         CancellationToken ct);

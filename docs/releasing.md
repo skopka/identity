@@ -5,9 +5,11 @@ Releases are published from Git tags by `.github/workflows/release.yml`.
 ## Repository Setup
 
 Create a protected GitHub Actions environment named `release`, restrict it to
-version tags and require a reviewer. Create a NuGet.org API key that can publish
-all seven `Skopka.Identity` package IDs and store it as the environment secret
-named `NUGET_API_KEY`.
+version tags and require a reviewer. Configure NuGet.org Trusted Publishing for
+the `Skopka` account with repository owner `skopka`, repository `identity`,
+workflow `release.yml`, environment `release` and package pattern
+`Skopka.Identity*`. The release job exchanges its GitHub OIDC token for a
+short-lived NuGet API key; no long-lived `NUGET_API_KEY` secret is needed.
 
 The release workflow publishes:
 
@@ -52,8 +54,8 @@ Start from a verified commit on `main`, then create and push an annotated versio
 ```shell
 git switch main
 git pull --ff-only
-git tag -a v0.15.0 -m "Skopka.Identity 0.15.0"
-git push origin v0.15.0
+git tag -a v0.17.0 -m "Skopka.Identity 0.17.0"
+git push origin v0.17.0
 ```
 
 The workflow removes the leading `v` and uses the remainder as the assembly and

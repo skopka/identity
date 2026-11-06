@@ -93,7 +93,7 @@ public sealed class EfIdentitySessionStore<TProfile>(
                 session.UserId,
                 session.SecurityStamp,
                 session.ExpiresAt,
-                session.Metadata),
+                session.Metadata) { Assurance = session.Assurance },
             now);
         parent.RefreshTokens.Add(CreateEntity(session, now));
         dbContext.Sessions.Add(parent);
@@ -318,6 +318,7 @@ public sealed class EfIdentitySessionStore<TProfile>(
             SecurityStamp = session.SecurityStamp,
             ClientName = session.Metadata?.ClientName,
             DeviceName = session.Metadata?.DeviceName,
+            Assurance = (int)session.Assurance,
             Version = 1,
             ExpiresAt = session.ExpiresAt,
             CreatedAt = now,
@@ -349,7 +350,7 @@ public sealed class EfIdentitySessionStore<TProfile>(
             session.RevokedAt,
             new IdentitySessionMetadata(
                 session.ClientName,
-                session.DeviceName));
+                session.DeviceName)) { Assurance = (IdentitySessionAssurance)session.Assurance };
 
     private static StoredRefreshSession Map(RefreshSessionEntity token)
         => new(
@@ -367,7 +368,7 @@ public sealed class EfIdentitySessionStore<TProfile>(
             token.ReplacedByTokenId,
             new IdentitySessionMetadata(
                 token.Session.ClientName,
-                token.Session.DeviceName));
+                token.Session.DeviceName)) { Assurance = (IdentitySessionAssurance)token.Session.Assurance };
 
     private static void ValidateReplacement(
         RefreshSessionEntity current,

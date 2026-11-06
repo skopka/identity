@@ -125,6 +125,35 @@ public sealed class IdentityUserLookupServiceTests
         Assert.Null(store.NormalizedPhone);
     }
 
+    [Fact]
+    public async Task LookupByIdReturnsOnlyNonDeletedUsersAndFailsClosedWithoutStore()
+    {
+        var user = CreateUser();
+        var lookup = new FakeLookupStore(null);
+        var normalizer = new DefaultIdentityNormalizer();
+        var metrics = new NoopIdentityMetrics();
+        var absent = new IdentityUserLookupService<TestProfile>(lookup, normalizer, metrics);
+        Assert.False((await absent.FindActiveByIdAsync(user.Id, CancellationToken.None)).IsSuccess);
+        var active = new IdentityUserLookupService<TestProfile>(lookup, normalizer, metrics, new FakeUserStore(user));
+        Assert.Equal(user, (await active.FindActiveByIdAsync(user.Id, CancellationToken.None)).Value);
+        var deleted = new IdentityUserLookupService<TestProfile>(lookup, normalizer, metrics,
+            new FakeUserStore(user with { DeletedAt = DateTimeOffset.UtcNow }));
+        var result = await deleted.FindActiveByIdAsync(user.Id, CancellationToken.None);
+        Assert.False(result.IsSuccess);
+        Assert.Contains(result.Errors, error => error.Code == IdentityErrorCodes.UserNotFound);
+    }
+
+    private sealed class FakeUserStore(IdentityUser<TestProfile>? user) : IIdentityUserStore<TestProfile>
+    {
+        public Task<IdentityUser<TestProfile>?> FindByIdAsync(Guid id, CancellationToken ct)
+            => Task.FromResult(user?.Id == id ? user : null);
+        public Task<OperationResult<IdentityUser<TestProfile>>> CreateAsync(NewIdentityUser<TestProfile> user, Skopka.Identity.Users.Handles.NormalizedHandles handles, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
+        public Task<OperationResult<IdentityUser<TestProfile>>> UpdateHandlesAsync(Guid id, long version, Skopka.Identity.Users.Handles.UpdatedHandles handles, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
+        public Task<OperationResult<IdentityUser<TestProfile>>> UpdateProfileAsync(Guid id, long version, TestProfile profile, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
+        public Task<OperationResult<IdentityUser<TestProfile>>> UpdateSecurityStampAsync(Guid id, long version, string stamp, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
+        public Task<OperationResult> UpdateStateAsync(Guid id, long version, DateTimeOffset? deleted, DateTimeOffset? blocked, DateTimeOffset? until, string? stamp, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
+    }
+
     private static IdentityUser<TestProfile> CreateUser()
         => new(
             Guid.NewGuid(),

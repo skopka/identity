@@ -35,6 +35,69 @@ public sealed class EfIdentityRegistrationStore<TProfile>
         this.exceptionMappers = exceptionMappers.ToArray();
     }
 
+    public Task<OperationResult<IdentityUser<TProfile>>> BindVerifiedPhoneAsync(
+        Guid userId, long expectedVersion, UpdatedHandles handles,
+        Guid challengeId, long challengeVersion, string proofHash,
+        DateTimeOffset now, CancellationToken ct)
+    {
+        // In-memory providers neither enforce unique indexes nor offer a transaction.
+        if (!dbContext.Database.IsRelational())
+            return Task.FromResult(OperationResultFactory.Fail<IdentityUser<TProfile>>(new Error(
+                IdentityErrorCodes.PhoneBindingUnavailable,
+                "Phone binding requires transactional relational storage.", ErrorType.Forbidden)));
+
+        // Retrying execution strategies cannot start around a caller-owned transaction.
+        return dbContext.Database.CurrentTransaction is not null
+            ? BindCoreAsync()
+            : dbContext.Database.CreateExecutionStrategy().ExecuteAsync(BindCoreAsync);
+
+        async Task<OperationResult<IdentityUser<TProfile>>> BindCoreAsync()
+        {
+            await using var transaction = dbContext.Database.CurrentTransaction is null
+                ? await dbContext.Database.BeginTransactionAsync(ct) : null;
+            var challenge = await dbContext.VerificationChallenges.SingleOrDefaultAsync(
+                entry => entry.Id == challengeId, ct);
+            var succeeded = false;
+            try
+            {
+                now = DateTimeOffset.UtcNow;
+                if (challenge is null || challenge.UserId is not null
+                    || challenge.Purpose != VerificationPurposes.PhoneSignIn
+                    || challenge.Binding != handles.Phone
+                    || challenge.State != VerificationChallengeState.Verified
+                    || challenge.ProofExpiresAt is null || challenge.ProofExpiresAt <= now
+                    || challenge.ProofHash != proofHash || challenge.Version != challengeVersion)
+                    return OperationResultFactory.Fail<IdentityUser<TProfile>>(new Error(
+                        IdentityErrorCodes.VerificationProofInvalid,
+                        "Verification proof is invalid or expired.", ErrorType.Unauthorized));
+
+                challenge.State = VerificationChallengeState.Consumed;
+                challenge.ConsumedAt = now;
+                challenge.ModifiedAt = now;
+                challenge.Version = checked(challenge.Version + 1);
+                var userStore = new EfIdentityUserStore<TProfile>(dbContext, exceptionMappers);
+                var result = await userStore.UpdateHandlesAsync(userId, expectedVersion, handles, now, ct);
+                if (!result.IsSuccess)
+                {
+                    if (result.Errors.Any(error => error.Code is IdentityErrorCodes.DuplicatePhone
+                        or IdentityErrorCodes.DuplicateLoginIdentifier))
+                        return OperationResultFactory.Fail<IdentityUser<TProfile>>(new Error(
+                            IdentityErrorCodes.DuplicatePhone, "Phone is already in use.",
+                            ErrorType.Conflict, new DuplicateDetails("phone", null)));
+                    return result;
+                }
+                if (transaction is not null) await transaction.CommitAsync(ct);
+                succeeded = true;
+                return result;
+            }
+            finally
+            {
+                if (!succeeded && challenge is not null)
+                    dbContext.Entry(challenge).State = EntityState.Detached;
+            }
+        }
+    }
+
     public Task<OperationResult<IdentityUser<TProfile>>> CreateWithPasswordAsync(
         NewIdentityUser<TProfile> user,
         NormalizedHandles handles,

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.17.0
+
+- Added immutable logical-session assurance and host admission policies for issuance, refresh and online validation. Existing sessions and unmodified stores default to no assurance.
+
+- Added atomic, version-checked verified phone binding for existing users through phone OTP proof verification and binding.
+- Added trusted administrative TOTP reset bound to the user version and exact enrollment, removing recovery codes and rotating the security stamp. TOTP enrollment writes now advance the user version; custom factor stores must implement the guarded overloads.
+
 ## 0.16.0
 
 - Added a shared phone-number policy with distinct invalid-format and disallowed-country errors. It respects the configured Identity normalizer and PhoneOtpOptions country allowlist.

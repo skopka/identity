@@ -99,6 +99,21 @@ public sealed class EfIdentityRegistrationStoreTests
         Assert.Single(database.Context.ExternalLogins);
     }
 
+    [Fact]
+    public async Task VerifiedPhoneBindingFailsClosedWithoutRelationalTransactions()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var result = await database.Store.BindVerifiedPhoneAsync(
+            Guid.NewGuid(), 1,
+            new UpdatedHandles(null, null, null, null, false,
+                "+79991234567", "+79991234567", true),
+            Guid.NewGuid(), 1, "proof", DateTimeOffset.UtcNow, CancellationToken.None);
+        Assert.False(result.IsSuccess);
+        Assert.Contains(result.Errors, error => error.Code == IdentityErrorCodes.PhoneBindingUnavailable);
+        Assert.DoesNotContain(database.Context.ChangeTracker.Entries(), entry =>
+            entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted);
+    }
+
     private static readonly DateTimeOffset Now = new(
         2026,
         7,

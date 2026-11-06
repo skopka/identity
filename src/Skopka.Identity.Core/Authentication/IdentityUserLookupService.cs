@@ -7,9 +7,20 @@ namespace Skopka.Identity.Authentication;
 public sealed class IdentityUserLookupService<TProfile>(
     IIdentityUserLookupStore<TProfile> store,
     IIdentityNormalizer normalizer,
-    IIdentityMetrics metrics)
+    IIdentityMetrics metrics,
+    IIdentityUserStore<TProfile>? userStore = null)
     : IIdentityUserLookupService<TProfile>
 {
+    public async Task<OperationResult<IdentityUser<TProfile>>> FindActiveByIdAsync(
+        Guid userId, CancellationToken ct)
+    {
+        using var op = metrics.Begin("user.lookup.id");
+        var user = userStore is null ? null : await userStore.FindByIdAsync(userId, ct);
+        if (user is null || user.DeletedAt is not null) return Fail(op, IdentityErrors.NotFound());
+        op.Success();
+        return OperationResultFactory.Success(user);
+    }
+
     public async Task<OperationResult<IdentityUser<TProfile>>>
         FindActiveByEmailAsync(
             string email,

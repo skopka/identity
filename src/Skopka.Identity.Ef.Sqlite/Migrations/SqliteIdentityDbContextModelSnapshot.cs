@@ -15,7 +15,7 @@ namespace Skopka.Identity.Ef.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.AuthUserEntity", b =>
                 {
@@ -223,6 +223,12 @@ namespace Skopka.Identity.Ef.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
                         .HasColumnName("session_id");
+
+                    b.Property<int>("Assurance")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("assurance");
 
                     b.Property<string>("ClientName")
                         .HasMaxLength(128)

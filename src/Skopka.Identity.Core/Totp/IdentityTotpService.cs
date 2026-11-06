@@ -2,6 +2,8 @@ using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Errors;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.RateLimiting;
+using Skopka.Identity.Security;
+using Skopka.Identity.SecurityEvents;
 using Skopka.Identity.Users;
 
 namespace Skopka.Identity.Totp;
@@ -14,9 +16,20 @@ public sealed class IdentityTotpService<TProfile>(
     TotpOptions options,
     IdentityRateLimitOptions rateLimitOptions,
     IEnumerable<IIdentityRateLimiter<TProfile>> rateLimiters,
-    IIdentityMetrics metrics)
+    IIdentityMetrics metrics,
+    IUserOperationPolicy? policy = null,
+    ISecurityStampGenerator? stampGenerator = null,
+    IIdentitySecurityEventObserver? securityEvents = null)
     : IIdentityTotpService<TProfile>
 {
+    public IdentityTotpService(ITotpFactorStore<TProfile> factorStore,
+        IIdentityUserStore<TProfile> userStore, ITotpCodeProvider codeProvider,
+        ITotpSecretProtector secretProtector, TotpOptions options,
+        IdentityRateLimitOptions rateLimitOptions, IEnumerable<IIdentityRateLimiter<TProfile>> rateLimiters,
+        IIdentityMetrics metrics)
+        : this(factorStore, userStore, codeProvider, secretProtector, options, rateLimitOptions,
+            rateLimiters, metrics, new DefaultUserOperationPolicy(), new DefaultSecurityStampGenerator()) { }
+
     private readonly IIdentityRateLimiter<TProfile>? rateLimiter =
         rateLimiters.FirstOrDefault();
 
@@ -95,6 +108,7 @@ public sealed class IdentityTotpService<TProfile>(
             now.Add(options.EnrollmentLifetime));
         var stored = await factorStore.CreateOrReplacePendingAsync(
             enrollment,
+            user!.Version,
             now,
             ct);
         if (!stored.IsSuccess)
@@ -191,6 +205,7 @@ public sealed class IdentityTotpService<TProfile>(
             factor.UserId,
             factor.EnrollmentId,
             factor.Version,
+            user!.Version,
             acceptedCounter,
             recoveryHashes,
             now,
@@ -205,6 +220,27 @@ public sealed class IdentityTotpService<TProfile>(
             new ConfirmedTotpEnrollment(
                 ToStatus(command.UserId, enabled.Value),
                 recoveryCodes));
+    }
+
+    public async Task<OperationResult> ResetAsync(ResetTotpCommand command, CancellationToken ct)
+    {
+        using var op = metrics.Begin("totp.reset");
+        ArgumentNullException.ThrowIfNull(command);
+        if (command.UserId == Guid.Empty || command.ExpectedEnrollmentId == Guid.Empty)
+            return Fail(op, Validation("userId", "UserId and enrollment id are required."));
+        var user = await userStore.FindByIdAsync(command.UserId, ct);
+        if (user is null) return Fail(op, IdentityErrors.NotFound());
+        if (!(policy ?? new DefaultUserOperationPolicy()).CanMutate(user.Flags)) return Fail(op, IdentityErrors.Forbidden(user.Flags));
+        if (user.DeletedAt is not null) return Fail(op, IdentityErrors.Deleted());
+        if (user.Version != command.ExpectedVersion) return Fail(op, IdentityErrors.Concurrency());
+        var factor = await factorStore.FindByUserIdAsync(command.UserId, ct);
+        if (factor?.State != TotpFactorState.Enabled) return Fail(op, TotpErrors.NotEnabled());
+        if (factor.EnrollmentId != command.ExpectedEnrollmentId) return Fail(op, IdentityErrors.Concurrency());
+        var now = DateTimeOffset.UtcNow;
+        var result = await factorStore.ResetAsync(command.UserId, command.ExpectedVersion,
+            factor.EnrollmentId, factor.Version, (stampGenerator ?? new DefaultSecurityStampGenerator()).Generate(), now, ct);
+        if (result.IsSuccess) securityEvents.Observe(IdentitySecurityEventTypes.TotpReset, now, command.UserId);
+        return Finish(op, result);
     }
 
     public async Task<OperationResult> DisableAsync(
@@ -308,7 +344,7 @@ public sealed class IdentityTotpService<TProfile>(
                 userId,
                 IsEnabled: true,
                 factor.RecoveryCodesRemaining,
-                factor.EnabledAt)
+                factor.EnabledAt) { EnrollmentId = factor.EnrollmentId }
             : new TotpFactorStatus(
                 userId,
                 IsEnabled: false,

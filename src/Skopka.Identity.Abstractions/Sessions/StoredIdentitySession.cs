@@ -9,4 +9,8 @@ public sealed record StoredIdentitySession(
     DateTimeOffset CreatedAt,
     DateTimeOffset LastRefreshedAt,
     DateTimeOffset? RevokedAt,
-    IdentitySessionMetadata? Metadata = null);
+    IdentitySessionMetadata? Metadata = null)
+{
+    /// <summary>Asserted only by trusted server code after verification, never from an untrusted request.</summary>
+    public IdentitySessionAssurance Assurance { get; init; }
+}

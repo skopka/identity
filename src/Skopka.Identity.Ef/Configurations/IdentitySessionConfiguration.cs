@@ -28,6 +28,9 @@ internal sealed class IdentitySessionConfiguration
         builder.Property(session => session.DeviceName)
             .HasColumnName("device_name")
             .HasMaxLength(SessionLimits.MaximumDeviceNameLength);
+        builder.Property(session => session.Assurance)
+            .HasColumnName("assurance")
+            .HasDefaultValue(0);
         builder.Property(session => session.Version)
             .HasColumnName("version")
             .IsConcurrencyToken();

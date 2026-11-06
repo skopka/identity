@@ -293,6 +293,24 @@ through `IIdentityUserService<TProfile>.ConfirmEmailAsync`. A successful passwor
 rotates the security stamp and invalidates sessions when the host uses online stamp
 validation.
 
+## Session assurance and admission
+
+Logical sessions carry an immutable `IdentitySessionAssurance` value. It defaults to
+`None`, including existing rows after the PostgreSQL or SQLite migration and custom
+stores that have not adopted the property. Only trusted server code may set
+`TotpVerified`, after verifying a TOTP factor or its recovery code; never bind it from
+an HTTP request. Refresh rotation preserves the logical session's assurance.
+`IIdentitySessionRegistry<TProfile>.ValidateWithAssuranceAsync` returns it alongside the
+online-validated user; older registry implementations safely report `None`.
+
+A host may register `IIdentitySessionAdmissionPolicy<TProfile>` implementations to
+evaluate the current user, assurance and operation before session creation, registry
+registration, refresh rotation or online validation. Every policy must succeed; no
+registered policies preserves the existing behavior. Custom refresh stores must return
+the parent session's assurance in `StoredRefreshSession` for policy checks, and custom
+registry implementations must implement assurance-aware validation themselves.
+Stateless access-token validation does not invoke these online checks.
+
 ## Account Sessions
 
 List active logical sessions for the authenticated user:

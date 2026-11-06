@@ -12,6 +12,50 @@ namespace Skopka.Identity.Core.Tests;
 public sealed class IdentitySessionServiceTests
 {
     [Fact]
+    public async Task AdmissionDenialStopsCreationAndRegistrationBeforePersistence()
+    {
+        var policy = new AdmissionPolicy { Denied = true };
+        var fixture = new Fixture(admissionPolicies: [policy]);
+        var created = await fixture.Service.CreateAsync(new CreateIdentitySessionCommand(
+            fixture.UserStore.User.Id, fixture.UserStore.User.SecurityStamp), CancellationToken.None);
+        var registered = await fixture.Registry.RegisterAsync(new RegisterIdentitySessionCommand(
+            fixture.UserStore.User.Id, fixture.UserStore.User.SecurityStamp), CancellationToken.None);
+        Assert.False(created.IsSuccess);
+        Assert.False(registered.IsSuccess);
+        Assert.Empty(fixture.SessionStore.Sessions);
+        Assert.Empty(fixture.SessionStore.LogicalSessions);
+        Assert.Null(fixture.AccessTokenProvider.LastGeneratedPayload);
+    }
+
+    [Fact]
+    public async Task AdmissionDenialPreventsRefreshRotationAndRegistryValidation()
+    {
+        var policy = new AdmissionPolicy();
+        var fixture = new Fixture(admissionPolicies: [policy]);
+        var session = await fixture.CreateAsync();
+        var registered = await fixture.Registry.RegisterAsync(new RegisterIdentitySessionCommand(
+            fixture.UserStore.User.Id, fixture.UserStore.User.SecurityStamp), CancellationToken.None);
+        Assert.True(registered.IsSuccess);
+        policy.Denied = true;
+        var refresh = await fixture.Service.RefreshAsync(new RefreshIdentitySessionCommand(session.RefreshToken), CancellationToken.None);
+        var validation = await fixture.Registry.ValidateAsync(new ValidateIdentitySessionCommand(
+            fixture.UserStore.User.Id, registered.Value.SessionId), CancellationToken.None);
+        Assert.False(refresh.IsSuccess);
+        Assert.False(validation.IsSuccess);
+        Assert.Null(fixture.SessionStore.Active.RotatedAt);
+        Assert.Single(fixture.SessionStore.Sessions);
+    }
+
+    private sealed class AdmissionPolicy : IIdentitySessionAdmissionPolicy<TestProfile>
+    {
+        public bool Denied { get; set; }
+        public Task<OperationResult> CheckAsync(IdentitySessionAdmissionContext<TestProfile> context, CancellationToken ct)
+            => Task.FromResult(Denied
+                ? OperationResultFactory.Fail(new Error("test.denied", "Denied", ErrorType.Unauthorized))
+                : OperationResultFactory.Success());
+    }
+
+    [Fact]
     public async Task RegistryCreatesSessionWithoutRefreshToken()
     {
         var fixture = new Fixture();
@@ -334,7 +378,8 @@ public sealed class IdentitySessionServiceTests
             TimeSpan? refreshSessionLifetime = null,
             IEnumerable<IIdentitySessionClaimsProvider<TestProfile>>?
                 additionalClaimsProviders = null,
-            IIdentitySecurityEventObserver? securityEvents = null)
+            IIdentitySecurityEventObserver? securityEvents = null,
+            IEnumerable<IIdentitySessionAdmissionPolicy<TestProfile>>? admissionPolicies = null)
         {
             UserStore = new FakeUserStore(CreateUser());
             SessionStore = new FakeSessionStore();
@@ -364,7 +409,7 @@ public sealed class IdentitySessionServiceTests
                         ?? TimeSpan.FromDays(10),
                 },
                 new NoopIdentityMetrics(),
-                securityEvents);
+                securityEvents, admissionPolicies);
             Registry = new IdentitySessionRegistry<TestProfile>(
                 UserStore,
                 SessionStore,
@@ -374,7 +419,7 @@ public sealed class IdentitySessionServiceTests
                         ?? TimeSpan.FromDays(10),
                 },
                 new NoopIdentityMetrics(),
-                securityEvents);
+                securityEvents, admissionPolicies);
         }
 
         public FakeUserStore UserStore { get; }

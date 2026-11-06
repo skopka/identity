@@ -78,7 +78,12 @@ public sealed class SqliteIdentityRegistrationTests
         Assert.Contains(
             scopedProvider.GetServices<IEfIdentityExceptionMapper>(),
             mapper => mapper is SqliteIdentityExceptionMapper);
-        Assert.Equal(6, providerContext.Database.GetMigrations().Count());
+        Assert.Equal(7, providerContext.Database.GetMigrations().Count());
+        Assert.Contains(
+            providerContext.Database.GetMigrations(),
+            migration => migration.EndsWith(
+                "_AddSessionAssurance",
+                StringComparison.Ordinal));
         Assert.Contains(
             providerContext.Database.GetMigrations(),
             migration => migration.EndsWith(

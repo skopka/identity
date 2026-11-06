@@ -7,4 +7,8 @@ public sealed record NewRefreshSession(
     string TokenHash,
     string SecurityStamp,
     DateTimeOffset ExpiresAt,
-    IdentitySessionMetadata? Metadata = null);
+    IdentitySessionMetadata? Metadata = null)
+{
+    /// <summary>Asserted only by trusted server code after verification, never from an untrusted request.</summary>
+    public IdentitySessionAssurance Assurance { get; init; }
+}
