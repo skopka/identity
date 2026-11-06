@@ -15,6 +15,10 @@ with `Microsoft.AspNetCore.Identity`.
 
 Phone OTP validates input through `IIdentityPhoneNumberPolicy`, using the configured `IIdentityNormalizer` and `PhoneOtpOptions.AllowedCountryCodes`. The default allowlist is empty. Hosts can configure, for example, `identity.ConfigurePhoneOtp(options => options.AllowedCountryCodes = ["+7"])`. The policy reports invalid format and disallowed country with distinct structured error codes. Only a confirmed phone can sign in an existing account; an unconfirmed number is not linked by OTP.
 
+## Documentation
+
+Documentation for version 0.16.0: [product overview](https://products.skopka.ru/en/identity/index.html) · [English guide](https://products.skopka.ru/guides/en/identity.html) · [Руководство на русском](https://products.skopka.ru/guides/ru/identity.html) · [API reference](https://products.skopka.ru/api/identity/index.html).
+
 ## Features
 
 - Generic application profile stored as PostgreSQL `jsonb` or SQLite JSON text.

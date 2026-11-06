@@ -7,7 +7,7 @@
         <Product>Skopka.Identity</Product>
         <Copyright>Copyright (c) Skopka contributors</Copyright>
         <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-        <PackageProjectUrl>https://github.com/skopka/identity</PackageProjectUrl>
+        <PackageProjectUrl>https://products.skopka.ru/identity/</PackageProjectUrl>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageTags>identity;authentication;authorization;aspnetcore;security</PackageTags>
         <RepositoryType>git</RepositoryType>
