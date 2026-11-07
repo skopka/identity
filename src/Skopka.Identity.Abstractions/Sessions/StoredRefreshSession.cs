@@ -17,4 +17,7 @@ public sealed record StoredRefreshSession(
 {
     /// <summary>Assurance of the parent logical session, or none for legacy stores.</summary>
     public IdentitySessionAssurance Assurance { get; init; }
+
+    /// <summary>Trusted security context, or null for legacy sessions.</summary>
+    public IdentitySessionContext? Context { get; init; }
 }

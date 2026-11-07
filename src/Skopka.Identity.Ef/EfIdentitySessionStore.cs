@@ -93,7 +93,7 @@ public sealed class EfIdentitySessionStore<TProfile>(
                 session.UserId,
                 session.SecurityStamp,
                 session.ExpiresAt,
-                session.Metadata) { Assurance = session.Assurance },
+                session.Metadata) { Assurance = session.Assurance, Context = session.Context },
             now);
         parent.RefreshTokens.Add(CreateEntity(session, now));
         dbContext.Sessions.Add(parent);
@@ -319,6 +319,8 @@ public sealed class EfIdentitySessionStore<TProfile>(
             ClientName = session.Metadata?.ClientName,
             DeviceName = session.Metadata?.DeviceName,
             Assurance = (int)session.Assurance,
+            Scope = session.Context?.Scope,
+            AuthenticationMethod = session.Context?.AuthenticationMethod,
             Version = 1,
             ExpiresAt = session.ExpiresAt,
             CreatedAt = now,
@@ -350,7 +352,7 @@ public sealed class EfIdentitySessionStore<TProfile>(
             session.RevokedAt,
             new IdentitySessionMetadata(
                 session.ClientName,
-                session.DeviceName)) { Assurance = (IdentitySessionAssurance)session.Assurance };
+                session.DeviceName)) { Assurance = (IdentitySessionAssurance)session.Assurance, Context = Context(session) };
 
     private static StoredRefreshSession Map(RefreshSessionEntity token)
         => new(
@@ -368,7 +370,11 @@ public sealed class EfIdentitySessionStore<TProfile>(
             token.ReplacedByTokenId,
             new IdentitySessionMetadata(
                 token.Session.ClientName,
-                token.Session.DeviceName)) { Assurance = (IdentitySessionAssurance)token.Session.Assurance };
+                token.Session.DeviceName)) { Assurance = (IdentitySessionAssurance)token.Session.Assurance, Context = Context(token.Session) };
+
+    private static IdentitySessionContext? Context(IdentitySessionEntity session)
+        => session.Scope is null || session.AuthenticationMethod is null ? null
+            : new IdentitySessionContext(session.Scope, session.AuthenticationMethod);
 
     private static void ValidateReplacement(
         RefreshSessionEntity current,

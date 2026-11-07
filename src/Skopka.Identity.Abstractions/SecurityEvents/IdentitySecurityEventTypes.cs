@@ -26,6 +26,8 @@ public static class IdentitySecurityEventTypes
     public const string PasswordChanged = "identity.password.changed";
     public const string PasswordRemoved = "identity.password.removed";
     public const string PasswordReset = "identity.password.reset";
+    /// <summary>A host-issued access link was consumed to replace credentials.</summary>
+    public const string AccessLinkUsed = "identity.access_link.used";
     public const string SessionCreated = "identity.session.created";
     public const string SessionRefreshed = "identity.session.refreshed";
     public const string SessionRevoked = "identity.session.revoked";

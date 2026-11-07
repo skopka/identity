@@ -15,7 +15,8 @@ public sealed class IdentitySessionRegistry<TProfile>(
     IdentitySessionOptions options,
     IIdentityMetrics metrics,
     IIdentitySecurityEventObserver? securityEvents = null,
-    IEnumerable<IIdentitySessionAdmissionPolicy<TProfile>>? admissionPolicies = null)
+    IEnumerable<IIdentitySessionAdmissionPolicy<TProfile>>? admissionPolicies = null,
+    IIdentitySessionLifetimePolicy<TProfile>? lifetimePolicy = null)
     : IIdentitySessionRegistry<TProfile>
 {
     public async Task<OperationResult<IdentitySessionInfo>> RegisterAsync(
@@ -25,7 +26,8 @@ public sealed class IdentitySessionRegistry<TProfile>(
         using var op = metrics.Begin("session.register");
         ValidateOptions();
 
-        if (command.UserId == Guid.Empty
+        if (!IdentitySessionAdmission.IsValid(command.Context)
+            || command.UserId == Guid.Empty
             || !Enum.IsDefined(command.Assurance)
             || string.IsNullOrWhiteSpace(command.SecurityStamp)
             || command.SecurityStamp.Length > SessionLimits.SecurityStampLength)
@@ -54,15 +56,20 @@ public sealed class IdentitySessionRegistry<TProfile>(
 
         var admission = await IdentitySessionAdmission.CheckAsync(admissionPolicies,
             new IdentitySessionAdmissionContext<TProfile>(user, command.Assurance,
-                IdentitySessionAdmissionOperation.Register, null, metadata.Value), ct);
+                IdentitySessionAdmissionOperation.Register, null, metadata.Value) { Context = command.Context }, ct);
         if (!admission.IsSuccess) return Fail<IdentitySessionInfo>(op, admission.Errors);
+
+        var lifetime = lifetimePolicy is null ? options.RefreshSessionLifetime
+            : await lifetimePolicy.GetLifetimeAsync(user, command.Context, options.RefreshSessionLifetime, ct);
+        if (lifetime <= TimeSpan.Zero || lifetime > TimeSpan.FromDays(36500))
+            return Fail<IdentitySessionInfo>(op, IdentitySessionErrors.SessionInvalid());
 
         var session = new NewIdentitySession(
             Guid.NewGuid(),
             user.Id,
             user.SecurityStamp,
-            now.Add(options.RefreshSessionLifetime),
-            metadata.Value) { Assurance = command.Assurance };
+            now.Add(lifetime),
+            metadata.Value) { Assurance = command.Assurance, Context = command.Context };
         var created = await sessionStore.CreateAsync(session, now, ct);
         if (!created.IsSuccess)
         {
@@ -113,6 +120,7 @@ public sealed class IdentitySessionRegistry<TProfile>(
             command.UserId,
             ct);
         if (session is null
+            || !IdentitySessionAdmission.IsValid(session.Context)
             || session.RevokedAt is not null
             || session.ExpiresAt <= now)
         {
@@ -137,11 +145,11 @@ public sealed class IdentitySessionRegistry<TProfile>(
         var assurance = IdentitySessionAdmission.Known(session.Assurance);
         var admission = await IdentitySessionAdmission.CheckAsync(admissionPolicies,
             new IdentitySessionAdmissionContext<TProfile>(user, assurance,
-                IdentitySessionAdmissionOperation.Validate, session.SessionId, session.Metadata), ct);
+                IdentitySessionAdmissionOperation.Validate, session.SessionId, session.Metadata) { Context = session.Context }, ct);
         if (!admission.IsSuccess) return Fail<IdentityValidatedSession<TProfile>>(op, admission.Errors);
 
         op.Success();
-        return OperationResultFactory.Success(new IdentityValidatedSession<TProfile>(user, assurance));
+        return OperationResultFactory.Success(new IdentityValidatedSession<TProfile>(user, assurance) { Context = session.Context });
     }
 
     public async Task<OperationResult> RevokeByIdAsync(

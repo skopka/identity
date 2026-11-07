@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Skopka.Identity.Authentication;
+using Skopka.Identity.AccessLinks;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.Ef.Entities;
 using Skopka.Identity.Errors;
@@ -27,6 +28,36 @@ namespace Skopka.Identity.Ef.PostgreSql.Tests;
 public sealed class PostgreSqlIdentityStoreIntegrationTests
     : IAsyncLifetime
 {
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task ConcurrentAccessLinkIssuanceLeavesOneActiveLink()
+    {
+        Guid userId;
+        long version;
+        await using (var scope = serviceProvider.CreateAsyncScope())
+        {
+            var user = await scope.ServiceProvider.GetRequiredService<IIdentityUserService<TestProfile>>()
+                .CreateAsync(new CreateUserCommand<TestProfile>("access-link-user", null, null, new TestProfile("test", [])), CancellationToken.None);
+            Assert.True(user.IsSuccess);
+            userId = user.Value.Id;
+            version = user.Value.Version;
+        }
+        var now = DateTimeOffset.UtcNow;
+        async Task<bool> IssueAsync()
+        {
+            await using var scope = serviceProvider.CreateAsyncScope();
+            var link = new StoredIdentityAccessLink(Guid.NewGuid(), userId, version + 1, "staff", new string('A', 64),
+                now.AddDays(7), 1, null, null, null, 0, false);
+            return (await scope.ServiceProvider.GetRequiredService<IIdentityAccessLinkStore<TestProfile>>()
+                .IssueAsync(link, version, false, "new-stamp", now, CancellationToken.None)).IsSuccess;
+        }
+        var results = await Task.WhenAll(IssueAsync(), IssueAsync());
+        Assert.Single(results, result => result);
+        await using var verify = serviceProvider.CreateAsyncScope();
+        var db = verify.ServiceProvider.GetRequiredService<IdentityDbContext<TestProfile>>();
+        Assert.Equal(1, await db.AccessLinks.CountAsync(x => x.UserId == userId && !x.Consumed));
+    }
+
     private readonly PostgreSqlContainer postgreSql =
         new PostgreSqlBuilder("postgres:17-alpine")
             .WithDatabase("skopka_identity")

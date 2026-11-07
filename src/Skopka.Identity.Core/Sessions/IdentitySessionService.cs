@@ -18,7 +18,8 @@ public sealed class IdentitySessionService<TProfile>(
     IdentitySessionOptions options,
     IIdentityMetrics metrics,
     IIdentitySecurityEventObserver? securityEvents = null,
-    IEnumerable<IIdentitySessionAdmissionPolicy<TProfile>>? admissionPolicies = null)
+    IEnumerable<IIdentitySessionAdmissionPolicy<TProfile>>? admissionPolicies = null,
+    IIdentitySessionLifetimePolicy<TProfile>? lifetimePolicy = null)
     : IIdentitySessionService<TProfile>
 {
     internal const int CurrentAccessTokenFormatVersion = 1;
@@ -30,7 +31,8 @@ public sealed class IdentitySessionService<TProfile>(
         using var op = metrics.Begin("session.create");
         ValidateOptions();
 
-        if (!Enum.IsDefined(command.Assurance)
+        if (!IdentitySessionAdmission.IsValid(command.Context)
+            || !Enum.IsDefined(command.Assurance)
             || string.IsNullOrWhiteSpace(command.SecurityStamp)
             || command.SecurityStamp.Length > SessionLimits.SecurityStampLength)
         {
@@ -60,13 +62,18 @@ public sealed class IdentitySessionService<TProfile>(
 
         var admission = await IdentitySessionAdmission.CheckAsync(admissionPolicies,
             new IdentitySessionAdmissionContext<TProfile>(user, command.Assurance,
-                IdentitySessionAdmissionOperation.Create, null, metadata.Value), ct);
+                IdentitySessionAdmissionOperation.Create, null, metadata.Value) { Context = command.Context }, ct);
         if (!admission.IsSuccess) return Fail<IssuedIdentitySession>(op, admission.Errors);
+
+        var lifetime = lifetimePolicy is null ? options.RefreshSessionLifetime
+            : await lifetimePolicy.GetLifetimeAsync(user, command.Context, options.RefreshSessionLifetime, ct);
+        if (lifetime <= TimeSpan.Zero || lifetime > TimeSpan.FromDays(36500))
+            return Fail<IssuedIdentitySession>(op, IdentitySessionErrors.SessionInvalid());
 
         var sessionId = Guid.NewGuid();
         var refreshTokenId = Guid.NewGuid();
         var refreshToken = refreshTokenProvider.Generate(refreshTokenId);
-        var refreshExpiresAt = now.Add(options.RefreshSessionLifetime);
+        var refreshExpiresAt = now.Add(lifetime);
         var issued = await IssueTokensAsync(
             user,
             sessionId,
@@ -82,7 +89,7 @@ public sealed class IdentitySessionService<TProfile>(
                 refreshToken.TokenHash,
                 user.SecurityStamp,
                 refreshExpiresAt,
-                metadata.Value) { Assurance = command.Assurance },
+                metadata.Value) { Assurance = command.Assurance, Context = command.Context },
             now,
             ct);
 
@@ -140,7 +147,8 @@ public sealed class IdentitySessionService<TProfile>(
                 IdentitySessionErrors.RefreshTokenReuseDetected());
         }
 
-        if (current.RevokedAt is not null || current.ExpiresAt <= now)
+        if (current.RevokedAt is not null || current.ExpiresAt <= now
+            || !IdentitySessionAdmission.IsValid(current.Context))
         {
             return Fail<IssuedIdentitySession>(
                 op,
@@ -164,7 +172,7 @@ public sealed class IdentitySessionService<TProfile>(
 
         var admission = await IdentitySessionAdmission.CheckAsync(admissionPolicies,
             new IdentitySessionAdmissionContext<TProfile>(user, IdentitySessionAdmission.Known(current.Assurance),
-                IdentitySessionAdmissionOperation.Refresh, current.SessionId, current.Metadata), ct);
+                IdentitySessionAdmissionOperation.Refresh, current.SessionId, current.Metadata) { Context = current.Context }, ct);
         if (!admission.IsSuccess) return Fail<IssuedIdentitySession>(op, admission.Errors);
 
         var replacementTokenId = Guid.NewGuid();
@@ -177,7 +185,7 @@ public sealed class IdentitySessionService<TProfile>(
             replacementToken.TokenHash,
             current.SecurityStamp,
             current.ExpiresAt,
-            current.Metadata);
+            current.Metadata) { Assurance = current.Assurance, Context = current.Context };
         var issued = await IssueTokensAsync(
             user,
             current.SessionId,
@@ -253,7 +261,7 @@ public sealed class IdentitySessionService<TProfile>(
             payload.UserId,
             now,
             ct);
-        if (session is null)
+        if (session is null || !IdentitySessionAdmission.IsValid(session.Context))
         {
             return Fail<IdentityUser<TProfile>>(
                 op,
@@ -273,7 +281,7 @@ public sealed class IdentitySessionService<TProfile>(
 
         var admission = await IdentitySessionAdmission.CheckAsync(admissionPolicies,
             new IdentitySessionAdmissionContext<TProfile>(user, IdentitySessionAdmission.Known(session.Assurance),
-                IdentitySessionAdmissionOperation.Validate, session.SessionId, session.Metadata), ct);
+                IdentitySessionAdmissionOperation.Validate, session.SessionId, session.Metadata) { Context = session.Context }, ct);
         if (!admission.IsSuccess) return Fail<IdentityUser<TProfile>>(op, admission.Errors);
 
         op.Success();

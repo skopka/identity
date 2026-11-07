@@ -6,6 +6,7 @@ namespace Skopka.Identity.Ef;
 
 public class IdentityDbContext<TProfile>(DbContextOptions options) : DbContext(options)
 {
+    public DbSet<IdentityAccessLinkEntity> AccessLinks => Set<IdentityAccessLinkEntity>();
     public DbSet<AuthUserEntity> Users => Set<AuthUserEntity>();
     public DbSet<UserProfileEntity<TProfile>> Profiles => Set<UserProfileEntity<TProfile>>();
     public DbSet<UserCredentialEntity> Credentials => Set<UserCredentialEntity>();
@@ -34,6 +35,7 @@ public class IdentityDbContext<TProfile>(DbContextOptions options) : DbContext(o
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.ApplyConfiguration(new IdentityAccessLinkConfiguration());
         modelBuilder.ApplyConfiguration(new AuthUserConfiguration());
         modelBuilder.ApplyConfiguration(new UserProfileBaseConfiguration());
         modelBuilder.ApplyConfiguration(new UserProfileConfiguration<TProfile>());

@@ -17,6 +17,13 @@ internal static class IdentitySessionAdmission
         return OperationResultFactory.Success();
     }
 
+    public static bool IsValid(IdentitySessionContext? context)
+        => context is null || (ValidValue(context.Scope) && ValidValue(context.AuthenticationMethod));
+
+    private static bool ValidValue(string? value)
+        => !string.IsNullOrWhiteSpace(value) && value.Length <= IdentitySessionContext.MaximumValueLength
+            && !value.Any(char.IsControl);
+
     public static IdentitySessionAssurance Known(IdentitySessionAssurance assurance)
         => Enum.IsDefined(assurance) ? assurance : IdentitySessionAssurance.None;
 }

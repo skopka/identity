@@ -14,6 +14,27 @@ namespace Skopka.Identity.Core.Tests;
 public sealed class IdentityDeviceAuthorizationServiceTests
 {
     [Fact]
+    public async Task ScopedRequestRejectsDifferentApprovalScopeAndPreservesContext()
+    {
+        var fixture = new Fixture();
+        var created = await fixture.Service.CreateAsync(new CreateDeviceAuthorizationRequestCommand(
+            new DeviceAuthorizationMetadata(null, null, null, null, null)) { Scope = "staff" }, CancellationToken.None);
+        Assert.True(created.IsSuccess);
+        var missing = await fixture.Service.ApproveAsync(fixture.Approve(created.Value), CancellationToken.None);
+        Assert.False(missing.IsSuccess);
+        var wrong = await fixture.Service.ApproveAsync(fixture.Approve(created.Value) with
+            { Context = new IdentitySessionContext("main", "password") }, CancellationToken.None);
+        Assert.False(wrong.IsSuccess);
+        var context = new IdentitySessionContext("staff", "password");
+        var approved = await fixture.Service.ApproveAsync(fixture.Approve(created.Value) with { Context = context }, CancellationToken.None);
+        Assert.True(approved.IsSuccess);
+        var consumed = await fixture.Service.ConsumeAsync(new ConsumeDeviceAuthorizationRequestCommand(
+            created.Value.DeviceCode, created.Value.BrowserVerifier), CancellationToken.None);
+        Assert.True(consumed.IsSuccess);
+        Assert.Equal(context, fixture.Sessions.LastContext);
+    }
+
+    [Fact]
     public async Task ApprovalAndConsumeCreateOneIndependentSession()
     {
         var fixture = new Fixture();
@@ -430,9 +451,12 @@ public sealed class IdentityDeviceAuthorizationServiceTests
                 request.ExpiresAt,
                 now,
                 null,
-                null);
+                null) { Scope = request.Scope };
             return Task.FromResult(OperationResultFactory.Success());
         }
+
+        public Task<OperationResult> CreateScopedAsync(NewDeviceAuthorizationRequest request, DateTimeOffset now, CancellationToken ct)
+            => CreateAsync(request, now, ct);
 
         public Task<StoredDeviceAuthorizationRequest?> FindByDeviceCodeAsync(
             string deviceCode,
@@ -474,6 +498,12 @@ public sealed class IdentityDeviceAuthorizationServiceTests
                 },
                 now,
                 ct);
+
+        public Task<OperationResult<StoredDeviceAuthorizationRequest>> ApproveAsync(Guid requestId, long expectedVersion,
+            Guid userId, string securityStamp, IdentitySessionContext? context, DateTimeOffset now, CancellationToken ct)
+            => TransitionAsync(expectedVersion, DeviceAuthorizationState.Pending, request => request with {
+                State = DeviceAuthorizationState.Approved, ResolvedByUserId = userId,
+                ApprovedSecurityStamp = securityStamp, Context = context, ResolvedAt = now }, now, ct);
 
         public Task<OperationResult<StoredDeviceAuthorizationRequest>> DenyAsync(
             Guid requestId,
@@ -677,11 +707,13 @@ public sealed class IdentityDeviceAuthorizationServiceTests
     {
         private int createCount;
         public int CreateCount => createCount;
+        public IdentitySessionContext? LastContext { get; private set; }
 
         public async Task<OperationResult<IssuedIdentitySession>> CreateAsync(
             CreateIdentitySessionCommand command,
             CancellationToken ct)
         {
+            LastContext = command.Context;
             Interlocked.Increment(ref createCount);
             if (delay > TimeSpan.Zero)
             {

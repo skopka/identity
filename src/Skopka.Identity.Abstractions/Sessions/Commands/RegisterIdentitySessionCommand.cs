@@ -7,4 +7,7 @@ public sealed record RegisterIdentitySessionCommand(
 {
     /// <summary>Asserted only by trusted server code after verification, never from an untrusted request.</summary>
     public IdentitySessionAssurance Assurance { get; init; }
+
+    /// <summary>Trusted security context, or null for legacy sessions.</summary>
+    public IdentitySessionContext? Context { get; init; }
 }

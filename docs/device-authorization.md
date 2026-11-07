@@ -6,6 +6,16 @@ inspired by RFC 8628, but it is not an OAuth Device Authorization Grant and
 does not expose a token endpoint. The HTTP and Razor flows belong to a host
 such as `Skopka.Hello`.
 
+When an application serves multiple site scopes, trusted server code must set
+`CreateDeviceAuthorizationRequestCommand.Scope` from the originating site and
+`ApproveDeviceAuthorizationRequestCommand.Context` from the online-validated
+approving session. Approval rejects a different scope; the resulting logical
+session retains that context. These are security inputs, never request-body
+values. Existing unscoped requests remain supported, so hosts enforcing scope
+must explicitly reject legacy unscoped sessions and requests. Custom request
+stores must implement scoped creation and approval; their default methods fail
+closed for non-null security context.
+
 ## Registration
 
 Register the feature on the existing identity builder after the normal

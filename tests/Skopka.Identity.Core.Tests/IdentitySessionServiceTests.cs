@@ -12,6 +12,59 @@ namespace Skopka.Identity.Core.Tests;
 public sealed class IdentitySessionServiceTests
 {
     [Fact]
+    public async Task LifetimeAndContextAreFixedAcrossRefreshAndRegistryValidation()
+    {
+        var policy = new LifetimePolicy();
+        var admission = new RecordingAdmissionPolicy();
+        var fixture = new Fixture(admissionPolicies: [admission], lifetimePolicy: policy);
+        var context = new IdentitySessionContext("staff", "password");
+        var created = await fixture.Service.CreateAsync(new CreateIdentitySessionCommand(
+            fixture.UserStore.User.Id, fixture.UserStore.User.SecurityStamp) { Context = context }, CancellationToken.None);
+        Assert.True(created.IsSuccess);
+        Assert.InRange(created.Value.RefreshTokenExpiresAt - DateTimeOffset.UtcNow, TimeSpan.FromDays(1) - TimeSpan.FromMinutes(1), TimeSpan.FromDays(1));
+        var refreshed = await fixture.Service.RefreshAsync(new RefreshIdentitySessionCommand(created.Value.RefreshToken), CancellationToken.None);
+        Assert.True(refreshed.IsSuccess);
+        Assert.Equal(created.Value.RefreshTokenExpiresAt, refreshed.Value.RefreshTokenExpiresAt);
+        Assert.Equal(context, admission.LastContext);
+        var registered = await fixture.Registry.RegisterAsync(new RegisterIdentitySessionCommand(
+            fixture.UserStore.User.Id, fixture.UserStore.User.SecurityStamp) { Context = context }, CancellationToken.None);
+        Assert.True(registered.IsSuccess);
+        var validated = await fixture.Registry.ValidateWithAssuranceAsync(new ValidateIdentitySessionCommand(
+            fixture.UserStore.User.Id, registered.Value.SessionId), CancellationToken.None);
+        Assert.True(validated.IsSuccess);
+        Assert.Equal(context, validated.Value.Context);
+        Assert.Equal(2, policy.Calls);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("bad\nvalue")]
+    public async Task InvalidSecurityContextFailsBeforePersistence(string scope)
+    {
+        var fixture = new Fixture();
+        var result = await fixture.Service.CreateAsync(new CreateIdentitySessionCommand(
+            fixture.UserStore.User.Id, fixture.UserStore.User.SecurityStamp)
+            { Context = new IdentitySessionContext(scope, "password") }, CancellationToken.None);
+        Assert.False(result.IsSuccess);
+        Assert.Empty(fixture.SessionStore.Sessions);
+    }
+
+    private sealed class LifetimePolicy : IIdentitySessionLifetimePolicy<TestProfile>
+    {
+        public int Calls { get; private set; }
+        public Task<TimeSpan> GetLifetimeAsync(IdentityUser<TestProfile> user, IdentitySessionContext? context,
+            TimeSpan defaultLifetime, CancellationToken cancellationToken)
+        { Calls++; return Task.FromResult(TimeSpan.FromDays(1)); }
+    }
+
+    private sealed class RecordingAdmissionPolicy : IIdentitySessionAdmissionPolicy<TestProfile>
+    {
+        public IdentitySessionContext? LastContext { get; private set; }
+        public Task<OperationResult> CheckAsync(IdentitySessionAdmissionContext<TestProfile> context, CancellationToken ct)
+        { LastContext = context.Context; return Task.FromResult(OperationResultFactory.Success()); }
+    }
+
+    [Fact]
     public async Task AdmissionDenialStopsCreationAndRegistrationBeforePersistence()
     {
         var policy = new AdmissionPolicy { Denied = true };
@@ -379,7 +432,8 @@ public sealed class IdentitySessionServiceTests
             IEnumerable<IIdentitySessionClaimsProvider<TestProfile>>?
                 additionalClaimsProviders = null,
             IIdentitySecurityEventObserver? securityEvents = null,
-            IEnumerable<IIdentitySessionAdmissionPolicy<TestProfile>>? admissionPolicies = null)
+            IEnumerable<IIdentitySessionAdmissionPolicy<TestProfile>>? admissionPolicies = null,
+            IIdentitySessionLifetimePolicy<TestProfile>? lifetimePolicy = null)
         {
             UserStore = new FakeUserStore(CreateUser());
             SessionStore = new FakeSessionStore();
@@ -409,7 +463,7 @@ public sealed class IdentitySessionServiceTests
                         ?? TimeSpan.FromDays(10),
                 },
                 new NoopIdentityMetrics(),
-                securityEvents, admissionPolicies);
+                securityEvents, admissionPolicies, lifetimePolicy);
             Registry = new IdentitySessionRegistry<TestProfile>(
                 UserStore,
                 SessionStore,
@@ -419,7 +473,7 @@ public sealed class IdentitySessionServiceTests
                         ?? TimeSpan.FromDays(10),
                 },
                 new NoopIdentityMetrics(),
-                securityEvents, admissionPolicies);
+                securityEvents, admissionPolicies, lifetimePolicy);
         }
 
         public FakeUserStore UserStore { get; }
@@ -570,7 +624,7 @@ public sealed class IdentitySessionServiceTests
                     now,
                     now,
                     null,
-                    session.Metadata));
+                    session.Metadata) { Assurance = session.Assurance, Context = session.Context });
             return Task.FromResult(OperationResultFactory.Success());
         }
 
@@ -761,7 +815,7 @@ public sealed class IdentitySessionServiceTests
                 null,
                 null,
                 null,
-                session.Metadata);
+                session.Metadata) { Assurance = session.Assurance, Context = session.Context };
 
         private static OperationResult Fail(string code)
             => OperationResultFactory.Fail(

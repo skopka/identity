@@ -1,10 +1,15 @@
+using Skopka.Identity.Sessions;
 using Skopka.Identity.StepUp;
 
 namespace Skopka.Identity.DeviceAuthorization;
 
 public sealed record CreateDeviceAuthorizationRequestCommand(
     DeviceAuthorizationMetadata Metadata,
-    string? ClientKey = null);
+    string? ClientKey = null)
+{
+    /// <summary>Trusted scope where the device request originated.</summary>
+    public string? Scope { get; init; }
+}
 
 public sealed record GetDeviceAuthorizationStatusCommand(
     string DeviceCode,
@@ -22,7 +27,11 @@ public sealed record GetDeviceAuthorizationApprovalDetailsByUserCodeCommand(
 public sealed record ApproveDeviceAuthorizationRequestCommand(
     string DeviceCode,
     Guid UserId,
-    StepUpDecision StepUpDecision);
+    StepUpDecision StepUpDecision)
+{
+    /// <summary>Trusted context of the validated approving session.</summary>
+    public IdentitySessionContext? Context { get; init; }
+}
 
 public sealed record DenyDeviceAuthorizationRequestCommand(
     string DeviceCode,

@@ -17,7 +17,7 @@ Phone OTP validates input through `IIdentityPhoneNumberPolicy`, using the config
 
 ## Documentation
 
-Documentation for version 0.16.0: [product overview](https://products.skopka.ru/en/identity/index.html) · [English guide](https://products.skopka.ru/guides/en/identity.html) · [Руководство на русском](https://products.skopka.ru/guides/ru/identity.html) · [API reference](https://products.skopka.ru/api/identity/index.html).
+Documentation for version 0.18.0: [product overview](https://products.skopka.ru/en/identity/index.html) · [English guide](https://products.skopka.ru/guides/en/identity.html) · [Руководство на русском](https://products.skopka.ru/guides/ru/identity.html) · [API reference](https://products.skopka.ru/api/identity/index.html).
 
 ## Features
 
@@ -233,6 +233,64 @@ registered policies preserves the existing behavior. Custom refresh stores must 
 the parent session's assurance in `StoredRefreshSession` for policy checks, and custom
 registry implementations must implement assurance-aware validation themselves.
 Stateless access-token validation does not invoke these online checks.
+
+Trusted server code can set `IdentitySessionContext` on session creation or registry
+registration to record a bounded site scope and primary authentication method.
+Admission policies receive the persisted context on refresh and online validation;
+legacy sessions have no context. Host policies must decide how to handle those
+sessions and must never take the context from a request body. Custom stores must
+preserve it through rotation. `IIdentitySessionLifetimePolicy<TProfile>` can choose
+a positive lifetime per validated user and context, up to 100 years; absent a
+policy, `IdentitySessionOptions.RefreshSessionLifetime` remains the default. The
+chosen absolute expiry is fixed at creation and is not extended by refresh.
+
+### Host-issued access links
+
+After calling `AddAccessLinks()` on the Identity builder and configuring password
+hashing, TOTP and relational Identity persistence, a trusted
+host can resolve `IIdentityAccessLinkService<TProfile>` to issue an access link for
+a user and an allowlisted server-derived scope. `IssueAsync` requires the current
+user version; it supersedes every earlier unconsumed link for that user. The
+independent `IdentityAccessLinkOptions.Lifetime` defaults to seven days and is
+bounded to thirty days; it does not change password-reset token expiry. When
+`InvalidateExisting` is true, issuance atomically removes the password and TOTP
+factor and revokes logical sessions. Otherwise those credentials remain usable
+until successful completion.
+
+For example, after the Quick Start's `identity` builder is configured, enable TOTP
+and choose an independent lifetime:
+
+```csharp
+identity.UseDataProtectionTotp();
+identity.AddAccessLinks(options => options.Lifetime = TimeSpan.FromDays(7));
+```
+
+An authorized server-side operator can then issue a link for a trusted site scope:
+
+```csharp
+using Skopka.Identity.AccessLinks;
+
+var links = scope.ServiceProvider.GetRequiredService<
+    IIdentityAccessLinkService<AppProfile>>();
+var issued = await links.IssueAsync(
+    new IssueIdentityAccessLinkCommand(userId, expectedVersion, "staff", true),
+    cancellationToken);
+// On success, deliver issued.Value.Token only through the host's protected workflow.
+```
+
+The host delivers the returned opaque token securely. It may call `InspectAsync`
+without mutation, then use a protected POST to begin enrollment and display the
+returned secret and a provisioning URI constructed by the host. A later protected POST calls `CompleteAsync`
+with the same trusted scope, enrollment id, authenticator code and new password.
+Completion consumes the link and replaces the password and TOTP factor atomically;
+recovery codes are returned once. Concurrent and incorrect attempts are bounded per
+link, with additional configured Identity rate limiting. Reuse, expiry and wrong
+scope return a structured invalid-link result. Treat tokens, authenticator secrets,
+passwords and recovery codes as sensitive: do not log them, and protect pages from
+caching, cross-site submission and referrer leakage. Use a shared TOTP protection
+key ring across instances. `identity.access_link.used` is a post-commit observer
+event, not a durable transactional audit record.
+Schedule `PruneAsync` periodically to remove expired access links in bounded batches.
 
 The host decides how to return the access token and protect the refresh token. For a
 browser, prefer a `Secure`, `HttpOnly`, `SameSite` cookie and add CSRF protection to

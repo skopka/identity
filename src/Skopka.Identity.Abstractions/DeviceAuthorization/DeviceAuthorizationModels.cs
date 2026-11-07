@@ -47,7 +47,10 @@ public sealed record NewDeviceAuthorizationRequest(
     string BrowserVerifierHash,
     string UserCode,
     DeviceAuthorizationMetadata Metadata,
-    DateTimeOffset ExpiresAt);
+    DateTimeOffset ExpiresAt)
+{
+    public string? Scope { get; init; }
+}
 
 public sealed record StoredDeviceAuthorizationRequest(
     Guid Id,
@@ -65,4 +68,9 @@ public sealed record StoredDeviceAuthorizationRequest(
     DateTimeOffset ExpiresAt,
     DateTimeOffset ModifiedAt,
     DateTimeOffset? ResolvedAt,
-    DateTimeOffset? ConsumedAt);
+    DateTimeOffset? ConsumedAt)
+{
+    /// <summary>Trusted security context captured at approval.</summary>
+    public IdentitySessionContext? Context { get; init; }
+    public string? Scope { get; init; }
+}

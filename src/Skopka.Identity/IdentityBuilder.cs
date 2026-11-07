@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skopka.Identity.Credentials;
+using Skopka.Identity.AccessLinks;
 using Skopka.Identity.PhoneOtp;
 using Skopka.Identity.Roles;
 using Skopka.Identity.Roles.Queries;
@@ -17,6 +18,19 @@ public sealed class IdentityBuilder<TProfile>
     }
 
     public IServiceCollection Services { get; }
+
+    /// <summary>Enables host-issued access links. Password hashing, TOTP and a relational store must also be configured.</summary>
+    public IdentityBuilder<TProfile> AddAccessLinks(Action<IdentityAccessLinkOptions>? configure = null)
+    {
+        var options = new IdentityAccessLinkOptions();
+        configure?.Invoke(options);
+        if (options.Lifetime <= TimeSpan.Zero || options.Lifetime > TimeSpan.FromDays(30))
+            throw new ArgumentOutOfRangeException(nameof(configure));
+        Services.RemoveAll<IdentityAccessLinkOptions>();
+        Services.AddSingleton(options);
+        Services.TryAddScoped<IIdentityAccessLinkService<TProfile>, IdentityAccessLinkService<TProfile>>();
+        return this;
+    }
 
     public IdentityBuilder<TProfile> ConfigurePasswordPolicy(
         Action<PasswordPolicyOptions> configure)

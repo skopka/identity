@@ -28,6 +28,12 @@ internal sealed class IdentitySessionConfiguration
         builder.Property(session => session.DeviceName)
             .HasColumnName("device_name")
             .HasMaxLength(SessionLimits.MaximumDeviceNameLength);
+        builder.Property(session => session.Scope)
+            .HasColumnName("scope")
+            .HasMaxLength(IdentitySessionContext.MaximumValueLength);
+        builder.Property(session => session.AuthenticationMethod)
+            .HasColumnName("authentication_method")
+            .HasMaxLength(IdentitySessionContext.MaximumValueLength);
         builder.Property(session => session.Assurance)
             .HasColumnName("assurance")
             .HasDefaultValue(0);

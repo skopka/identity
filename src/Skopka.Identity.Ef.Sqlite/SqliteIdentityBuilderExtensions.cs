@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skopka.Identity;
 using Skopka.Identity.Authentication;
+using Skopka.Identity.AccessLinks;
 using Skopka.Identity.Credentials;
 using Skopka.Identity.DeviceAuthorization;
 using Skopka.Identity.Ef;
@@ -87,6 +88,7 @@ public static class SqliteIdentityBuilderExtensions
         builder.Services.TryAddScoped<
             IIdentityRegistrationStore<TProfile>,
             EfIdentityRegistrationStore<TProfile>>();
+        builder.Services.TryAddScoped<IIdentityAccessLinkStore<TProfile>, EfIdentityAccessLinkStore<TProfile>>();
         builder.Services.TryAddScoped<
             IPasswordCredentialStore<TProfile>,
             EfPasswordCredentialStore<TProfile>>();

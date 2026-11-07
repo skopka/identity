@@ -54,6 +54,9 @@ internal sealed class DeviceAuthorizationRequestConfiguration
             .HasMaxLength(SessionLimits.MaximumDeviceNameLength);
         builder.Property(request => request.ResolvedByUserId)
             .HasColumnName("resolved_by_user_id");
+        builder.Property(request => request.Scope).HasColumnName("scope").HasMaxLength(IdentitySessionContext.MaximumValueLength);
+        builder.Property(request => request.ApprovedScope).HasColumnName("approved_scope").HasMaxLength(IdentitySessionContext.MaximumValueLength);
+        builder.Property(request => request.ApprovedAuthenticationMethod).HasColumnName("approved_authentication_method").HasMaxLength(IdentitySessionContext.MaximumValueLength);
         builder.Property(request => request.ApprovedSecurityStamp)
             .HasColumnName("approved_security_stamp")
             .HasMaxLength(SessionLimits.SecurityStampLength);

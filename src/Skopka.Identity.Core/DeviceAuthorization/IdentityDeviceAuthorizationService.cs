@@ -39,6 +39,9 @@ public sealed class IdentityDeviceAuthorizationService<TProfile>(
             return Fail<CreatedDeviceAuthorizationRequest>(op, metadata.Errors);
         }
 
+        if (command.Scope is not null && !IdentitySessionAdmission.IsValid(new IdentitySessionContext(command.Scope, "device")))
+            return Fail<CreatedDeviceAuthorizationRequest>(op, DeviceAuthorizationErrors.Invalid());
+
         var rateLimitError = await CheckRateLimitAsync(
             IdentityRateLimitScopes.DeviceAuthorizationCreateClient,
             NormalizeClientKey(command.ClientKey),
@@ -56,14 +59,14 @@ public sealed class IdentityDeviceAuthorizationService<TProfile>(
         var browserVerifier = GenerateSecret();
         var userCode = GenerateUserCode();
         var expiresAt = now.Add(options.RequestLifetime);
-        var created = await requests.CreateAsync(
+        var created = await requests.CreateScopedAsync(
             new NewDeviceAuthorizationRequest(
                 id,
                 deviceCode,
                 Hash(browserVerifier),
                 userCode,
                 metadata.Value,
-                expiresAt),
+                expiresAt) { Scope = command.Scope },
             now,
             ct);
         if (!created.IsSuccess)
@@ -264,6 +267,7 @@ public sealed class IdentityDeviceAuthorizationService<TProfile>(
 
         if (!IsValidDeviceCode(command.DeviceCode)
             || command.UserId == Guid.Empty
+            || !IdentitySessionAdmission.IsValid(command.Context)
             || !IsValidStepUp(command))
         {
             return Fail(op, DeviceAuthorizationErrors.StepUpInvalid());
@@ -278,7 +282,8 @@ public sealed class IdentityDeviceAuthorizationService<TProfile>(
         }
 
         request = await ExpireIfRequiredAsync(request, ct);
-        if (request.State != DeviceAuthorizationState.Pending)
+        if (request.State != DeviceAuthorizationState.Pending
+            || !string.Equals(request.Scope, command.Context?.Scope, StringComparison.Ordinal))
         {
             return Fail(op, DeviceAuthorizationErrors.StateInvalid());
         }
@@ -296,6 +301,7 @@ public sealed class IdentityDeviceAuthorizationService<TProfile>(
             request.Version,
             user!.Id,
             user.SecurityStamp,
+            command.Context,
             now,
             ct);
         if (!approved.IsSuccess)
@@ -447,7 +453,7 @@ public sealed class IdentityDeviceAuthorizationService<TProfile>(
             new CreateIdentitySessionCommand(
                 user.Id,
                 request.ApprovedSecurityStamp,
-                request.Metadata.SessionMetadata),
+                request.Metadata.SessionMetadata) { Context = request.Context },
             ct);
         if (!issued.IsSuccess)
         {

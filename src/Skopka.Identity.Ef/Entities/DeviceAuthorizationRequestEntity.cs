@@ -17,6 +17,9 @@ public sealed class DeviceAuthorizationRequestEntity
     public string? SessionClientName { get; set; }
     public string? SessionDeviceName { get; set; }
     public Guid? ResolvedByUserId { get; set; }
+    public string? Scope { get; set; }
+    public string? ApprovedScope { get; set; }
+    public string? ApprovedAuthenticationMethod { get; set; }
     public string? ApprovedSecurityStamp { get; set; }
     public Guid? ConsumptionId { get; set; }
     public Guid? SessionId { get; set; }

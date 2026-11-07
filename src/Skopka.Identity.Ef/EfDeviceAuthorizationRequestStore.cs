@@ -32,6 +32,7 @@ public sealed class EfDeviceAuthorizationRequestStore<TProfile>(
             new DeviceAuthorizationRequestEntity
             {
                 Id = request.Id,
+                Scope = request.Scope,
                 DeviceCode = request.DeviceCode,
                 BrowserVerifierHash = request.BrowserVerifierHash,
                 UserCode = request.UserCode,
@@ -53,6 +54,9 @@ public sealed class EfDeviceAuthorizationRequestStore<TProfile>(
         await dbContext.SaveChangesAsync(ct);
         return OperationResultFactory.Success();
     }
+
+    public Task<OperationResult> CreateScopedAsync(NewDeviceAuthorizationRequest request, DateTimeOffset now, CancellationToken ct)
+        => CreateAsync(request, now, ct);
 
     public Task<StoredDeviceAuthorizationRequest?> FindByDeviceCodeAsync(
         string deviceCode,
@@ -87,25 +91,21 @@ public sealed class EfDeviceAuthorizationRequestStore<TProfile>(
     }
 
     public Task<OperationResult<StoredDeviceAuthorizationRequest>> ApproveAsync(
-        Guid requestId,
-        long expectedVersion,
-        Guid userId,
-        string securityStamp,
-        DateTimeOffset now,
-        CancellationToken ct)
-        => TransitionAsync(
-            requestId,
-            expectedVersion,
-            DeviceAuthorizationState.Pending,
-            now,
-            request =>
-            {
-                request.State = DeviceAuthorizationState.Approved;
-                request.ResolvedByUserId = userId;
-                request.ApprovedSecurityStamp = securityStamp;
-                request.ResolvedAt = now;
-            },
-            ct);
+        Guid requestId, long expectedVersion, Guid userId, string securityStamp, DateTimeOffset now, CancellationToken ct)
+        => ApproveAsync(requestId, expectedVersion, userId, securityStamp, null, now, ct);
+
+    public Task<OperationResult<StoredDeviceAuthorizationRequest>> ApproveAsync(
+        Guid requestId, long expectedVersion, Guid userId, string securityStamp,
+        IdentitySessionContext? context, DateTimeOffset now, CancellationToken ct)
+        => TransitionAsync(requestId, expectedVersion, DeviceAuthorizationState.Pending, now, request =>
+        {
+            request.State = DeviceAuthorizationState.Approved;
+            request.ResolvedByUserId = userId;
+            request.ApprovedSecurityStamp = securityStamp;
+            request.ApprovedScope = context?.Scope;
+            request.ApprovedAuthenticationMethod = context?.AuthenticationMethod;
+            request.ResolvedAt = now;
+        }, ct);
 
     public Task<OperationResult<StoredDeviceAuthorizationRequest>> DenyAsync(
         Guid requestId,
@@ -375,7 +375,8 @@ public sealed class EfDeviceAuthorizationRequestStore<TProfile>(
             request.ExpiresAt,
             request.ModifiedAt,
             request.ResolvedAt,
-            request.ConsumedAt);
+            request.ConsumedAt) { Scope = request.Scope, Context = request.ApprovedScope == null || request.ApprovedAuthenticationMethod == null
+                ? null : new IdentitySessionContext(request.ApprovedScope, request.ApprovedAuthenticationMethod) };
 
     private void Detach(object? entity)
     {

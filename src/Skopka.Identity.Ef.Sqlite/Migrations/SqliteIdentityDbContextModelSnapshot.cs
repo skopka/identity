@@ -106,6 +106,16 @@ namespace Skopka.Identity.Ef.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<string>("ApprovedAuthenticationMethod")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("approved_authentication_method");
+
+                    b.Property<string>("ApprovedScope")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("approved_scope");
+
                     b.Property<string>("ApprovedSecurityStamp")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT")
@@ -171,6 +181,11 @@ namespace Skopka.Identity.Ef.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("return_url");
 
+                    b.Property<string>("Scope")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("scope");
+
                     b.Property<string>("SessionClientName")
                         .HasMaxLength(128)
                         .HasColumnType("TEXT")
@@ -217,6 +232,74 @@ namespace Skopka.Identity.Ef.Migrations
                     b.ToTable("device_authorization_requests", (string)null);
                 });
 
+            modelBuilder.Entity("Skopka.Identity.Ef.Entities.IdentityAccessLinkEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Consumed")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("consumed");
+
+                    b.Property<long?>("EnrollmentExpiresAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("enrollment_expires_at");
+
+                    b.Property<Guid?>("EnrollmentId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("enrollment_id");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("expires_at");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("failed_attempts");
+
+                    b.Property<string>("ProtectedSecret")
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("protected_secret");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("scope");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("token_hash");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.Property<long>("UserVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("user_version");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_identity_access_links_expires_at");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_identity_access_links_user_id");
+
+                    b.ToTable("identity_access_links", (string)null);
+                });
+
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.IdentitySessionEntity", b =>
                 {
                     b.Property<Guid>("SessionId")
@@ -229,6 +312,11 @@ namespace Skopka.Identity.Ef.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(0)
                         .HasColumnName("assurance");
+
+                    b.Property<string>("AuthenticationMethod")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("authentication_method");
 
                     b.Property<string>("ClientName")
                         .HasMaxLength(128)
@@ -255,6 +343,11 @@ namespace Skopka.Identity.Ef.Migrations
                     b.Property<long?>("RevokedAt")
                         .HasColumnType("INTEGER")
                         .HasColumnName("revoked_at");
+
+                    b.Property<string>("Scope")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("scope");
 
                     b.Property<string>("SecurityStamp")
                         .IsRequired()
@@ -835,6 +928,15 @@ namespace Skopka.Identity.Ef.Migrations
                         .HasColumnName("profile");
 
                     b.ToTable("user_profiles", (string)null);
+                });
+
+            modelBuilder.Entity("Skopka.Identity.Ef.Entities.IdentityAccessLinkEntity", b =>
+                {
+                    b.HasOne("Skopka.Identity.Ef.Entities.AuthUserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Skopka.Identity.Ef.Entities.IdentitySessionEntity", b =>

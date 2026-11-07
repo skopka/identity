@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.18.0
+
+- Added optional host-issued, scope-bound access links with independent expiry, one-use completion, TOTP enrollment and atomic credential recovery. New links supersede prior links; hosts can invalidate existing credentials and sessions at issuance.
+- Added trusted session scope and authentication method, persisted across refresh and available to online admission policies. Added a per-account and per-context session lifetime policy with fixed absolute expiry.
+- Bound scoped device authorization requests to the approving session's scope and retained its trusted context in the resulting session. Custom device stores must implement scoped operations to use them.
+- Added PostgreSQL and SQLite migrations for access links and session and device authorization context. Existing session and device rows have no scope; hosts requiring scope must account for legacy sessions.
+
 ## 0.17.0
 
 - Added immutable logical-session assurance and host admission policies for issuance, refresh and online validation. Existing sessions and unmodified stores default to no assurance.

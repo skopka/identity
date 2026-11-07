@@ -9,7 +9,11 @@ public enum IdentitySessionAdmissionOperation { Create, Register, Refresh, Valid
 /// <summary>Trusted, online-validated state supplied to session admission policies.</summary>
 public sealed record IdentitySessionAdmissionContext<TProfile>(
     IdentityUser<TProfile> User, IdentitySessionAssurance Assurance,
-    IdentitySessionAdmissionOperation Operation, Guid? SessionId, IdentitySessionMetadata? Metadata);
+    IdentitySessionAdmissionOperation Operation, Guid? SessionId, IdentitySessionMetadata? Metadata)
+{
+    /// <summary>Security context persisted with this session.</summary>
+    public IdentitySessionContext? Context { get; init; }
+}
 
 /// <summary>Host policy checked before issuing, rotating, registering or accepting a logical session.</summary>
 public interface IIdentitySessionAdmissionPolicy<TProfile>
