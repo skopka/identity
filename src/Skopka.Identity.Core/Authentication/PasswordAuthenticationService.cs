@@ -7,6 +7,8 @@ using Skopka.Identity.Metrics;
 using Skopka.Identity.RateLimiting;
 using Skopka.Identity.Users;
 
+using Skopka.Identity.Users.Handles;
+
 namespace Skopka.Identity.Authentication;
 
 public sealed class PasswordAuthenticationService<TProfile>(
@@ -66,6 +68,12 @@ public sealed class PasswordAuthenticationService<TProfile>(
                 IdentityErrors.Validation(
                     "handle",
                     "The password login handle is unsupported."));
+        }
+
+        var scopeError = PhoneScopeValidator.Validate(cmd.PhoneScope);
+        if (scopeError is not null)
+        {
+            return Fail(op, scopeError);
         }
 
         var normalizedLogin = NormalizeLogin(cmd);
@@ -249,7 +257,10 @@ public sealed class PasswordAuthenticationService<TProfile>(
                     null,
                     cmd.Handle == PasswordLoginHandle.Phone
                         ? normalizedValue
-                        : null);
+                        : null)
+                {
+                    PhoneScope = cmd.PhoneScope ?? IdentityPhoneScopes.Default,
+                };
     }
 
     private static string CreateAccountKey(
@@ -264,7 +275,11 @@ public sealed class PasswordAuthenticationService<TProfile>(
 
         if (login.NormalizedValue is not null)
         {
-            return $"{(int)handle}:{login.NormalizedValue}";
+            // A shared phone in another scope is a different (unknown) account.
+            return handle == PasswordLoginHandle.Phone
+                && login.PhoneScope.Length > 0
+                    ? $"{(int)handle}:{login.PhoneScope.Length}:{login.PhoneScope}:{login.NormalizedValue}"
+                    : $"{(int)handle}:{login.NormalizedValue}";
         }
 
         var canonicalKeys = login.NormalizedPhoneIdentifier is not null
@@ -309,6 +324,7 @@ public sealed class PasswordAuthenticationService<TProfile>(
             PasswordLoginHandle.Phone =>
                 await userLookupStore.FindActiveByNormalizedPhoneAsync(
                     login.NormalizedValue!,
+                    login.PhoneScope,
                     ct),
             _ => null
         };
@@ -364,5 +380,8 @@ public sealed class PasswordAuthenticationService<TProfile>(
     private sealed record NormalizedLogin(
         string? NormalizedValue,
         IReadOnlyCollection<string>? NormalizedKeys,
-        string? NormalizedPhoneIdentifier);
+        string? NormalizedPhoneIdentifier)
+    {
+        public string PhoneScope { get; init; } = IdentityPhoneScopes.Default;
+    }
 }

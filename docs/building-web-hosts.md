@@ -361,6 +361,35 @@ The query service is not authorization. Restrict admin endpoints with applicatio
 policies and avoid returning profile fields that the current administrator is not
 allowed to inspect.
 
+### Role members
+
+To list the members of a role, or of any of several roles, set `RoleIds` on the same
+query. Search, status, flags and the `(CreatedAt, Id)` cursor work unchanged, and
+`CountAsync` returns the number of users matching the same filter:
+
+```csharp
+var members = new IdentityUserQuery(
+    Search: request.Search,
+    Status: IdentityUserStatus.Active,
+    PageSize: 50,
+    Cursor: DecodeCursor(request.Cursor))
+{
+    RoleIds = [teacherRoleId, managerRoleId],
+};
+var page = await userQueries.QueryAsync(members, ct);
+var total = await userQueries.CountAsync(members, ct);
+```
+
+A user matches when it has a direct membership in at least one listed role; a member of
+several listed roles appears once. Role membership is filtered in the database with one
+`EXISTS` query on both providers, so the host does not page through every user. Up to 50
+distinct role ids are allowed. `null` means no role filter, and an empty collection is a
+validation error so that "members of no roles" cannot widen into every user. Unknown
+role ids match nobody. Custom `IIdentityUserQueryStore<TProfile>` implementations must
+opt in through `SupportsRoleMembershipQueries` and implement `CountAsync`; otherwise
+role-filtered queries and counts fail with `identity.user_query.unsupported` instead of
+returning unfiltered users.
+
 When roles are enabled, `IIdentityRoleQueryService<TProfile>` provides the same bounded
 cursor contract for the role catalog:
 
@@ -377,6 +406,65 @@ Role search matches normalized name fragments. `PageSize` is limited to 100 and 
 stable cursor is ordered by `(CreatedAt, Id)`. Role queries do not grant permission to
 create roles or change memberships; the host must authorize those operations
 separately.
+
+## Phone scopes
+
+By default a phone number belongs to at most one active account. A host that signs
+people in at several places, for example a main site for personal accounts and a staff
+site for invited employees, can let the same number belong to one account per place by
+giving the phone a scope. The scope is a trusted, server-selected identifier such as
+the site the request arrived at; never take it from a request body. It is compared
+ordinally, may be up to 128 characters and cannot have control characters or
+surrounding whitespace.
+
+| Operation | Scope argument | Without a scope |
+| --- | --- | --- |
+| `CreateUserCommand.PhoneScope` (also inside registration commands) | scope of the new phone | default scope `""` |
+| `ChangePhoneCommand.PhoneScope` | scope of the new phone | keeps the current scope |
+| `BindVerifiedPhoneCommand.PhoneScope` | scope of the bound phone | keeps the current scope |
+| `VerifyPhoneOtpCommand.PhoneScope` | account that signs in | default scope only |
+| `FindActiveByPhoneAsync(phone, scope, ct)` | account that is returned | default scope only |
+| `AuthenticatePasswordCommand.PhoneScope` with `PasswordLoginHandle.Phone` | account that signs in | default scope only |
+
+`IdentityUser.PhoneScope` reports the scope. Removing a phone returns the account to
+the default scope; changing a user name or email does not move it. A second account
+with the same number in the same scope still receives `identity.phone.duplicate`,
+and restore still fails when the number was taken in that scope meanwhile.
+
+User names and emails remain unique across all scopes. `PasswordLoginHandle.Automatic`
+searches every scope: when the entered number belongs to accounts in two scopes it
+resolves two users, which fails as invalid credentials like any other ambiguous login.
+Use a user name, or `PasswordLoginHandle.Phone` with a scope, for such accounts.
+
+A phone-sign-in code is bound to the number, not to a scope. Requesting codes for the
+same number on two sites at once supersedes the earlier code, as two requests on one
+site do.
+
+For a main site and a staff site, keep personal accounts in the default scope so
+existing data needs no migration, and pass `"staff"` on every staff-site operation:
+
+```csharp
+var verified = await phoneOtp.VerifyAsync(
+    new VerifyPhoneOtpCommand(challengeId, code, clientKey)
+    {
+        PhoneScope = site.IsStaff ? "staff" : null,
+    },
+    ct);
+```
+
+To give an existing staff account a number that a personal account already uses, bind
+it on the staff site with `BindVerifiedPhoneCommand { PhoneScope = "staff" }` or change
+it with `ChangePhoneCommand { PhoneScope = "staff" }`.
+
+Upgrading: apply the `PhoneScopes` migration of the PostgreSQL or SQLite package. It
+adds `phone_scope` with the default `''` to `auth_users` and
+`identity_login_identifiers` and makes their unique indexes include it; existing rows
+stay in the default scope and behave as before. Reverting the migration fails while two
+accounts share a number. Custom lookup stores that do not override the scoped
+`FindActiveByNormalizedPhoneAsync` overload resolve only the default scope and report
+named scopes as not found; custom user and registration stores must persist
+`NormalizedHandles.PhoneScope` and `UpdatedHandles.PhoneScope` (`null` keeps the
+stored scope) and scope phone uniqueness the same way.
 
 ## Errors and Concurrency
 

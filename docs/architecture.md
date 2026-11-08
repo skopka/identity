@@ -114,6 +114,10 @@ user aggregate mutation. A stale expected version returns
 `identity.concurrency.conflict`.
 
 User name, email and phone are unique only for active users and only when non-null.
+Phone uniqueness is per phone scope: the same number may belong to one active account in
+each host-defined scope, and the default scope `""` reproduces global uniqueness. The
+login-identifier registry carries the owner's phone scope and is unique per scope as
+well; user names and emails stay globally unique through their own indexes.
 Soft-deleted users release their handles. Restoring a user can therefore fail with a
 duplicate-handle error if another active user took one of those handles.
 

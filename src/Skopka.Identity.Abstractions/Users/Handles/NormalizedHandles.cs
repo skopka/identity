@@ -1,4 +1,4 @@
-﻿namespace Skopka.Identity.Users.Handles;
+namespace Skopka.Identity.Users.Handles;
 
 public sealed record NormalizedHandles(
     string? UserName,
@@ -13,6 +13,9 @@ public sealed record NormalizedHandles(
         : this(userName, email, phone, null)
     {
     }
+
+    /// <summary>Validated scope of the phone; <see langword="null"/> means the default scope.</summary>
+    public string? PhoneScope { get; init; }
 
     public void Deconstruct(
         out string? userName,

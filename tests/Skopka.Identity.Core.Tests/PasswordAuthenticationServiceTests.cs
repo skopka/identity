@@ -74,6 +74,39 @@ public sealed class PasswordAuthenticationServiceTests
     }
 
     [Fact]
+    public async Task NamedPhoneScopeFailsClosedOnLookupStoreWithoutScopes()
+    {
+        // The fake implements only the default-scope lookup, like a pre-0.19 custom store.
+        var fixture = new Fixture();
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Phone,
+                "+1 (234) 567-8901",
+                "correct") { PhoneScope = "staff" },
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Null(fixture.LookupStore.LastNormalizedPhone);
+    }
+
+    [Fact]
+    public async Task MalformedPhoneScopeIsRejectedBeforeLookup()
+    {
+        var fixture = new Fixture();
+
+        var result = await fixture.Service.AuthenticateAsync(
+            new AuthenticatePasswordCommand(
+                PasswordLoginHandle.Phone,
+                "+1 (234) 567-8901",
+                "correct") { PhoneScope = new string('s', 129) },
+            CancellationToken.None);
+
+        Assert.Contains(result.Errors, error => error.Code == "identity.validation.failed");
+        Assert.Null(fixture.LookupStore.LastNormalizedPhone);
+    }
+
+    [Fact]
     public async Task ExplicitPhoneRejectsNonPhoneShapedInputBeforeLookup()
     {
         var limiter = new FakeIdentityRateLimiter();

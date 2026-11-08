@@ -38,11 +38,11 @@ This module owns PostgreSQL-specific EF Core integration for `Skopka.Identity`.
   normalized handle is not null:
   - `normalized_user_name`
   - `normalized_email`
-  - `normalized_phone`
+  - `normalized_phone`, together with `phone_scope` (one owner per phone scope)
 - PostgreSQL unique violation SQLSTATE `23505` should be translated to the appropriate
   duplicate identity error.
 - `identity_login_identifiers.normalized_key` has one active owner across all handle
-  types through the stable filtered unique index
+  types within the owner's `phone_scope` through the stable filtered unique index
   `ux_identity_login_identifiers_active_normalized_key`; conflicts map to
   `identity.login_identifier.duplicate`.
 - Keep index names stable so exception mapping can identify which handle failed.

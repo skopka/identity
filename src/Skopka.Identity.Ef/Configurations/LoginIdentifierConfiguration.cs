@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Skopka.Identity.Authentication;
 using Skopka.Identity.Ef.Entities;
+using Skopka.Identity.Users;
 
 namespace Skopka.Identity.Ef.Configurations;
 
@@ -26,6 +27,11 @@ internal sealed class LoginIdentifierConfiguration
             .HasMaxLength(IdentityLoginLimits.MaximumLoginLength);
         builder.Property(identifier => identifier.IsActive)
             .HasColumnName("is_active");
+        builder.Property(identifier => identifier.PhoneScope)
+            .HasColumnName("phone_scope")
+            .HasMaxLength(IdentityPhoneScopes.MaximumLength)
+            .HasDefaultValue(IdentityPhoneScopes.Default)
+            .IsRequired();
 
         builder.HasOne(identifier => identifier.User)
             .WithMany(user => user.LoginIdentifiers)

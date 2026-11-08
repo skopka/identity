@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Skopka.Identity.Ef.Entities;
+using Skopka.Identity.Users;
 
 namespace Skopka.Identity.Ef.Configurations;
 
@@ -17,6 +18,11 @@ internal sealed class AuthUserConfiguration : IEntityTypeConfiguration<AuthUserE
         builder.Property(user => user.NormalizedUserName).HasColumnName("normalized_user_name");
         builder.Property(user => user.NormalizedEmail).HasColumnName("normalized_email");
         builder.Property(user => user.NormalizedPhone).HasColumnName("normalized_phone");
+        builder.Property(user => user.PhoneScope)
+            .HasColumnName("phone_scope")
+            .HasMaxLength(IdentityPhoneScopes.MaximumLength)
+            .HasDefaultValue(IdentityPhoneScopes.Default)
+            .IsRequired();
         builder.Property(user => user.EmailConfirmed).HasColumnName("email_confirmed");
         builder.Property(user => user.PhoneConfirmed).HasColumnName("phone_confirmed");
         builder.Property(user => user.Version)

@@ -225,6 +225,7 @@ public sealed class EfIdentityRegistrationStore<TProfile>
             NormalizedUserName = handles.UserName,
             NormalizedEmail = handles.Email,
             NormalizedPhone = handles.Phone,
+            PhoneScope = EfIdentityUserStore<TProfile>.ResolvePhoneScope(handles, user),
             PhoneConfirmed = verifiedPhone is not null,
             Version = 1,
             SecurityStamp = user.SecurityStamp,
@@ -243,6 +244,7 @@ public sealed class EfIdentityRegistrationStore<TProfile>
                 UserId = userId,
                 NormalizedKey = normalizedKey,
                 IsActive = true,
+                PhoneScope = authUser.PhoneScope,
                 User = authUser
             })
             .ToArray();

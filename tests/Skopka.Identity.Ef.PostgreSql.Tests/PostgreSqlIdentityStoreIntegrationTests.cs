@@ -277,29 +277,17 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
             "20260730223142_AddRateLimitPartitionVersions");
 
         var userId = Guid.NewGuid();
-        var profile = new UserProfileEntity<TestProfile>
-        {
-            UserId = userId,
-            UserName = "\t+1 (234) 567-8901\t",
-            Email = "alice@example.com",
-            Phone = "\t+1 555 123 4567\t",
-            Profile = new TestProfile("Legacy", [])
-        };
-        var user = new AuthUserEntity
-        {
-            Id = userId,
-            NormalizedUserName = "+1 (234) 567-8901",
-            NormalizedEmail = "ALICE@EXAMPLE.COM",
-            NormalizedPhone = "15551234567",
-            Version = 1,
-            SecurityStamp = "LEGACY-SECURITY-STAMP",
-            CreatedAt = DateTimeOffset.UtcNow,
-            ModifiedAt = DateTimeOffset.UtcNow,
-            Profile = profile
-        };
-        profile.User = user;
-        context.Users.Add(user);
-        await context.SaveChangesAsync();
+        await InsertLegacyUserAsync(
+            context,
+            userId,
+            "\t+1 (234) 567-8901\t",
+            "alice@example.com",
+            "\t+1 555 123 4567\t",
+            "+1 (234) 567-8901",
+            "ALICE@EXAMPLE.COM",
+            "15551234567",
+            "LEGACY-SECURITY-STAMP",
+            DateTimeOffset.UtcNow);
 
         await migrator.MigrateAsync();
         context.ChangeTracker.Clear();
@@ -323,6 +311,13 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
         Assert.All(
             identifiers,
             identifier => Assert.True(identifier.IsActive));
+        // The phone-scope migration leaves existing accounts in the default scope.
+        Assert.All(
+            identifiers,
+            identifier => Assert.Equal("", identifier.PhoneScope));
+        Assert.Equal(
+            "",
+            (await context.Users.AsNoTracking().SingleAsync(item => item.Id == userId)).PhoneScope);
     }
 
     [Fact]
@@ -356,29 +351,17 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
             "20260730223142_AddRateLimitPartitionVersions");
 
         var userId = Guid.NewGuid();
-        var profile = new UserProfileEntity<TestProfile>
-        {
-            UserId = userId,
-            UserName = "legacy",
-            Email = "legacy@example.com",
-            Phone = "call12345678",
-            Profile = new TestProfile("Invalid legacy phone", [])
-        };
-        var user = new AuthUserEntity
-        {
-            Id = userId,
-            NormalizedUserName = "LEGACY",
-            NormalizedEmail = "LEGACY@EXAMPLE.COM",
-            NormalizedPhone = "12345678",
-            Version = 1,
-            SecurityStamp = "INVALID-PHONE-STAMP",
-            CreatedAt = DateTimeOffset.UtcNow,
-            ModifiedAt = DateTimeOffset.UtcNow,
-            Profile = profile
-        };
-        profile.User = user;
-        context.Users.Add(user);
-        await context.SaveChangesAsync();
+        await InsertLegacyUserAsync(
+            context,
+            userId,
+            "legacy",
+            "legacy@example.com",
+            "call12345678",
+            "LEGACY",
+            "LEGACY@EXAMPLE.COM",
+            "12345678",
+            "INVALID-PHONE-STAMP",
+            DateTimeOffset.UtcNow);
 
         var exception = await Assert.ThrowsAsync<PostgresException>(
             () => migrator.MigrateAsync());
@@ -425,13 +408,20 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
             0,
             0,
             TimeSpan.Zero);
-        var userStore = new EfIdentityUserStore<TestProfile>(context);
-        var created = await userStore.CreateAsync(
-            NewUser(Guid.NewGuid(), "legacy-verification"),
-            new NormalizedHandles("LEGACY-VERIFICATION", null, null),
-            now,
-            CancellationToken.None);
-        Assert.True(created.IsSuccess);
+        // Insert through SQL: the current entity model may have columns that this
+        // older schema does not have yet.
+        var created = (Value: (Id: Guid.NewGuid(), SecurityStamp: "STAMP-LEGACY-VERIFICATION"), IsSuccess: true);
+        await InsertLegacyUserAsync(
+            context,
+            created.Value.Id,
+            "legacy-verification",
+            null,
+            null,
+            "LEGACY-VERIFICATION",
+            null,
+            null,
+            created.Value.SecurityStamp,
+            now);
 
         var oldestId = Guid.NewGuid();
         var verifiedId = Guid.NewGuid();
@@ -567,13 +557,20 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
             0,
             0,
             TimeSpan.Zero);
-        var userStore = new EfIdentityUserStore<TestProfile>(context);
-        var created = await userStore.CreateAsync(
-            NewUser(Guid.NewGuid(), "legacy-session"),
-            new NormalizedHandles("LEGACY-SESSION", null, null),
-            now,
-            CancellationToken.None);
-        Assert.True(created.IsSuccess);
+        // Insert through SQL: the current entity model may have columns that this
+        // older schema does not have yet.
+        var created = (Value: (Id: Guid.NewGuid(), SecurityStamp: "STAMP-LEGACY-SESSION"), IsSuccess: true);
+        await InsertLegacyUserAsync(
+            context,
+            created.Value.Id,
+            "legacy-session",
+            null,
+            null,
+            "LEGACY-SESSION",
+            null,
+            null,
+            created.Value.SecurityStamp,
+            now);
 
         var sessionId = Guid.NewGuid();
         var oldTokenId = Guid.NewGuid();
@@ -1125,6 +1122,41 @@ public sealed class PostgreSqlIdentityStoreIntegrationTests
                 "rate-limit-2026-07",
             ],
             buckets.Select(bucket => bucket.PartitionVersion));
+    }
+
+    /// <summary>
+    /// Inserts a user with only the columns that exist since the security-stamp migration,
+    /// so legacy-migration tests keep working when later migrations add user columns.
+    /// </summary>
+    private static async Task InsertLegacyUserAsync(
+        PostgreSqlIdentityDbContext<TestProfile> context,
+        Guid userId,
+        string? userName,
+        string? email,
+        string? phone,
+        string? normalizedUserName,
+        string? normalizedEmail,
+        string? normalizedPhone,
+        string securityStamp,
+        DateTimeOffset createdAt)
+    {
+        var profile = System.Text.Json.JsonSerializer.Serialize(
+            new TestProfile(userName ?? "legacy", []));
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO auth_users
+                (id, flags, normalized_user_name, normalized_email, normalized_phone,
+                 email_confirmed, phone_confirmed, version, security_stamp,
+                 created_at, modified_at)
+            VALUES
+                ({userId}, {0}, {normalizedUserName}, {normalizedEmail}, {normalizedPhone},
+                 {false}, {false}, {1L}, {securityStamp}, {createdAt}, {createdAt})
+            """);
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO user_profiles (user_id, user_name, email, phone, profile)
+            VALUES ({userId}, {userName}, {email}, {phone}, CAST({profile} AS jsonb))
+            """);
     }
 
     private static NewIdentityUser<TestProfile> NewUser(

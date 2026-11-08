@@ -10,12 +10,27 @@ public sealed record BeginPhoneOtpCommand(string Phone, string? ClientKey = null
 public sealed record VerifyPhoneOtpCommand(
     Guid ChallengeId,
     string Code,
-    string? ClientKey = null);
+    string? ClientKey = null)
+{
+    /// <summary>
+    /// Trusted, server-selected scope in which the verified phone signs in.
+    /// <see langword="null"/> searches the default scope only; accounts holding the same
+    /// phone in other scopes are never selected.
+    /// </summary>
+    public string? PhoneScope { get; init; }
+}
 
 /// <summary>Server-authorized target and one-time proof for attaching a confirmed phone.</summary>
 /// <remarks>The host must bind the flow to the authenticated user and session.</remarks>
 public sealed record BindVerifiedPhoneCommand(
-    Guid UserId, long ExpectedVersion, string Phone, VerificationProof Proof);
+    Guid UserId, long ExpectedVersion, string Phone, VerificationProof Proof)
+{
+    /// <summary>
+    /// Trusted, server-selected scope for the bound phone. <see langword="null"/> keeps the
+    /// user's current scope.
+    /// </summary>
+    public string? PhoneScope { get; init; }
+}
 
 public sealed record IssuedPhoneOtpChallenge(
     Guid ChallengeId,

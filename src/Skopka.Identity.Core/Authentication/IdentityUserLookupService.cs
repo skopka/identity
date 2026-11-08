@@ -2,6 +2,8 @@ using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.Users;
 
+using Skopka.Identity.Users.Handles;
+
 namespace Skopka.Identity.Authentication;
 
 public sealed class IdentityUserLookupService<TProfile>(
@@ -50,12 +52,25 @@ public sealed class IdentityUserLookupService<TProfile>(
         return OperationResultFactory.Success(user);
     }
 
-    public async Task<OperationResult<IdentityUser<TProfile>>>
+    public Task<OperationResult<IdentityUser<TProfile>>>
         FindActiveByPhoneAsync(
             string phone,
             CancellationToken ct)
+        => FindActiveByPhoneAsync(phone, null, ct);
+
+    public async Task<OperationResult<IdentityUser<TProfile>>>
+        FindActiveByPhoneAsync(
+            string phone,
+            string? phoneScope,
+            CancellationToken ct)
     {
         using var op = metrics.Begin("user.lookup.phone");
+
+        var scopeError = PhoneScopeValidator.Validate(phoneScope);
+        if (scopeError is not null)
+        {
+            return Fail(op, scopeError);
+        }
 
         var normalizedPhone = normalizer.NormalizePhoneLoginIdentifier(phone);
         if (string.IsNullOrWhiteSpace(normalizedPhone))
@@ -69,6 +84,7 @@ public sealed class IdentityUserLookupService<TProfile>(
 
         var user = await store.FindActiveByNormalizedPhoneAsync(
             normalizedPhone,
+            phoneScope ?? IdentityPhoneScopes.Default,
             ct);
         if (user is null)
         {

@@ -24,4 +24,25 @@ public interface IIdentityUserLookupService<TProfile>
                     IdentityErrorCodes.UserNotFound,
                     "User not found.",
                     ErrorType.NotFound)));
+
+    /// <summary>
+    /// Finds the active user holding <paramref name="phone"/> in <paramref name="phoneScope"/>.
+    /// The overload without a scope searches the default scope only.
+    /// </summary>
+    /// <remarks>
+    /// Custom implementations without scope support resolve only the default scope and
+    /// report every named scope as not found.
+    /// </remarks>
+    Task<OperationResult<IdentityUser<TProfile>>> FindActiveByPhoneAsync(
+        string phone,
+        string? phoneScope,
+        CancellationToken ct)
+        => string.IsNullOrEmpty(phoneScope)
+            ? FindActiveByPhoneAsync(phone, ct)
+            : Task.FromResult(
+                OperationResultFactory.Fail<IdentityUser<TProfile>>(
+                    new Error(
+                        IdentityErrorCodes.UserNotFound,
+                        "User not found.",
+                        ErrorType.NotFound)));
 }

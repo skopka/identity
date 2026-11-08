@@ -206,6 +206,14 @@ Preserve these rules:
 - Temporary blocking is represented by `BlockedUntil`; `BlockedAt` belongs to the public
   model and persistence mapping.
 - Restore may fail if unique handles were occupied after deletion.
+- Phone numbers are unique per phone scope. A scope is a trusted host identifier stored
+  as `auth_users.phone_scope`; `''` is the default scope and reproduces global
+  uniqueness. Create/registration without a scope uses `''`; change-phone and bind
+  without a scope keep the current scope; removing the phone resets it to `''`. Phone
+  lookups, phone OTP sign-in and `PasswordLoginHandle.Phone` without a scope search
+  `''` only and never pick an account from a named scope. `Automatic` login searches
+  every scope, so a number shared across scopes is ambiguous there. User names and
+  emails stay globally unique.
 - Credentials are separate from profile data. Storage must hide password implementation
   details such as hash, salt and pepper.
 - Password policy defaults to 15 through 128 Unicode code points. Configuration may
@@ -354,7 +362,9 @@ Preserve these rules:
 - Password and external registration must use `IIdentityRegistrationStore<TProfile>` so
   the user and initial sign-in method commit atomically.
 - User and role queries are bounded to 100 rows and use stable `(CreatedAt, Id)` cursor
-  ordering.
+  ordering. User queries may filter by direct membership in any of up to 50 role ids
+  and count matches with the same filter; stores opt in through
+  `SupportsRoleMembershipQueries`, otherwise Core fails closed.
   Query services are not endpoint authorization.
 - Exact account workflows use `IIdentityUserLookupService<TProfile>` rather than
   administrative contains-search. Its not-found result must be suppressed by public
@@ -389,7 +399,7 @@ EF Core storage is split:
 - `identity_login_identifiers`
   - distinct normalized login keys for each user
   - active-state marker synchronized with soft delete and restore
-  - one active owner per normalized key across handle types
+  - one active owner per normalized key across handle types within a phone scope
 - `user_credentials`
   - opaque password verifier
   - credential update timestamp
@@ -425,7 +435,7 @@ PostgreSQL requirements:
 - Use filtered unique indexes for non-deleted users and non-null values:
   - `normalized_user_name`
   - `normalized_email`
-  - `normalized_phone`
+  - `normalized_phone` together with `phone_scope`
 - Map unique constraint violations to duplicate-handle domain errors.
 - Map EF concurrency conflicts to the identity concurrency error.
 - Bump timestamps/version consistently in persistence operations.

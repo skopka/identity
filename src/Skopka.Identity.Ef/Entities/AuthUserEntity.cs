@@ -1,4 +1,4 @@
-﻿namespace Skopka.Identity.Ef.Entities;
+namespace Skopka.Identity.Ef.Entities;
 
 public sealed class AuthUserEntity
 {
@@ -9,6 +9,9 @@ public sealed class AuthUserEntity
     public string? NormalizedUserName { get; set; }
     public string? NormalizedEmail { get; set; }
     public string? NormalizedPhone { get; set; }
+
+    /// <summary>Scope within which <see cref="NormalizedPhone"/> is unique; '' is the default scope.</summary>
+    public string PhoneScope { get; set; } = "";
 
     public bool EmailConfirmed { get; set; }
     public bool PhoneConfirmed { get; set; }

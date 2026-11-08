@@ -15,9 +15,11 @@ with `Microsoft.AspNetCore.Identity`.
 
 Phone OTP validates input through `IIdentityPhoneNumberPolicy`, using the configured `IIdentityNormalizer` and `PhoneOtpOptions.AllowedCountryCodes`. The default allowlist is empty. Hosts can configure, for example, `identity.ConfigurePhoneOtp(options => options.AllowedCountryCodes = ["+7"])`. The policy reports invalid format and disallowed country with distinct structured error codes. Only a confirmed phone can sign in an existing account; an unconfirmed number is not linked by OTP. Trusted applications can use `VerifyForBindingAsync` and `BindVerifiedPhoneAsync` to bind a verified number to an existing user; the binding consumes the proof atomically and requires the expected user version.
 
+Phone scopes let one number belong to two accounts that sign in at different places, for example a personal account on the main site and a staff account on a staff site. A trusted host sets `PhoneScope` when it creates the user, changes the phone or binds a verified phone, and passes the same scope to `VerifyPhoneOtpCommand`, `FindActiveByPhoneAsync` and phone-handle password login. A number is unique within its scope; user names and emails stay globally unique. Without a scope every operation uses the default scope `""`, so hosts that never name one keep global phone uniqueness and pre-0.19 behavior. Lookups without a scope never choose an account from a named scope. Automatic password login searches every scope, so a number shared across scopes is ambiguous there and fails as invalid credentials. See [phone scopes](docs/building-web-hosts.md#phone-scopes).
+
 ## Documentation
 
-Documentation for version 0.18.0: [product overview](https://products.skopka.ru/en/identity/index.html) · [English guide](https://products.skopka.ru/guides/en/identity.html) · [Руководство на русском](https://products.skopka.ru/guides/ru/identity.html) · [API reference](https://products.skopka.ru/api/identity/index.html).
+Documentation for version 0.19.0: [product overview](https://products.skopka.ru/en/identity/index.html) · [English guide](https://products.skopka.ru/guides/en/identity.html) · [Руководство на русском](https://products.skopka.ru/guides/ru/identity.html) · [API reference](https://products.skopka.ru/api/identity/index.html).
 
 ## Features
 
@@ -36,6 +38,7 @@ Documentation for version 0.18.0: [product overview](https://products.skopka.ru/
 - OTP challenge/proof orchestration with HMAC-protected generated codes.
 - Passwordless phone OTP sign-in with E.164 normalization, one-time proofs,
   persistent rate limits and optional country-prefix allowlist.
+- Phone scopes: one number may belong to one account per host-defined sign-in scope.
 - Short-lived JWT access tokens with signing-key overlap and rotating opaque refresh
   sessions.
 - Active-session listing, device labels and user-scoped session revocation.
@@ -44,7 +47,8 @@ Documentation for version 0.18.0: [product overview](https://products.skopka.ru/
 - Optional online access-token/session validation.
 - Role CRUD, direct memberships, bounded role queries and role projection into
   session claims.
-- Bounded cursor-based user and role queries for administrative interfaces.
+- Bounded cursor-based user and role queries for administrative interfaces, including
+  role members (any of several roles) with search and a matching count.
 - Structured security-event observer hooks for host-side audit pipelines.
 - Step-up verification decisions separated from normal application authorization.
 - EF Core stores with PostgreSQL and SQLite mappings and packaged migrations.

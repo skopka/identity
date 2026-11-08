@@ -15,6 +15,13 @@ public record IdentityUser<TProfile>(
     DateTimeOffset? BlockedAt,
     DateTimeOffset? BlockedUntil,
     DateTimeOffset CreatedAt,
-    DateTimeOffset ModifiedAt);
+    DateTimeOffset ModifiedAt)
+{
+    /// <summary>
+    /// Scope within which <see cref="Phone"/> is unique; <see cref="IdentityPhoneScopes.Default"/>
+    /// unless the host placed the phone in a named scope.
+    /// </summary>
+    public string PhoneScope { get; init; } = IdentityPhoneScopes.Default;
+}
     
     

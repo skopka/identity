@@ -1,4 +1,4 @@
-﻿namespace Skopka.Identity.Users.Handles;
+namespace Skopka.Identity.Users.Handles;
 
 public sealed record UpdatedHandles(
     string? UserName, string? NormalizedUserName,
@@ -27,6 +27,12 @@ public sealed record UpdatedHandles(
             null)
     {
     }
+
+    /// <summary>
+    /// Validated new scope of the phone. <see langword="null"/> keeps the stored scope, so
+    /// changing a user name or email never moves a phone between scopes.
+    /// </summary>
+    public string? PhoneScope { get; init; }
 
     public void Deconstruct(
         out string? userName,

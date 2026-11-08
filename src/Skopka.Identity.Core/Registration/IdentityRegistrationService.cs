@@ -213,6 +213,20 @@ public sealed class IdentityRegistrationService<TProfile>(
             return null;
         }
 
+        var scopeError = PhoneScopeValidator.Validate(command.PhoneScope);
+        if (scopeError is not null)
+        {
+            error = scopeError;
+            return null;
+        }
+
+        var normalizedUserName = normalizer.NormalizeUserName(
+            command.UserName);
+        var normalizedEmail = normalizer.NormalizeEmail(command.Email);
+        var normalizedPhone = normalizer.NormalizePhoneLoginIdentifier(
+            command.Phone);
+        var phoneScope = PhoneScopeValidator.Effective(
+            normalizedPhone, command.PhoneScope);
         var user = new NewIdentityUser<TProfile>(
             command.UserName,
             command.Email,
@@ -220,12 +234,10 @@ public sealed class IdentityRegistrationService<TProfile>(
             command.Profile,
             command.Flags,
             securityStampGenerator.Generate(),
-            Guid.NewGuid());
-        var normalizedUserName = normalizer.NormalizeUserName(
-            command.UserName);
-        var normalizedEmail = normalizer.NormalizeEmail(command.Email);
-        var normalizedPhone = normalizer.NormalizePhoneLoginIdentifier(
-            command.Phone);
+            Guid.NewGuid())
+        {
+            PhoneScope = phoneScope,
+        };
         var loginIdentifierKeys = LoginIdentifierKeyBuilder.Create(
             normalizer,
             command.UserName,
@@ -245,7 +257,10 @@ public sealed class IdentityRegistrationService<TProfile>(
             normalizedUserName,
             normalizedEmail,
             normalizedPhone,
-            loginIdentifierKeys);
+            loginIdentifierKeys)
+        {
+            PhoneScope = phoneScope,
+        };
 
         error = null;
         return new PreparedUser(user, handles);
@@ -269,7 +284,10 @@ public sealed class IdentityRegistrationService<TProfile>(
             null,
             null,
             now,
-            now);
+            now)
+        {
+            PhoneScope = user.PhoneScope,
+        };
 
     private static OperationResult<IdentityUser<TProfile>> Fail(
         IIdentityOpScope op,

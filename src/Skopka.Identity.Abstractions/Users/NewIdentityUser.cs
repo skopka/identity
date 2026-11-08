@@ -7,4 +7,8 @@ public sealed record NewIdentityUser<TProfile>(
     TProfile Profile,
     UserFlags Flags,
     string SecurityStamp,
-    Guid? Id = null);
+    Guid? Id = null)
+{
+    /// <summary>Scope of <see cref="Phone"/>; see <see cref="IdentityPhoneScopes"/>.</summary>
+    public string PhoneScope { get; init; } = IdentityPhoneScopes.Default;
+}

@@ -45,7 +45,11 @@ identity stores when it is added.
   deleted/blocked/audit timestamps.
 - `identity_login_identifiers` stores the distinct normalized-key union per user. Its
   active marker must change atomically with create, handle update, soft delete and
-  restore.
+  restore. Each row copies the owner's `phone_scope`, which must change together with
+  `auth_users.phone_scope`.
+- `auth_users.phone_scope` is `''` (default scope) unless the host named a scope for the
+  phone; it resets to `''` when the phone is removed. `UpdatedHandles.PhoneScope` null
+  keeps the stored scope.
 - `user_profiles` stores display handles and the generic `Profile`.
 - `identity_roles` stores display/normalized names, optional parent metadata, version and
   audit timestamps.

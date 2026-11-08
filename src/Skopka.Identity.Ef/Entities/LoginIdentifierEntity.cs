@@ -8,5 +8,8 @@ public sealed class LoginIdentifierEntity
 
     public bool IsActive { get; set; }
 
+    /// <summary>Copy of the owner's phone scope; the active key is unique within it.</summary>
+    public string PhoneScope { get; set; } = "";
+
     public AuthUserEntity User { get; set; } = null!;
 }

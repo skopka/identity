@@ -56,6 +56,12 @@ operation; its default fails closed. The EF binding operation requires relationa
 transactional storage and fails closed with EF InMemory. Never expose account occupancy before a valid
 code has been verified.
 
+With phone scopes, the verified number resolves only the account in the scope the host
+passes in `VerifyPhoneOtpCommand.PhoneScope`; without one, only the default scope. A
+scope must come from trusted server state, such as the site the request arrived at:
+a client that could choose it could pick which of two accounts its code opens. Rate
+limits and the daily phone budget remain per number across all scopes.
+
 Configure `PhoneOtpOptions` to limit daily phone and client requests and to
 allow only selected country prefixes. Existing Verification settings control
 code length, lifetime, attempts and resend cooldown. Use a persistent HMAC

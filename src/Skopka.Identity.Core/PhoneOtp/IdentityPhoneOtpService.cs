@@ -172,6 +172,9 @@ public sealed class IdentityPhoneOtpService<TProfile>(
         if (command is null || command.Proof is null || string.IsNullOrEmpty(command.Proof.Token) || command.Phone is null)
             return OperationResultFactory.Fail<IdentityUser<TProfile>>(new Error(
                 IdentityErrorCodes.VerificationProofInvalid, "Verification proof is invalid or expired.", ErrorType.Unauthorized));
+        var scopeError = PhoneScopeValidator.Validate(command.PhoneScope);
+        if (scopeError is not null)
+            return OperationResultFactory.Fail<IdentityUser<TProfile>>(scopeError);
         var normalized = phonePolicy.Normalize(command.Phone);
         if (!normalized.IsSuccess)
             return OperationResultFactory.Fail<IdentityUser<TProfile>>(normalized.Errors);
@@ -201,7 +204,10 @@ public sealed class IdentityPhoneOtpService<TProfile>(
         if (error is not null) return OperationResultFactory.Fail<IdentityUser<TProfile>>(error);
         return await registrationStore.BindVerifiedPhoneAsync(user.Id, user.Version,
             new UpdatedHandles(user.UserName, name, user.Email, email, user.EmailConfirmed,
-                normalized.Value, phone, true, keys), challenge.Id, challenge.Version,
+                normalized.Value, phone, true, keys)
+            {
+                PhoneScope = command.PhoneScope ?? user.PhoneScope,
+            }, challenge.Id, challenge.Version,
             challenge.ProofHash, now, ct);
     }
 
@@ -210,6 +216,12 @@ public sealed class IdentityPhoneOtpService<TProfile>(
         CancellationToken ct)
     {
         using var op = metrics.Begin("phone_otp.verify");
+        var scopeError = PhoneScopeValidator.Validate(command.PhoneScope);
+        if (scopeError is not null)
+        {
+            return Fail<VerifiedPhoneOtp<TProfile>>(op, scopeError);
+        }
+
         var challenge = await challengeStore.FindByIdAsync(
             command.ChallengeId, ct);
         if (challenge is null
@@ -242,7 +254,7 @@ public sealed class IdentityPhoneOtpService<TProfile>(
         }
 
         var found = await lookup.FindActiveByPhoneAsync(
-            challenge.Binding, ct);
+            challenge.Binding, command.PhoneScope, ct);
         if (!found.IsSuccess)
         {
             if (found.Errors.Any(error => error.Code != IdentityErrorCodes.UserNotFound))

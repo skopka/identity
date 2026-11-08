@@ -1,4 +1,4 @@
-﻿using Skopka.Abstraction.OperationResult;
+using Skopka.Abstraction.OperationResult;
 using Skopka.Identity.Metrics;
 using Skopka.Identity.Security;
 using Skopka.Identity.SecurityEvents;
@@ -26,10 +26,17 @@ public sealed class IdentityUserService<TProfile>(
         using var op = metrics.Begin("user.create");
         var now = DateTimeOffset.UtcNow;
 
+        var scopeError = PhoneScopeValidator.Validate(cmd.PhoneScope);
+        if (scopeError is not null)
+        {
+            return Fail(op, scopeError);
+        }
+
         var normalizedUserName = normalizer.NormalizeUserName(cmd.UserName);
         var normalizedEmail = normalizer.NormalizeEmail(cmd.Email);
         var normalizedPhone = normalizer.NormalizePhoneLoginIdentifier(
             cmd.Phone);
+        var phoneScope = PhoneScopeValidator.Effective(normalizedPhone, cmd.PhoneScope);
         var loginIdentifierKeys = LoginIdentifierKeyBuilder.Create(
             normalizer,
             cmd.UserName,
@@ -48,7 +55,10 @@ public sealed class IdentityUserService<TProfile>(
             normalizedUserName,
             normalizedEmail,
             normalizedPhone,
-            loginIdentifierKeys);
+            loginIdentifierKeys)
+        {
+            PhoneScope = phoneScope,
+        };
 
         if (!policy.CanMutate(cmd.Flags))
             return Fail(op, IdentityErrors.Forbidden(cmd.Flags));
@@ -60,7 +70,10 @@ public sealed class IdentityUserService<TProfile>(
             cmd.Profile,
             cmd.Flags,
             securityStampGenerator.Generate(),
-            Guid.NewGuid());
+            Guid.NewGuid())
+        {
+            PhoneScope = phoneScope,
+        };
 
         var res = await store.CreateAsync(user, handles, now, ct);
         ObserveSuccess(
@@ -256,7 +269,15 @@ public sealed class IdentityUserService<TProfile>(
             ct);
 
     public async Task<OperationResult<IdentityUser<TProfile>>> ChangePhoneAsync(ChangePhoneCommand cmd, CancellationToken ct)
-        => await ChangeHandlesAsync("user.change_phone", cmd.UserId, cmd.ExpectedVersion,
+    {
+        var scopeError = PhoneScopeValidator.Validate(cmd.PhoneScope);
+        if (scopeError is not null)
+        {
+            using var op = metrics.Begin("user.change_phone");
+            return Fail(op, scopeError);
+        }
+
+        return await ChangeHandlesAsync("user.change_phone", cmd.UserId, cmd.ExpectedVersion,
             mutate: _ => null,
             buildUpdated: (user) =>
             {
@@ -265,9 +286,15 @@ public sealed class IdentityUserService<TProfile>(
                 return new UpdatedHandles(
                     user.UserName, normalizer.NormalizeUserName(user.UserName),
                     user.Email, normalizer.NormalizeEmail(user.Email), user.EmailConfirmed,
-                    cmd.NewPhone, nPhone, false);
+                    cmd.NewPhone, nPhone, false)
+                {
+                    // Without a named scope the phone stays where the account's phone was.
+                    PhoneScope = PhoneScopeValidator.Effective(
+                        nPhone, cmd.PhoneScope ?? user.PhoneScope),
+                };
             },
             ct);
+    }
 
     public async Task<OperationResult<IdentityUser<TProfile>>> PatchProfileAsync<TPatch>(PatchProfileCommand<TPatch> cmd, CancellationToken ct)
     {

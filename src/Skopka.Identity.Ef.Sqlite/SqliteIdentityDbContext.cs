@@ -40,13 +40,19 @@ public sealed class SqliteIdentityDbContext<TProfile>(
             .HasDatabaseName(SqliteIdentityConstraintNames.Email)
             .HasFilter("deleted_at IS NULL AND normalized_email IS NOT NULL");
 
-        users.HasIndex(user => user.NormalizedPhone)
+        // Phone numbers are unique per phone scope; the default scope '' keeps the
+        // pre-0.19 global uniqueness for hosts that never name a scope.
+        users.HasIndex(user => new { user.NormalizedPhone, user.PhoneScope })
             .IsUnique()
             .HasDatabaseName(SqliteIdentityConstraintNames.Phone)
             .HasFilter("deleted_at IS NULL AND normalized_phone IS NOT NULL");
 
         modelBuilder.Entity<LoginIdentifierEntity>()
-            .HasIndex(identifier => identifier.NormalizedKey)
+            .HasIndex(identifier => new
+            {
+                identifier.NormalizedKey,
+                identifier.PhoneScope
+            })
             .IsUnique()
             .HasDatabaseName(SqliteIdentityConstraintNames.LoginIdentifier)
             .HasFilter("is_active = 1");

@@ -78,8 +78,18 @@ public sealed class EfIdentityUserStore<TProfile>
         return profile is null ? null : ToModel(profile);
     }
 
+    /// <summary>Finds the active owner of the phone in the default scope.</summary>
+    public Task<IdentityUser<TProfile>?> FindActiveByNormalizedPhoneAsync(
+        string normalizedPhone,
+        CancellationToken ct)
+        => FindActiveByNormalizedPhoneAsync(
+            normalizedPhone,
+            IdentityPhoneScopes.Default,
+            ct);
+
     public async Task<IdentityUser<TProfile>?> FindActiveByNormalizedPhoneAsync(
         string normalizedPhone,
+        string phoneScope,
         CancellationToken ct)
     {
         var profile = await dbContext.Profiles
@@ -87,6 +97,7 @@ public sealed class EfIdentityUserStore<TProfile>
             .Include(entity => entity.User)
             .SingleOrDefaultAsync(
                 entity => entity.User.DeletedAt == null
+                    && entity.User.PhoneScope == phoneScope
                     && entity.User.NormalizedPhone == normalizedPhone,
                 ct);
 
@@ -145,6 +156,7 @@ public sealed class EfIdentityUserStore<TProfile>
             NormalizedUserName = handles.UserName,
             NormalizedEmail = handles.Email,
             NormalizedPhone = handles.Phone,
+            PhoneScope = ResolvePhoneScope(handles, user),
             Version = 1,
             SecurityStamp = user.SecurityStamp,
             CreatedAt = now,
@@ -211,6 +223,15 @@ public sealed class EfIdentityUserStore<TProfile>
         authUser.NormalizedPhone = updated.NormalizedPhone;
         authUser.EmailConfirmed = updated.EmailConfirmed;
         authUser.PhoneConfirmed = updated.PhoneConfirmed;
+        if (updated.NormalizedPhone is null)
+        {
+            authUser.PhoneScope = IdentityPhoneScopes.Default;
+        }
+        else if (updated.PhoneScope is not null)
+        {
+            authUser.PhoneScope = updated.PhoneScope;
+        }
+
         ReconcileLoginIdentifiers(
             authUser,
             ResolveLoginIdentifierKeys(updated),
@@ -388,6 +409,13 @@ public sealed class EfIdentityUserStore<TProfile>
             .ThenInclude(user => user.LoginIdentifiers)
             .SingleOrDefaultAsync(profile => profile.UserId == userId, ct);
 
+    internal static string ResolvePhoneScope(
+        NormalizedHandles handles,
+        NewIdentityUser<TProfile> user)
+        => handles.Phone is null
+            ? IdentityPhoneScopes.Default
+            : handles.PhoneScope ?? user.PhoneScope;
+
     private static IReadOnlyCollection<string> ResolveLoginIdentifierKeys(
         NormalizedHandles handles)
         => handles.LoginIdentifierKeys
@@ -422,6 +450,7 @@ public sealed class EfIdentityUserStore<TProfile>
                 UserId = user.Id,
                 NormalizedKey = normalizedKey,
                 IsActive = isActive,
+                PhoneScope = user.PhoneScope,
                 User = user
             });
         }
@@ -446,6 +475,7 @@ public sealed class EfIdentityUserStore<TProfile>
         foreach (var identifier in user.LoginIdentifiers.Except(stale))
         {
             identifier.IsActive = isActive;
+            identifier.PhoneScope = user.PhoneScope;
             desired.Remove(identifier.NormalizedKey);
         }
 
@@ -477,7 +507,10 @@ public sealed class EfIdentityUserStore<TProfile>
             user.BlockedAt,
             user.BlockedUntil,
             user.CreatedAt,
-            user.ModifiedAt);
+            user.ModifiedAt)
+        {
+            PhoneScope = user.PhoneScope,
+        };
     }
 
     private Error? MapException(DbUpdateException exception)

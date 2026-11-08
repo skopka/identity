@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.19.0
+
+- Added phone scopes. A trusted host can place a phone in a named scope when creating a user, changing the phone or binding a verified phone, so one number can belong to one account per scope (for example a personal account and a staff account). Phone OTP sign-in, exact phone lookup and phone-handle password login accept the scope; without one they search the default scope `""` only and never choose an account from a named scope. Automatic password login searches every scope, so a number shared across scopes is ambiguous there. User names and emails remain globally unique. `IdentityUser.PhoneScope` reports the scope.
+- Added PostgreSQL and SQLite `PhoneScopes` migrations: `phone_scope` (default `''`) on `auth_users` and `identity_login_identifiers`, included in their unique indexes. Existing accounts stay in the default scope with unchanged behavior. Custom stores must persist the scope; custom lookup stores without the scoped overload resolve only the default scope.
+- Added role-membership filtering to user queries: `IdentityUserQuery.RoleIds` (any of up to 50 roles) keeps search, status, flags and the `(CreatedAt, Id)` cursor, and `IIdentityUserQueryService.CountAsync` counts matches with the same filter in one database query. Custom query stores must opt in through `SupportsRoleMembershipQueries`; otherwise these queries fail with `identity.user_query.unsupported`.
+
 ## 0.18.0
 
 - Added optional host-issued, scope-bound access links with independent expiry, one-use completion, TOTP enrollment and atomic credential recovery. New links supersede prior links; hosts can invalidate existing credentials and sessions at issuance.

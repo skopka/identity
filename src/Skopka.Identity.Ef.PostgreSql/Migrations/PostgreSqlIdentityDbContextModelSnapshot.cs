@@ -73,6 +73,14 @@ namespace Skopka.Identity.Ef.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("phone_confirmed");
 
+                    b.Property<string>("PhoneScope")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasDefaultValue("")
+                        .HasColumnName("phone_scope");
+
                     b.Property<string>("SecurityStamp")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -91,15 +99,15 @@ namespace Skopka.Identity.Ef.Migrations
                         .HasDatabaseName("ux_auth_users_normalized_email")
                         .HasFilter("deleted_at IS NULL AND normalized_email IS NOT NULL");
 
-                    b.HasIndex("NormalizedPhone")
-                        .IsUnique()
-                        .HasDatabaseName("ux_auth_users_normalized_phone")
-                        .HasFilter("deleted_at IS NULL AND normalized_phone IS NOT NULL");
-
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
                         .HasDatabaseName("ux_auth_users_normalized_user_name")
                         .HasFilter("deleted_at IS NULL AND normalized_user_name IS NOT NULL");
+
+                    b.HasIndex("NormalizedPhone", "PhoneScope")
+                        .IsUnique()
+                        .HasDatabaseName("ux_auth_users_normalized_phone")
+                        .HasFilter("deleted_at IS NULL AND normalized_phone IS NOT NULL");
 
                     b.ToTable("auth_users", (string)null);
                 });
@@ -395,10 +403,18 @@ namespace Skopka.Identity.Ef.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
+                    b.Property<string>("PhoneScope")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasDefaultValue("")
+                        .HasColumnName("phone_scope");
+
                     b.HasKey("UserId", "NormalizedKey")
                         .HasName("pk_identity_login_identifiers");
 
-                    b.HasIndex("NormalizedKey")
+                    b.HasIndex("NormalizedKey", "PhoneScope")
                         .IsUnique()
                         .HasDatabaseName("ux_identity_login_identifiers_active_normalized_key")
                         .HasFilter("is_active = TRUE");
