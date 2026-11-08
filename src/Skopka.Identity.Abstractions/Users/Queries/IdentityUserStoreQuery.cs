@@ -8,4 +8,11 @@ public sealed record IdentityUserStoreQuery(
     IdentityUserStatus Status,
     UserFlags RequiredFlags,
     int PageSize,
-    IdentityUserCursor? Cursor);
+    IdentityUserCursor? Cursor)
+{
+    /// <summary>
+    /// Distinct, validated role ids; a user matches when it is a direct member of any of
+    /// them. <see langword="null"/> means no role filter. Never empty.
+    /// </summary>
+    public IReadOnlyList<Guid>? RoleIds { get; init; }
+}

@@ -9,25 +9,19 @@ public sealed class EfIdentityUserQueryStore<TProfile>(
     IdentityDbContext<TProfile> dbContext)
     : IIdentityUserQueryStore<TProfile>
 {
+    public bool SupportsRoleMembershipQueries => true;
+
     public async Task<IdentityUserPage<TProfile>> QueryAsync(
         IdentityUserStoreQuery query,
         DateTimeOffset now,
         CancellationToken ct)
     {
-        var profiles = dbContext.Profiles
-            .AsNoTracking()
-            .Include(profile => profile.User)
-            .AsQueryable();
-
-        profiles = ApplySearch(profiles, query);
-        profiles = ApplyStatus(profiles, query.Status, now);
-
-        if (query.RequiredFlags != UserFlags.None)
-        {
-            var flags = (int)query.RequiredFlags;
-            profiles = profiles.Where(
-                profile => (profile.User.Flags & flags) == flags);
-        }
+        var profiles = Filter(
+            dbContext.Profiles
+                .AsNoTracking()
+                .Include(profile => profile.User),
+            query,
+            now);
 
         if (query.Cursor is not null)
         {
@@ -58,6 +52,40 @@ public sealed class EfIdentityUserQueryStore<TProfile>(
             : null;
 
         return new IdentityUserPage<TProfile>(items, nextCursor);
+    }
+
+    public Task<long> CountAsync(
+        IdentityUserStoreQuery query,
+        DateTimeOffset now,
+        CancellationToken ct)
+        => Filter(dbContext.Profiles.AsNoTracking(), query, now)
+            .LongCountAsync(ct);
+
+    private static IQueryable<UserProfileEntity<TProfile>> Filter(
+        IQueryable<UserProfileEntity<TProfile>> profiles,
+        IdentityUserStoreQuery query,
+        DateTimeOffset now)
+    {
+        profiles = ApplySearch(profiles, query);
+        profiles = ApplyStatus(profiles, query.Status, now);
+
+        if (query.RequiredFlags != UserFlags.None)
+        {
+            var flags = (int)query.RequiredFlags;
+            profiles = profiles.Where(
+                profile => (profile.User.Flags & flags) == flags);
+        }
+
+        if (query.RoleIds is { } roleIds)
+        {
+            // Translated to EXISTS over identity_user_roles (indexed by role_id), so the
+            // database filters membership; nothing is paged through in memory.
+            profiles = profiles.Where(profile =>
+                profile.User.RoleMemberships.Any(
+                    membership => roleIds.Contains(membership.RoleId)));
+        }
+
+        return profiles;
     }
 
     private static IQueryable<UserProfileEntity<TProfile>> ApplySearch(
