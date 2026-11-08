@@ -25,6 +25,7 @@ public sealed class PostgreSqlPhoneScopeTests : IAsyncLifetime
         var services = new ServiceCollection();
         services.AddSkopkaIdentity<ScopeProfile>()
             .UsePostgreSql(postgreSql.GetConnectionString())
+            .UsePbkdf2PasswordHasher()
             .UseHmacOneTimeCodes("test", Enumerable.Repeat((byte)7, 32).ToArray())
             .UseHmacRateLimiting(
                 Enumerable.Repeat((byte)9, 32).ToArray(),

@@ -71,7 +71,7 @@ public sealed class PasswordAuthenticationService<TProfile>(
         }
 
         // The scope only selects the account for an explicit phone handle.
-        var scopeError = cmd.Handle == PasswordLoginHandle.Phone
+        var scopeError = cmd.Handle is PasswordLoginHandle.Phone or PasswordLoginHandle.Automatic
             ? PhoneScopeValidator.Validate(cmd.PhoneScope)
             : null;
         if (scopeError is not null)
@@ -239,7 +239,11 @@ public sealed class PasswordAuthenticationService<TProfile>(
                 : new NormalizedLogin(
                     null,
                     normalizedKeys,
-                    normalizer.NormalizePhoneLoginIdentifier(cmd.Login));
+                    normalizer.NormalizePhoneLoginIdentifier(cmd.Login))
+                {
+                    PhoneScope = cmd.PhoneScope ?? IdentityPhoneScopes.Default,
+                    ScopesAutomaticPhone = cmd.PhoneScope is not null,
+                };
         }
 
         var normalizedValue = cmd.Handle switch
@@ -303,10 +307,17 @@ public sealed class PasswordAuthenticationService<TProfile>(
     {
         if (handle == PasswordLoginHandle.Automatic)
         {
-            var users = await userLookupStore
-                .FindActiveByNormalizedLoginIdentifiersAsync(
-                    login.NormalizedKeys!,
-                    ct);
+            var users = login.ScopesAutomaticPhone
+                ? await userLookupStore
+                    .FindActiveByNormalizedLoginIdentifiersAsync(
+                        login.NormalizedKeys!,
+                        login.NormalizedPhoneIdentifier,
+                        login.PhoneScope,
+                        ct)
+                : await userLookupStore
+                    .FindActiveByNormalizedLoginIdentifiersAsync(
+                        login.NormalizedKeys!,
+                        ct);
             var distinctUsers = users
                 .DistinctBy(user => user.Id)
                 .Take(IdentityLoginLimits.MaximumResolvedUsers)
@@ -386,5 +397,8 @@ public sealed class PasswordAuthenticationService<TProfile>(
         string? NormalizedPhoneIdentifier)
     {
         public string PhoneScope { get; init; } = IdentityPhoneScopes.Default;
+
+        /// <summary>Automatic login with an explicit scope for the entered number.</summary>
+        public bool ScopesAutomaticPhone { get; init; }
     }
 }

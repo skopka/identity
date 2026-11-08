@@ -30,6 +30,24 @@ public interface IIdentityUserLookupStore<TProfile>
             : Task.FromResult<IdentityUser<TProfile>?>(null);
 
     /// <summary>
+    /// Resolves the normalized keys as the unscoped overload does, except that a user
+    /// whose own normalized phone equals <paramref name="normalizedPhone"/> is returned
+    /// only when its phone scope is <paramref name="phoneScope"/>. Users matched by user
+    /// name or email keys are returned from every scope.
+    /// </summary>
+    /// <remarks>
+    /// Stores without scope support fall back to the unscoped lookup, so a number shared
+    /// across scopes stays ambiguous there rather than resolving to the wrong account.
+    /// </remarks>
+    Task<IReadOnlyList<IdentityUser<TProfile>>>
+        FindActiveByNormalizedLoginIdentifiersAsync(
+            IReadOnlyCollection<string> normalizedKeys,
+            string? normalizedPhone,
+            string phoneScope,
+            CancellationToken ct)
+        => FindActiveByNormalizedLoginIdentifiersAsync(normalizedKeys, ct);
+
+    /// <summary>
     /// Resolves the normalized keys across every phone scope; callers treat several
     /// matching users as ambiguous.
     /// </summary>

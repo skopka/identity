@@ -211,8 +211,9 @@ Preserve these rules:
   uniqueness. Create/registration without a scope uses `''`; change-phone and bind
   without a scope keep the current scope; removing the phone resets it to `''`. Phone
   lookups, phone OTP sign-in and `PasswordLoginHandle.Phone` without a scope search
-  `''` only and never pick an account from a named scope. `Automatic` login searches
-  every scope, so a number shared across scopes is ambiguous there. User names and
+  `''` only and never pick an account from a named scope. `Automatic` login with a
+  scope limits the entered number to that scope (user names and emails stay global);
+  without a scope it searches every scope, so a shared number is ambiguous there. User names and
   emails stay globally unique.
 - Credentials are separate from profile data. Storage must hide password implementation
   details such as hash, salt and pepper.

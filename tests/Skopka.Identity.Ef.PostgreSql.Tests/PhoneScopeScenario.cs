@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Skopka.Identity.Authentication;
+using Skopka.Identity.Credentials;
 using Skopka.Identity.Errors;
 using Skopka.Identity.PhoneOtp;
 using Skopka.Identity.Registration;
@@ -118,6 +119,41 @@ internal static class PhoneScopeScenario
         Assert.True(restored.IsSuccess);
         Assert.Equal(Staff, restored.Value.PhoneScope);
         Assert.False(restored.Value.PhoneConfirmed);
+
+        // Automatic "number + password" login resolves the account of the passed scope.
+        var userStore = services.GetRequiredService<IIdentityUserStore<ScopeProfile>>();
+        var passwords = services.GetRequiredService<IPasswordCredentialService<ScopeProfile>>();
+        var passwordLogin = services.GetRequiredService<IPasswordAuthenticationService<ScopeProfile>>();
+        const string personalPassword = "personal-password-0001";
+        const string staffPassword = "staff-password-000001";
+        var personalNow = (await userStore.FindByIdAsync(personal.Value.Id, CancellationToken.None))!;
+        Assert.True((await passwords.SetPasswordAsync(
+            new SetPasswordCommand(personalNow.Id, personalNow.Version, personalPassword),
+            CancellationToken.None)).IsSuccess);
+        Assert.True((await passwords.SetPasswordAsync(
+            new SetPasswordCommand(restored.Value.Id, restored.Value.Version, staffPassword),
+            CancellationToken.None)).IsSuccess);
+
+        Task<Skopka.Abstraction.OperationResult.OperationResult<IdentityUser<ScopeProfile>>> AutomaticAsync(
+            string login, string password, string? phoneScope)
+            => passwordLogin.AuthenticateAsync(
+                new AuthenticatePasswordCommand(PasswordLoginHandle.Automatic, login, password)
+                {
+                    PhoneScope = phoneScope,
+                },
+                CancellationToken.None);
+
+        Assert.Equal(personal.Value.Id,
+            (await AutomaticAsync("+7 999 123-45-67", personalPassword, IdentityPhoneScopes.Default)).Value.Id);
+        Assert.Equal(restored.Value.Id,
+            (await AutomaticAsync("+7 999 123-45-67", staffPassword, Staff)).Value.Id);
+        // Another scope's password does not open the account of this scope.
+        Assert.False((await AutomaticAsync("+7 999 123-45-67", staffPassword, IdentityPhoneScopes.Default)).IsSuccess);
+        // Without a scope the shared number stays ambiguous, as in 0.19.0.
+        Assert.False((await AutomaticAsync("+7 999 123-45-67", personalPassword, null)).IsSuccess);
+        // User names keep their global reach whatever scope the site passes.
+        Assert.Equal(restored.Value.Id,
+            (await AutomaticAsync("staff-ivan", staffPassword, IdentityPhoneScopes.Default)).Value.Id);
 
         // Scopes are trusted ordinal identifiers; malformed values are rejected.
         var invalid = await users.CreateAsync(

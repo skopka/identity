@@ -104,9 +104,29 @@ public sealed class EfIdentityUserStore<TProfile>
         return profile is null ? null : ToModel(profile);
     }
 
-    public async Task<IReadOnlyList<IdentityUser<TProfile>>>
+    public Task<IReadOnlyList<IdentityUser<TProfile>>>
         FindActiveByNormalizedLoginIdentifiersAsync(
             IReadOnlyCollection<string> normalizedKeys,
+            CancellationToken ct)
+        => FindByLoginIdentifiersAsync(normalizedKeys, null, null, ct);
+
+    public Task<IReadOnlyList<IdentityUser<TProfile>>>
+        FindActiveByNormalizedLoginIdentifiersAsync(
+            IReadOnlyCollection<string> normalizedKeys,
+            string? normalizedPhone,
+            string phoneScope,
+            CancellationToken ct)
+        => FindByLoginIdentifiersAsync(
+            normalizedKeys,
+            string.IsNullOrEmpty(normalizedPhone) ? null : normalizedPhone,
+            phoneScope,
+            ct);
+
+    private async Task<IReadOnlyList<IdentityUser<TProfile>>>
+        FindByLoginIdentifiersAsync(
+            IReadOnlyCollection<string> normalizedKeys,
+            string? normalizedPhone,
+            string? phoneScope,
             CancellationToken ct)
     {
         var keys = normalizedKeys
@@ -120,13 +140,25 @@ public sealed class EfIdentityUserStore<TProfile>
             return [];
         }
 
-        var profiles = await dbContext.Profiles
+        var candidates = dbContext.Profiles
             .AsNoTracking()
             .Include(profile => profile.User)
             .Where(profile => profile.User.DeletedAt == null
                 && profile.User.LoginIdentifiers.Any(identifier =>
                     identifier.IsActive
-                    && keys.Contains(identifier.NormalizedKey)))
+                    && keys.Contains(identifier.NormalizedKey)));
+        if (normalizedPhone is not null && phoneScope is not null)
+        {
+            // The entered number reaches only its owner in the requested scope. An owner
+            // of the same number in another scope matched through that number, so it is
+            // left out; matches by user name or email keep their global reach.
+            candidates = candidates.Where(profile =>
+                profile.User.PhoneScope == phoneScope
+                || profile.User.NormalizedPhone == null
+                || profile.User.NormalizedPhone != normalizedPhone);
+        }
+
+        var profiles = await candidates
             .OrderBy(profile => profile.UserId)
             .Take(IdentityLoginLimits.MaximumResolvedUsers)
             .ToListAsync(ct);

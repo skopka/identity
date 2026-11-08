@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.19.1
+
+- Automatic password login now honors `AuthenticatePasswordCommand.PhoneScope`: when a scope is passed, an entered phone number reaches only the account whose phone is in that scope, so "number + password" works for a number shared by a personal and a staff account. User names and emails still match in every scope. Without a scope the behavior is unchanged. Pass `IdentityPhoneScopes.Default` explicitly for sites that use the default scope.
+- Added a scoped `IIdentityUserLookupStore.FindActiveByNormalizedLoginIdentifiersAsync` overload. Custom stores that do not override it fall back to the unscoped lookup, where a shared number stays ambiguous.
+
 ## 0.19.0
 
 - Added phone scopes. A trusted host can place a phone in a named scope when creating a user, changing the phone or binding a verified phone, so one number can belong to one account per scope (for example a personal account and a staff account). Phone OTP sign-in, exact phone lookup and phone-handle password login accept the scope; without one they search the default scope `""` only and never choose an account from a named scope. Automatic password login searches every scope, so a number shared across scopes is ambiguous there. User names and emails remain globally unique. `IdentityUser.PhoneScope` reports the scope.

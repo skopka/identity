@@ -425,16 +425,21 @@ surrounding whitespace.
 | `VerifyPhoneOtpCommand.PhoneScope` | account that signs in | default scope only |
 | `FindActiveByPhoneAsync(phone, scope, ct)` | account that is returned | default scope only |
 | `AuthenticatePasswordCommand.PhoneScope` with `PasswordLoginHandle.Phone` | account that signs in | default scope only |
+| `AuthenticatePasswordCommand.PhoneScope` with `PasswordLoginHandle.Automatic` (0.19.1) | account an entered number reaches | every scope (a shared number is ambiguous) |
 
 `IdentityUser.PhoneScope` reports the scope. Removing a phone returns the account to
 the default scope; changing a user name or email does not move it. A second account
 with the same number in the same scope still receives `identity.phone.duplicate`,
 and restore still fails when the number was taken in that scope meanwhile.
 
-User names and emails remain unique across all scopes. `PasswordLoginHandle.Automatic`
-searches every scope: when the entered number belongs to accounts in two scopes it
-resolves two users, which fails as invalid credentials like any other ambiguous login.
-Use a user name, or `PasswordLoginHandle.Phone` with a scope, for such accounts.
+User names and emails remain unique across all scopes. With
+`PasswordLoginHandle.Automatic` and a scope (0.19.1), an entered number reaches only the
+account whose phone is in that scope, while user names and emails still match in every
+scope; pass `IdentityPhoneScopes.Default` explicitly on a site that uses the default
+scope. Without a scope `Automatic` searches every scope: a number that belongs to
+accounts in two scopes resolves two users, which fails as invalid credentials like any
+other ambiguous login. Custom lookup stores that do not override the scoped
+`FindActiveByNormalizedLoginIdentifiersAsync` overload keep that unscoped behavior.
 
 A phone-sign-in code is bound to the number, not to a scope. Requesting codes for the
 same number on two sites at once supersedes the earlier code, as two requests on one

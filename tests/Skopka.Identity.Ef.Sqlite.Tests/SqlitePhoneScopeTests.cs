@@ -16,6 +16,7 @@ public sealed class SqlitePhoneScopeTests
         var services = new ServiceCollection();
         services.AddSkopkaIdentity<ScopeProfile>()
             .UseSqlite(connection)
+            .UsePbkdf2PasswordHasher()
             .UseHmacOneTimeCodes("test", Enumerable.Repeat((byte)7, 32).ToArray())
             .UseHmacRateLimiting(
                 Enumerable.Repeat((byte)9, 32).ToArray(),
