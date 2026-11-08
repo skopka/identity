@@ -70,7 +70,10 @@ public sealed class PasswordAuthenticationService<TProfile>(
                     "The password login handle is unsupported."));
         }
 
-        var scopeError = PhoneScopeValidator.Validate(cmd.PhoneScope);
+        // The scope only selects the account for an explicit phone handle.
+        var scopeError = cmd.Handle == PasswordLoginHandle.Phone
+            ? PhoneScopeValidator.Validate(cmd.PhoneScope)
+            : null;
         if (scopeError is not null)
         {
             return Fail(op, scopeError);
