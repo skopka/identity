@@ -533,3 +533,16 @@ Consumer-visible API, options, defaults, behavior or package changes require pac
 README, documentation and XML updates and matching Russian and English Products
 documentation in the same work before release. Follow the Products documentation
 workflow and record an explicit reason if there is no documentation impact.
+
+## Immediate Products publication
+
+The owner has authorized publication of reviewed documentation updates: after
+updating and verifying the public Products documentation for released packages,
+commit and push the scoped changes in `products`, create and push a new annotated
+stable `vX.Y.Z` tag there, and verify the deployment in the same task. Follow
+[the site release checklist](docs/releasing.md#publish-the-products-update-immediately)
+and the canonical Products workflow. Do not stop at a local build or postpone the
+tag to another task. Honor an explicit draft-only or no-publication request.
+This standing instruction covers the documentation site only; it does not
+authorize a library/NuGet release. Instructions-only changes that do not affect
+published pages require no empty site release.
